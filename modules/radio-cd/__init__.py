@@ -1,15 +1,18 @@
 import datetime
 import os
 
+from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-class Radio(TabbedPanelItem):
+_modname = 'Radio_cd'
+_modversion = '0.0.1'
+class Radio_cd(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
-        self.text = 'Radio'
+        self.text = 'Radio/CD'
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/radio.kv')

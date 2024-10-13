@@ -10,6 +10,11 @@ _modname = 'BSI_base'
 _modversion = '0.0.1'
 
 class BSI_base(TabbedPanelItem):
+
+    _ignition_on = 0x01
+    _ignition_off = 0x02
+    _ignition_wakeup = 0x03
+
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
@@ -26,6 +31,7 @@ class BSI_base(TabbedPanelItem):
         runner.register(100, self.can_vin_vis)
         runner.register(100, self.can_vin_wmi)
         runner.register(100, self.can_vin_vds)
+        runner.register(100, self.parktronic)
         runner.register(50, self.can_fast)
         runner.register(100, self.can_temp_level)
 
@@ -34,8 +40,9 @@ class BSI_base(TabbedPanelItem):
             'economy': 0,
             'dash_lights': 0,
             'dark_mode': 0,
+            'reverse': 0,
             'lum': 10,
-            'power_mode': 0x01
+            'power_mode': BSI_base._ignition_off
         }
 
         self.gauges = {
@@ -50,11 +57,22 @@ class BSI_base(TabbedPanelItem):
     def on_command(self, command, value):
         if not command in self.commands:
             print('command not found?!?')
-        if command in ['economy', 'dash_lights', 'dark_mode']:
+        if command in ['economy', 'dash_lights', 'dark_mode', 'reverse']:
             value = 1 if value == 'down' else 0
-        self.commands[command] = int(value)
         if command == 'lum':
             self.ids['cur_lum'].text = f'lum: {value}'
+        if command == 'power_mode':
+            self.ignition(value)
+        self.commands[command] = int(value)
+
+    def ignition(self, value):
+        if self.commands['power_mode'] == BSI_base._ignition_off and value == BSI_base._ignition_on:
+            self.on_val('rpm', 800)
+            self.on_val('speed', 10)
+            self.on_val('fuel', 30)
+            self.on_val('oil', 65)
+            self.on_val('coolant', 60)
+
 
     def on_temp(self, step, value):
         # Avoid overflows, anything over 250 (85.0) is not displayed
@@ -91,21 +109,35 @@ class BSI_base(TabbedPanelItem):
     def can_slow(self):
         temp = int((self.temperature+40)*2)
         coolant = int(self.gauges['coolant']+40)
-        return 0x0F6, [0x08, coolant, 0x00, 0x1F, 0x00, temp, temp, 0x01]
+        com = self.commands
+        reverse = int(com['reverse'])<<7 | 0x01
+        return 0x0F6, [0x08, coolant, 0x00, 0x1F, 0x00, temp, temp, reverse]
 
     def can_fast(self):
         rpm = int(self.gauges['rpm']*10)
         speed = int(self.gauges['speed']*100)
         return 0x0B6, [rpm>>8, rpm&0xFF, speed>>8, speed&0xFF, 0x00, 0x00, 0x00, 0x00]
+    
+    def parktronic(self):
+        com = self.commands
+        if int(com['reverse']) == 1:
+            return 0x0E1, [0x24, 0xD0, 0xCC, 0x11, 0x5C, 0xFE, 0xC2]
+        else:
+            return 0x0E1, None
+        # 0x0E1, [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
+        # D8 00 3F FC FC FC 00
 
     def can_vin_vis(self):
-        return 0x2B6, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        #32 31 37 31 35 33 38 33
+        return 0x2B6, [0x32, 0x31, 0x37, 0x31, 0x35, 0x33, 0x38, 0x33]
 
     def can_vin_wmi(self):
+        #56 46 33
         return 0x336, [0x56, 0x46, 0x33]
 
     def can_vin_vds(self):
-        return 0x3B6, [0x00, 0x00, 0x00, 0x46, 0x00, 0x00]
+        #36 4A 52 48 52 48
+        return 0x3B6, [0x36, 0x4A, 0x52, 0x48, 0x52, 0x48]
 
     def can_temp_level(self):
         oil = self.gauges['oil']+40

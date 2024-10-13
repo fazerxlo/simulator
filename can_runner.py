@@ -7,6 +7,8 @@ import sched
 class CanRunner():
     def __init__(self):
         self.bus = can.Bus(channel='can0', interface='socketcan', bitrate=125000)
+        #can.interfaces.serial.serial_can.SerialBus(channel, baudrate=115200, timeout=0.1, rtscts=False, *args, **kwargs)
+        #self.bus = can.Bus(channel='/dev/ttyACM0', interface='serial', bitrate=125000, baudrate=9600)
         self.sender = threading.Thread(target=self.sender)
         self.sender_exit = threading.Event()
         self.receiver = threading.Thread(target=self.receiver)
@@ -65,11 +67,12 @@ class CanRunner():
                 if (now - message['timer']).total_seconds() >= message['schedule']:
                     id, data = message['call']()
                     #print(f'sending {id}')
-                    self.bus.send(can.Message(arbitration_id=id, data=data, is_extended_id=False))
+                    if data != None:
+                        self.bus.send(can.Message(arbitration_id=id, data=data, is_extended_id=False))
                     message['timer'] = now
 
             # Wait until next round
-            time.sleep(0.01)
+            time.sleep(0.02)
 
     def run(self):
         self.sender.start()

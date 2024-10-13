@@ -24,7 +24,7 @@ class Radio_gen(TabbedPanelItem):
         print('registering radio calls')
         runner.register(50, self.can_status)
         runner.register(100, self.can_volume)
-        #runner.reg(self.can_volume, 0x1A5, 100)
+        runner.reg(self.can_volume, 0x1A5, 100)
         runner.register(50, self.can_panel)
         runner.register(100, self.can_audio)
 

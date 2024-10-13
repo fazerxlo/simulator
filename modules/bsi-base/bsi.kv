@@ -12,7 +12,6 @@
           on_state: root.on_command('economy', self.state)
         ToggleButton:
           text: 'dash lights'
-          state: 'down'
           on_state: root.on_command('dash_lights', self.state)
         ToggleButton:
           text: 'dark mode'
@@ -38,26 +37,29 @@
           allow_no_selection: False
           on_state: root.on_command('power_mode', 0x00)
         ToggleButton:
-          text: 'on'
+          text: 'ignition on'
+          group: 'pow_mode'
+          allow_no_selection: False
+          on_state: root.on_command('power_mode', 0x01)
+        ToggleButton:
+          text: 'ignition off'
           group: 'pow_mode'
           allow_no_selection: False
           state: 'down'
-          on_state: root.on_command('power_mode', 0x01)
-        ToggleButton:
-          text: 'sleep'
-          group: 'pow_mode'
-          allow_no_selection: False
           on_state: root.on_command('power_mode', 0x02)
         ToggleButton:
           text: 'wakeup'
           group: 'pow_mode'
           allow_no_selection: False
           on_state: root.on_command('power_mode', 0x03)
+#        ToggleButton:
+#          text: 'com_off'
+#          group: 'pow_mode'
+#          allow_no_selection: False
+#          on_state: root.on_command('power_mode', 0x04)
         ToggleButton:
-          text: 'com_off'
-          group: 'pow_mode'
-          allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x04)
+          text: 'Reverse'
+          on_state: root.on_command('reverse', self.state)
 
     BoxLayout:
       orientation: 'horizontal'
