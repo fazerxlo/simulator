@@ -52,12 +52,16 @@ class PeugeotSim(App):
         self.modules = {}
         for name in self.conf['modules']:
             module = importlib.import_module(f'modules.{name}')
-            self.modules[name] = getattr(module, module._modname)(self.can_runner)
+            module_instance = getattr(module, module._modname)(self.can_runner)
+            self.modules[name] = module_instance
+            if hasattr(module_instance, 'on_can_message'):
+                self.can_runner.listen(None, module_instance.on_can_message)
+
             if not tabs.tab_list:
-                tabs.add_widget(self.modules[name])
-                Clock.schedule_once(partial(tabs.switch_to, self.modules[name]))
+                tabs.add_widget(module_instance)
+                Clock.schedule_once(partial(tabs.switch_to, module_instance))
             else:
-                tabs.add_widget(self.modules[name])
+                tabs.add_widget(module_instance)
 
     def on_stop(self):
         print('closing app')

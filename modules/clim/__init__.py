@@ -89,3 +89,15 @@ class Clim(TabbedPanelItem):
         b6 = self.dir[1]<<4 # 4 bits: direction, 4 bits unknown // right seat only
         b7 = self.fan # 4 unknown, 4 bits: fan
         return 0x1E3, [b1, b2, b3, b4, b5, b6, b7]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x1D0 and len(msg.data) >= 7:
+            self.fan = msg.data[2]
+            self.dir[0] = msg.data[3]
+            self.options['recycle'] = (msg.data[4] >> 5) & 1
+            self.temps[0] = msg.data[5]
+            self.temps[1] = msg.data[6]
+            if 0 <= self.temps[0] < len(self.temp_disp):
+                self.ids['cur_temp0'].text = f'{self.temp_disp[self.temps[0]]}c'
+            if 0 <= self.temps[1] < len(self.temp_disp):
+                self.ids['cur_temp1'].text = f'{self.temp_disp[self.temps[1]]}c'

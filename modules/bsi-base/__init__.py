@@ -142,3 +142,18 @@ class BSI_base(TabbedPanelItem):
     def can_temp_level(self):
         oil = self.gauges['oil']+40
         return 0x161, [0x00, 0x00, oil, self.gauges['fuel'], 0xff, 0xff, 0xff, 0xff]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x0B6 and len(msg.data) >= 4:
+            rpm = (msg.data[0] << 8) | msg.data[1]
+            speed = (msg.data[2] << 8) | msg.data[3]
+            self.on_val('rpm', int(rpm / 10))
+            self.on_val('speed', int(speed / 100))
+        elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
+            self.on_val('oil', int(msg.data[2]) - 40)
+            self.on_val('fuel', int(msg.data[3]))
+        elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 6:
+            coolant = int(msg.data[1])
+            temp = int(msg.data[5])
+            self.on_val('coolant', coolant - 40)
+            self.on_temp(False, temp / 2 - 40)

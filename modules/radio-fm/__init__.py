@@ -67,3 +67,9 @@ class Radio_fm(TabbedPanelItem):
 
     def can_radio(self):
         return 0x1E0, [int('00100100',2), 0x00, 0x00, 0x00, 0x20]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x225 and len(msg.data) >= 5:
+            self.band = msg.data[2]
+            freq = (msg.data[3] << 8) | msg.data[4]
+            self.on_freq(freq)
