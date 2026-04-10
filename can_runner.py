@@ -3,9 +3,10 @@ import datetime
 import time
 import threading
 import sched
+import queue
 
 class CanRunner():
-    def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
+    def __init__(self, channel='can0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
         self.bus = can.Bus(channel=channel, interface=interface, bitrate=bitrate)
         #can.interfaces.serial.serial_can.SerialBus(channel, baudrate=115200, timeout=0.1, rtscts=False, *args, **kwargs)
@@ -18,6 +19,7 @@ class CanRunner():
         self.mess = []
         self.listeners = []
         self.modules = {}
+        self.event_queue = queue.Queue()
 
     def reg(self, func, id, schedule, tp_id=None, tp_callback=None, *args, **kwargs):
         new_module = {
@@ -48,12 +50,23 @@ class CanRunner():
 
             for listener in self.listeners:
                 if listener['id'] is None or listener['id'] == recvd.arbitration_id:
-                    listener['callback'](recvd)
+                    self.event_queue.put((listener['callback'], recvd))
 
             for message in self.mess:
                 if message['tp_id'] == recvd['arbitration_id']:
-                    message['tp_callback'](recvd['data'])
+                    self.event_queue.put((message['tp_callback'], recvd['data']))
 
+
+    def process_events(self, dt=None):
+        while True:
+            try:
+                callback, payload = self.event_queue.get_nowait()
+            except queue.Empty:
+                break
+            try:
+                callback(payload)
+            except Exception as exc:
+                print(f'CanRunner callback error: {exc}')
 
     def sender(self):
         while True:

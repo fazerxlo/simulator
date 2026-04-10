@@ -47,6 +47,7 @@ class PeugeotSim(App):
         # Init CAN runner
         self.can_runner = CanRunner(monitor=self.monitor)
         self.can_runner.run()
+        Clock.schedule_interval(self.can_runner.process_events, 0)
 
         # Init modules
         self.modules = {}
