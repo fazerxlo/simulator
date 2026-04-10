@@ -1,0 +1,420 @@
+Fazer@localhost:~/git/simulator>  /usr/bin/env /home/Fazer/git/simulator/.venv/bin/python /home/Fazer/.vscode/extensions/ms-python.debugpy-2025.18.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher 49421 -- /home/Fazer/git/simulator/app.py monitor 
+[INFO   ] [Logger      ] Record log in /home/Fazer/.kivy/logs/kivy_26-04-10_7.txt
+[INFO   ] [Kivy        ] v2.3.1
+[INFO   ] [Kivy        ] Installed at "/home/Fazer/git/simulator/.venv/lib64/python3.13/site-packages/kivy/__init__.py"
+[INFO   ] [Python      ] v3.13.12 (main, Mar 27 2026, 19:06:58) [GCC]
+[INFO   ] [Python      ] Interpreter at "/home/Fazer/git/simulator/.venv/bin/python"
+[INFO   ] [Logger      ] Purge log fired. Processing...
+[INFO   ] [Logger      ] Purge finished!
+ /home/Fazer/git/simulator/.venv/lib64/python3.13/site-packages/can/interfaces/__init__.py:8: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+   from pkg_resources import iter_entry_points
+[DEBUG  ] Loading socketcan native backend
+[INFO   ] [Factory     ] 195 symbols loaded
+[INFO   ] [Image       ] Providers: img_tex, img_dds, img_sdl2 (img_pil, img_ffpyplayer ignored)
+[INFO   ] [Window      ] Provider: sdl2
+[INFO   ] [GL          ] Using the "OpenGL" graphics system
+[INFO   ] [GL          ] Backend used <sdl2>
+[INFO   ] [GL          ] OpenGL version <b'4.6 (Compatibility Profile) Mesa 26.0.4'>
+[INFO   ] [GL          ] OpenGL vendor <b'AMD'>
+[INFO   ] [GL          ] OpenGL renderer <b'AMD Radeon Graphics (radeonsi, renoir, ACO, DRM 3.64, 6.19.7-1-default)'>
+[INFO   ] [GL          ] OpenGL parsed version: 4, 6
+[INFO   ] [GL          ] Shading version <b'4.60'>
+[INFO   ] [GL          ] Texture max size <16384>
+[INFO   ] [GL          ] Texture max units <32>
+[INFO   ] [Window      ] auto add sdl2 input provider
+[INFO   ] [Window      ] virtual keyboard not allowed, single mode, not docked
+[INFO   ] [Text        ] Provider: sdl2
+[DEBUG  ] [can config  ] {'interface': 'socketcan', 'bitrate': 125000, 'channel': 'vcan0'}
+[INFO   ] Created a socket
+[DEBUG  ] Binding socket to channel=vcan0
+[DEBUG  ] Bound socket.
+[TRACE  ] [Received    ] Timestamp: 1775846414.956659        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846414.967754        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+registering BSI calls
+[TRACE  ] [Received    ] Timestamp: 1775846414.968058        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846414.968264        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846414.999065        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+registering BSI calls[TRACE  ] [Received    ] Timestamp: 1775846414.999118        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+
+[TRACE  ] [Received    ] Timestamp: 1775846414.999157        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846414.999193        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.010188        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+registering BSI calls
+[TRACE  ] [Received    ] Timestamp: 1775846415.021205        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.021252        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.021306        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.021340        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.021371        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+registering radio calls
+[INFO   ] [ProbeSysfs  ] device match: /dev/input/event2
+[INFO   ] [MTD         ] Read event from </dev/input/event2>
+[INFO   ] [Base        ] Start application main loop
+[INFO   ] [GL          ] NPOT texture support is available
+[TRACE  ] [Received    ] Timestamp: 1775846415.053121        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.053181        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.053232        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.054393        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.054449        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.064436        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.075468        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.075513        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.076636        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.106790        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.107947        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.107994        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.108034        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.118910        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.129820        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.129897        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.129953        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.129999        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.130066        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.161318        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.162512        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.162541        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.162565        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.162590        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.173465        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.184287        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.184322        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.184348        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.215596        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.215636        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.215659        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.216810        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.226621        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.237619        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.238757        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.238795        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.238826        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.238854        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.270354        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.270431        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.270484        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.271650        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.271799        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.281678        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.292662        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.292751        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.293959        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.324606        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.324685        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.324754        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.324823        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.335825        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.346901        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.346970        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.347009        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.347056        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.347092        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.377648        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.378782        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.378808        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.378833        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.378854        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.389709        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.400575        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.400642        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.400693        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.432244        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.432300        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.432345        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.432391        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.443367        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.454399        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.454478        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.454519        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.454571        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.455711        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.486301        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.486372        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.486414        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.486453        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.486491        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.497546        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.507444        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.508616        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.508662        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.538833        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.538882        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.540001        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.540038        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.549884        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.560838        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.560952        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.562130        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.562191        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.562266        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.592464        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.593612        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.593651        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.593688        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.594806        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.604701        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.615677        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.615742        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.616949        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.647170        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.648381        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.648444        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.648477        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.659398        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.670418        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.670491        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.670565        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.670655        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.671823        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.702587        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.702660        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.702749        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.703890        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.703943        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.713896        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.724905        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.724953        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.726111        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.756750        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.756814        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.757992        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.758032        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.768930        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.778656        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.779845        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.779907        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.781098        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.781149        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.811674        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.811762        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.811872        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.813040        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.813099        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.822908        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.833832        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.833876        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.835016        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.865395        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.865437        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.865465        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.866636        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.876542        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.887564        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.887623        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.888762        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.888814        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.888870        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.920510        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.920546        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.920583        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.920609        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.920630        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.931557        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.942589        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.942668        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.942743        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.974569        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.974627        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.974669        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.974710        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.985628        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.996630        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.996698        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.998066        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.998128        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846415.998166        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.028811        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.028959        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.029034        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.030332        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.030416        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.040353        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.051299        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.051398        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.051489        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.082233        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.083393        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.083427        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.083452        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.094276        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.105149        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.105197        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.105240        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.105280        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.106438        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.136648        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.137825        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.137865        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.137894        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.137931        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.148800        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.159599        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.160772        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.160818        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.192029        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.192103        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.192157        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.192208        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.203044        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.213909        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.213981        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.214022        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.214072        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.214140        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.245602        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.245714        ID: 00b6    S                DLC:  8    19 00 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.246940        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.246997        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.247073        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.256984        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.267955        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.268011        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.269153        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.300473        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.300525        ID: 00b6    S                DLC:  8    03 30 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.301644        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.301673        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.312438        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.323304        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.323348        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.323388        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.324570        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.324655        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.354884        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.356005        ID: 00b6    S                DLC:  8    06 58 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.356051        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.357194        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.357231        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.357267        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.378770        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.378817        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.378859        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.409974        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.410023        ID: 00b6    S                DLC:  8    09 88 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.410059        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.410092        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.422229        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.434346        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.435550        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.435606        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.435657        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.435732        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.457229        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.457284        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.457323        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.458487        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.468431        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.468998        ID: 00b6    S                DLC:  8    0c b0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.480014        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.480070        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.480112        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.511969        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.512060        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.523135        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.523226        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.523328        ID: 00b6    S                DLC:  8    0e 48 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.534321        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.545420        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.545534        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.546725        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.546788        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.557653        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.557704        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.557755        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.558903        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.579383        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.580564        ID: 00b6    S                DLC:  8    0e 48 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.580627        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.580675        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.580736        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.612341        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.612434        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.633254        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.634457        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.634513        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.634564        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.645568        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.645621        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.646786        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.656713        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.657953        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.658038        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.658111        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.668971        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.689786        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.691007        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.691073        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.691132        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.691191        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.723050        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.723142        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.744059        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.744114        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.745274        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.745326        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.756421        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.756508        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.757692        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.757742        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.767742        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.767828        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.769039        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.779004        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.799891        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.799952        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.801125        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.801192        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.801249        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.832046        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.832112        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.852858        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.854025        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.854102        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.854191        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.865213        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.865310        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.866501        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.866581        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.876724        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.877940        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.877983        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.887878        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.908681        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.909874        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.909959        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.910004        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.910094        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.940862        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.941154        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.962097        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.962401        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.962517        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.962616        ID: 00b6    S                DLC:  8    0f e0 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.973720        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.973989        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.974113        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.974196        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.985191        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.985259        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.986453        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846416.996399        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.018430        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.018500        ID: 00b6    S                DLC:  8    0e 48 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.019649        ID: 01d0    S                DLC:  7    00 00 00 00 01 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.019712        ID: 012d    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.019770        ID: 01e3    S                DLC:  7    66 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.050411        ID: 0128    S                DLC:  8    00 00 00 00 40 00 b0 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.051566        ID: 0168    S                DLC:  8    00 00 00 00 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.072517        ID: 0036    S                DLC:  8    0e 00 00 0a 01 80 00 a0     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.072609        ID: 00f6    S                DLC:  8    08 64 12 c4 b0 8e 78 01     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.073789        ID: 02b6    S                DLC:  8    32 31 37 31 35 33 38 33     '21715383'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.073866        ID: 00b6    S                DLC:  8    0e 48 03 e8 00 00 00 00     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.084821        ID: 0336    S                DLC:  3    56 46 33                    'VF3'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.084900        ID: 03b6    S                DLC:  6    36 4a 52 48 52 48           '6JRHRH'    Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.084951        ID: 0161    S                DLC:  8    00 00 69 1e ff ff ff ff     Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.086111        ID: 0220    S                DLC:  1    04                          Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.086222        ID: 0221    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.086260        ID: 02a1    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[TRACE  ] [Received    ] Timestamp: 1775846417.086293        ID: 0261    S                DLC:  7    00 00 00 00 00 00 00        Channel: vcan0
+[INFO   ] [Base        ] Leaving application in progress...
+closing app
+[TRACE  ] [Received    ] Timestamp: 1775846417.097493        ID: 01a1    S                DLC:  8    ff 00 00 00 00 00 00 00     Channel: vcan0
+Fazer@localhost:~/git/simulator> 

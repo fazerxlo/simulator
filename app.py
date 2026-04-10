@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import sys
+import argparse
 import kivy
 import can
 import datetime
@@ -16,7 +18,21 @@ from kivy.clock import Clock
 
 from can_runner import CanRunner
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('mode', nargs='?', choices=['monitor'], help='Run mode')
+    parser.add_argument('--monitor', action='store_true', help='Monitor CAN bus only, do not send outgoing frames')
+    args, unknown = parser.parse_known_args()
+    sys.argv = [sys.argv[0]] + unknown
+    return args
+
+
 class PeugeotSim(App):
+    def __init__(self, monitor=False, **kwargs):
+        super().__init__(**kwargs)
+        self.monitor = monitor
+
     def build(self):
         return Builder.load_file('main.kv')
 
@@ -29,7 +45,7 @@ class PeugeotSim(App):
             self.conf = yaml.load(conf_file, Loader=yaml.FullLoader)
 
         # Init CAN runner
-        self.can_runner = CanRunner()
+        self.can_runner = CanRunner(monitor=self.monitor)
         self.can_runner.run()
 
         # Init modules
@@ -49,4 +65,6 @@ class PeugeotSim(App):
         self.thread_exit = True
 
 if __name__ == '__main__':
-    PeugeotSim().run()
+    args = parse_args()
+    monitor_mode = args.monitor or args.mode == 'monitor'
+    PeugeotSim(monitor=monitor_mode).run()

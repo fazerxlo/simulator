@@ -21,3 +21,11 @@ This is a python+kivy app that connect to a socketcan network (hardcoded for now
 ## Requirements
 
 Python3, kivy and a socketcan network named `can0` (for example, a CANAble interface, or a virtual can interface)
+
+Run in monitor mode to listen only and avoid sending CAN frames:
+
+    python app.py monitor
+
+or
+
+    python app.py --monitor
