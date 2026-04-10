@@ -95,9 +95,34 @@ class Clim(TabbedPanelItem):
             self.fan = msg.data[2]
             self.dir[0] = msg.data[3]
             self.options['recycle'] = (msg.data[4] >> 5) & 1
+            self.options['unfrost_front'] = (msg.data[4] >> 4) & 1
             self.temps[0] = msg.data[5]
             self.temps[1] = msg.data[6]
             if 0 <= self.temps[0] < len(self.temp_disp):
                 self.ids['cur_temp0'].text = f'{self.temp_disp[self.temps[0]]}c'
             if 0 <= self.temps[1] < len(self.temp_disp):
                 self.ids['cur_temp1'].text = f'{self.temp_disp[self.temps[1]]}c'
+            if 'slider_fan' in self.ids and self.ids['slider_fan'].value != self.fan:
+                self.ids['slider_fan'].value = self.fan
+            if 'cur_fan' in self.ids:
+                self.ids['cur_fan'].text = f'Fan: {self.fan}'
+            if 'recycle' in self.ids:
+                self.ids['recycle'].state = 'down' if self.options['recycle'] else 'normal'
+            if 'unfrost_front' in self.ids:
+                self.ids['unfrost_front'].state = 'down' if self.options['unfrost_front'] else 'normal'
+            for seat, prefix in [(0, 'left'), (1, 'right')]:
+                for state_id in [f'{prefix}_fr', f'{prefix}_up', f'{prefix}_ud', f'{prefix}_down', f'{prefix}_fd', f'{prefix}_fast']:
+                    if state_id in self.ids:
+                        self.ids[state_id].state = 'normal'
+                if self.dir[seat] == 0x03 and f'{prefix}_fr' in self.ids:
+                    self.ids[f'{prefix}_fr'].state = 'down'
+                elif self.dir[seat] == 0x04 and f'{prefix}_up' in self.ids:
+                    self.ids[f'{prefix}_up'].state = 'down'
+                elif self.dir[seat] == 0x06 and f'{prefix}_ud' in self.ids:
+                    self.ids[f'{prefix}_ud'].state = 'down'
+                elif self.dir[seat] == 0x02 and f'{prefix}_down' in self.ids:
+                    self.ids[f'{prefix}_down'].state = 'down'
+                elif self.dir[seat] == 0x05 and f'{prefix}_fd' in self.ids:
+                    self.ids[f'{prefix}_fd'].state = 'down'
+                elif self.dir[seat] == 0x01 and f'{prefix}_fast' in self.ids:
+                    self.ids[f'{prefix}_fast'].state = 'down'

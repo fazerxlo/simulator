@@ -82,3 +82,50 @@ class Combine(TabbedPanelItem):
         b6 = opt['dae']<<5 | opt['eco_blink']<<1 | opt['eco']
         b7 = opt['battery_blink']<<7 | opt['obd_blink']<<6
         return 0x168, [b0, b1, 0x00, b3, b4, 0x00, b6, b7]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x128 and len(msg.data) >= 6:
+            data = msg.data
+            self.options['airbag_pass'] = (data[0] >> 7) & 1
+            self.options['seatbelt'] = (data[0] >> 6) & 1
+            self.options['brakes'] = (data[0] >> 5) & 1
+            self.options['low_fuel'] = (data[0] >> 4) & 1
+            self.options['preheat'] = (data[0] >> 2) & 1
+            self.options['warn'] = (data[1] >> 7) & 1
+            self.options['stop'] = (data[1] >> 6) & 1
+            self.options['doors'] = (data[1] >> 4) & 1
+            self.options['esp'] = (data[2] >> 5) & 1
+            self.options['esp_blink'] = (data[2] >> 4) & 1
+            self.options['tyre'] = (data[3] >> 6) & 1
+            self.options['backlight'] = (data[4] >> 7) & 1
+            self.options['low_beam'] = (data[4] >> 6) & 1
+            self.options['high_beam'] = (data[4] >> 5) & 1
+            self.options['fog_front'] = (data[4] >> 4) & 1
+            self.options['fog_rear'] = (data[4] >> 3) & 1
+            self.options['clig_r'] = (data[4] >> 2) & 1
+            self.options['clig_l'] = (data[4] >> 1) & 1
+            self.options['on'] = (data[5] >> 7) & 1
+            for key, value in self.options.items():
+                if key in self.ids:
+                    self.ids[key].state = 'down' if value else 'normal'
+        elif msg.arbitration_id == 0x168 and len(msg.data) >= 8:
+            data = msg.data
+            self.options['coolant'] = (data[0] >> 7) & 1
+            self.options['oil_blink'] = (data[0] >> 6) & 1
+            self.options['coolant_blink'] = (data[0] >> 5) & 1
+            self.options['oil'] = (data[0] >> 3) & 1
+            self.options['tyre'] = (data[1] >> 6) & 1
+            self.options['abs'] = (data[3] >> 5) & 1
+            self.options['esp'] = (data[3] >> 4) & 1
+            self.options['obd'] = (data[3] >> 1) & 1
+            self.options['gas_water'] = data[3] & 1
+            self.options['airbag'] = (data[4] >> 5) & 1
+            self.options['battery'] = (data[4] >> 1) & 1
+            self.options['dae'] = (data[6] >> 5) & 1
+            self.options['eco_blink'] = (data[6] >> 1) & 1
+            self.options['eco'] = data[6] & 1
+            self.options['battery_blink'] = (data[7] >> 7) & 1
+            self.options['obd_blink'] = (data[7] >> 6) & 1
+            for key, value in self.options.items():
+                if key in self.ids:
+                    self.ids[key].state = 'down' if value else 'normal'

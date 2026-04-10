@@ -86,6 +86,8 @@ class BSI_base(TabbedPanelItem):
         else:
             self.temperature = value
         self.ids['cur_ext_temp'].text = f'temp: {self.temperature}'
+        if 'slider_temp' in self.ids and self.ids['slider_temp'].value != self.temperature:
+            self.ids['slider_temp'].value = self.temperature
 
     def on_val(self, name, value):
         texts = {
@@ -97,6 +99,9 @@ class BSI_base(TabbedPanelItem):
         }
 
         self.ids[f'cur_{name}'].text = texts[name].format(value)
+        slider_id = f'slider_{name}'
+        if slider_id in self.ids and self.ids[slider_id].value != value:
+            self.ids[slider_id].value = value
         self.gauges[name] = int(value)
 
     def can_commandes(self):
@@ -144,7 +149,36 @@ class BSI_base(TabbedPanelItem):
         return 0x161, [0x00, 0x00, oil, self.gauges['fuel'], 0xff, 0xff, 0xff, 0xff]
 
     def on_can_message(self, msg):
-        if msg.arbitration_id == 0x0B6 and len(msg.data) >= 4:
+        if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
+            b2 = msg.data[2]
+            b3 = msg.data[3]
+            b4 = msg.data[4]
+            economy = (b2 >> 7) & 1
+            dash_lights = (b3 >> 5) & 1
+            dark_mode = (b3 >> 4) & 1
+            lum = b3 & 0x0F
+            power_mode = b4
+            self.commands['economy'] = economy
+            self.commands['dash_lights'] = dash_lights
+            self.commands['dark_mode'] = dark_mode
+            self.commands['lum'] = lum
+            self.commands['power_mode'] = power_mode
+            self.ids['economy'].state = 'down' if economy else 'normal'
+            self.ids['dash_lights'].state = 'down' if dash_lights else 'normal'
+            self.ids['dark_mode'].state = 'down' if dark_mode else 'normal'
+            self.ids['cur_lum'].text = f'lum: {lum}'
+            if 'slider_lum' in self.ids:
+                self.ids['slider_lum'].value = lum
+            power_ids = {
+                0x00: 'sleeping',
+                0x01: 'ignition_on',
+                0x02: 'ignition_off',
+                0x03: 'wakeup'
+            }
+            for mode_key, mode_id in power_ids.items():
+                if mode_id in self.ids:
+                    self.ids[mode_id].state = 'down' if power_mode == mode_key else 'normal'
+        elif msg.arbitration_id == 0x0B6 and len(msg.data) >= 4:
             rpm = (msg.data[0] << 8) | msg.data[1]
             speed = (msg.data[2] << 8) | msg.data[3]
             self.on_val('rpm', int(rpm / 10))
@@ -152,7 +186,11 @@ class BSI_base(TabbedPanelItem):
         elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
             self.on_val('oil', int(msg.data[2]) - 40)
             self.on_val('fuel', int(msg.data[3]))
-        elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 6:
+        elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
+            reverse = (msg.data[7] >> 7) & 1
+            self.commands['reverse'] = reverse
+            if 'reverse' in self.ids:
+                self.ids['reverse'].state = 'down' if reverse else 'normal'
             coolant = int(msg.data[1])
             temp = int(msg.data[5])
             self.on_val('coolant', coolant - 40)

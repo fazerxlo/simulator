@@ -34,3 +34,11 @@ class BTE(TabbedPanelItem):
     def can_message(self):
         b1 = self.bits
         return 0x12B, [b1]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x12B and len(msg.data) >= 1:
+            self.bits = msg.data[0]
+            for bit in range(8):
+                key = f'b{bit}'
+                if key in self.ids:
+                    self.ids[key].state = 'down' if (self.bits >> bit) & 1 else 'normal'
