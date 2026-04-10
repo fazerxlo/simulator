@@ -54,6 +54,7 @@ class BSI_base(TabbedPanelItem):
             'coolant': 0
         }
         self.temperature = 20
+        self._updating_power_buttons = False
 
     def on_command(self, command, value):
         if command in ['economy', 'dash_lights', 'dark_mode', 'reverse']:
@@ -61,6 +62,8 @@ class BSI_base(TabbedPanelItem):
         if command == 'lum':
             self.ids['cur_lum'].text = f'lum: {value}'
         if command == 'power_mode':
+            if self._updating_power_buttons:
+                return
             self.set_power_mode(value)
             return
         self.commands[command] = int(value)
@@ -68,10 +71,16 @@ class BSI_base(TabbedPanelItem):
     def set_power_mode(self, value):
         power_mode = int(value)
         self.commands['power_mode'] = power_mode
+        self._updating_power_buttons = True
+        self.commands['power_mode'] = power_mode
         if power_mode == BSI_base._ignition_on:
-            self.ids['engine'].disabled = False
+            if 'engine' in self.ids:
+                self.ids['engine'].disabled = False
         else:
-            self.ids['engine'].disabled = True
+            if 'engine' in self.ids:
+                self.ids['engine'].disabled = True
+                self.ids['engine'].state = 'normal'
+                self.ids['engine'].text = 'Engine'
             self.commands['engine_running'] = 0
             self.on_val('rpm', 0)
             self.on_val('speed', 0)
@@ -82,16 +91,26 @@ class BSI_base(TabbedPanelItem):
             self.ids['sleeping'].state = 'down' if power_mode == 0x00 else 'normal'
         if 'wakeup' in self.ids:
             self.ids['wakeup'].state = 'down' if power_mode == BSI_base._ignition_wakeup else 'normal'
+        self._updating_power_buttons = False
 
-    def start_engine(self):
+    def toggle_engine(self, state):
         if self.commands['power_mode'] != BSI_base._ignition_on:
             return
-        self.commands['engine_running'] = 1
-        self.on_val('rpm', 800)
-        self.on_val('speed', 10)
-        self.on_val('fuel', 30)
-        self.on_val('oil', 65)
-        self.on_val('coolant', 60)
+        if state == 'down':
+            self.commands['engine_running'] = 1
+            self.on_val('rpm', 800)
+            self.on_val('speed', 10)
+            self.on_val('fuel', 30)
+            self.on_val('oil', 65)
+            self.on_val('coolant', 60)
+            if 'engine' in self.ids:
+                self.ids['engine'].text = 'Stop Engine'
+        else:
+            self.commands['engine_running'] = 0
+            self.on_val('rpm', 0)
+            self.on_val('speed', 0)
+            if 'engine' in self.ids:
+                self.ids['engine'].text = 'Engine'
 
     def on_temp(self, step, value):
         # Avoid overflows, anything over 250 (85.0) is not displayed
