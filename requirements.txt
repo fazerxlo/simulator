@@ -1,0 +1,5 @@
+Kivy==2.3.1
+python-can==3.3.4
+PyYAML==6.0.3
+setuptools==81.0.0
+
