@@ -42,33 +42,32 @@
           allow_no_selection: False
           on_state: root.on_command('power_mode', 0x00)
         ToggleButton:
-          id: ignition_on
-          text: 'ignition on'
-          group: 'pow_mode'
+          id: ignition
+          text: 'Ignition'
           allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x01)
-        ToggleButton:
-          id: ignition_off
-          text: 'ignition off'
-          group: 'pow_mode'
-          allow_no_selection: False
-          state: 'down'
-          on_state: root.on_command('power_mode', 0x02)
+          on_state: root.on_command('power_mode', 0x01 if self.state == 'down' else 0x02)
         ToggleButton:
           id: wakeup
           text: 'wakeup'
           group: 'pow_mode'
           allow_no_selection: False
           on_state: root.on_command('power_mode', 0x03)
-#        ToggleButton:
-#          text: 'com_off'
-#          group: 'pow_mode'
-#          allow_no_selection: False
-#          on_state: root.on_command('power_mode', 0x04)
+        Button:
+          id: engine
+          text: 'Engine'
+          disabled: True
+          on_press: root.start_engine()
         ToggleButton:
           id: reverse
           text: 'Reverse'
           on_state: root.on_command('reverse', self.state)
+
+      BoxLayout:
+        orientation: 'vertical'
+        size_hint: 0.4, 1
+        Label:
+          id: cur_217_raw
+          text: '0x217: --'
 
     BoxLayout:
       orientation: 'horizontal'

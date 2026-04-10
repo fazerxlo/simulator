@@ -42,7 +42,8 @@ class BSI_base(TabbedPanelItem):
             'dark_mode': 0,
             'reverse': 0,
             'lum': 10,
-            'power_mode': BSI_base._ignition_off
+            'power_mode': BSI_base._ignition_off,
+            'engine_running': 0
         }
 
         self.gauges = {
@@ -55,24 +56,42 @@ class BSI_base(TabbedPanelItem):
         self.temperature = 20
 
     def on_command(self, command, value):
-        if not command in self.commands:
-            print('command not found?!?')
         if command in ['economy', 'dash_lights', 'dark_mode', 'reverse']:
             value = 1 if value == 'down' else 0
         if command == 'lum':
             self.ids['cur_lum'].text = f'lum: {value}'
         if command == 'power_mode':
-            self.ignition(value)
+            self.set_power_mode(value)
+            return
         self.commands[command] = int(value)
 
-    def ignition(self, value):
-        if self.commands['power_mode'] == BSI_base._ignition_off and value == BSI_base._ignition_on:
-            self.on_val('rpm', 800)
-            self.on_val('speed', 10)
-            self.on_val('fuel', 30)
-            self.on_val('oil', 65)
-            self.on_val('coolant', 60)
+    def set_power_mode(self, value):
+        power_mode = int(value)
+        self.commands['power_mode'] = power_mode
+        if power_mode == BSI_base._ignition_on:
+            self.ids['engine'].disabled = False
+        else:
+            self.ids['engine'].disabled = True
+            self.commands['engine_running'] = 0
+            self.on_val('rpm', 0)
+            self.on_val('speed', 0)
 
+        if 'ignition' in self.ids:
+            self.ids['ignition'].state = 'down' if power_mode == BSI_base._ignition_on else 'normal'
+        if 'sleeping' in self.ids:
+            self.ids['sleeping'].state = 'down' if power_mode == 0x00 else 'normal'
+        if 'wakeup' in self.ids:
+            self.ids['wakeup'].state = 'down' if power_mode == BSI_base._ignition_wakeup else 'normal'
+
+    def start_engine(self):
+        if self.commands['power_mode'] != BSI_base._ignition_on:
+            return
+        self.commands['engine_running'] = 1
+        self.on_val('rpm', 800)
+        self.on_val('speed', 10)
+        self.on_val('fuel', 30)
+        self.on_val('oil', 65)
+        self.on_val('coolant', 60)
 
     def on_temp(self, step, value):
         # Avoid overflows, anything over 250 (85.0) is not displayed
@@ -162,22 +181,13 @@ class BSI_base(TabbedPanelItem):
             self.commands['dash_lights'] = dash_lights
             self.commands['dark_mode'] = dark_mode
             self.commands['lum'] = lum
-            self.commands['power_mode'] = power_mode
             self.ids['economy'].state = 'down' if economy else 'normal'
             self.ids['dash_lights'].state = 'down' if dash_lights else 'normal'
             self.ids['dark_mode'].state = 'down' if dark_mode else 'normal'
             self.ids['cur_lum'].text = f'lum: {lum}'
             if 'slider_lum' in self.ids:
                 self.ids['slider_lum'].value = lum
-            power_ids = {
-                0x00: 'sleeping',
-                0x01: 'ignition_on',
-                0x02: 'ignition_off',
-                0x03: 'wakeup'
-            }
-            for mode_key, mode_id in power_ids.items():
-                if mode_id in self.ids:
-                    self.ids[mode_id].state = 'down' if power_mode == mode_key else 'normal'
+            self.set_power_mode(power_mode)
         elif msg.arbitration_id == 0x0B6 and len(msg.data) >= 4:
             rpm = (msg.data[0] << 8) | msg.data[1]
             speed = (msg.data[2] << 8) | msg.data[3]
@@ -195,3 +205,7 @@ class BSI_base(TabbedPanelItem):
             temp = int(msg.data[5])
             self.on_val('coolant', coolant - 40)
             self.on_temp(False, temp / 2 - 40)
+        elif msg.arbitration_id == 0x217 and len(msg.data) >= 8:
+            raw_bytes = ' '.join(f'{b:02X}' for b in msg.data)
+            if 'cur_217_raw' in self.ids:
+                self.ids['cur_217_raw'].text = f'0x217: {raw_bytes}'
