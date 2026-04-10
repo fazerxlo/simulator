@@ -15,6 +15,7 @@ class CanRunner():
         self.receiver_exit = threading.Event()
         self.messages = []
         self.mess = []
+        self.receive_handlers = []
         self.modules = {}
 
     def reg(self, func, id, schedule, tp_id=None, tp_callback=None, *args, **kwargs):
@@ -43,10 +44,20 @@ class CanRunner():
             recvd = self.bus.recv(1.0)
             if not recvd:
                 continue
+            arb_id = recvd.arbitration_id
             for message in self.mess:
-                if message['tp_id'] == recvd['arbitration_id']:
-                    message['tp_callback'](recvd['data'])
+                if message['tp_id'] == arb_id:
+                    message['tp_callback'](recvd.data)
+            for handler in self.receive_handlers:
+                if handler['id'] is None or handler['id'] == arb_id:
+                    handler['callback'](recvd)
 
+
+    def register_receive(self, callback, arbitration_id=None):
+        self.receive_handlers.append({
+            'id': arbitration_id,
+            'callback': callback
+        })
 
     def sender(self):
         while True:
@@ -72,7 +83,7 @@ class CanRunner():
                     message['timer'] = now
 
             # Wait until next round
-            time.sleep(0.02)
+            time.sleep(0.01)
 
     def run(self):
         self.sender.start()

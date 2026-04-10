@@ -2,10 +2,11 @@ modules:
   - bsi-base
   - bsi-trip
   - bsi-log
-  #- radio-gen
-  #- radio-fm
+  # - radio-gen
+  # - radio-fm
   - clim
-  #- combine
+  - combine
+  - can-monitor
   #- kml
   #- bte
-  #- radio-cd
+  # - radio-cd

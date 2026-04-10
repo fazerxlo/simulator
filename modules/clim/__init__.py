@@ -28,7 +28,7 @@ class Clim(TabbedPanelItem):
         self.dir = [0,0]
         self.options = {
             'unfrost_front': 0,
-            'unfrost_read': 0,
+            'unfrost_rear': 0,
             'recycle': 0,
             'auto': 0,
             'dual': 0
@@ -72,17 +72,44 @@ class Clim(TabbedPanelItem):
             self.bits &= ~(1<<bit)
 
     def can_clim_panel(self):
-        b4 = self.options['recycle']<<5 | self.options['unfrost_front']<<4
+
+
+        b4 = self.options['recycle']<<5 | self.options['unfrost_front']<<4 | 1
         return 0x1D0, [0x00, 0x00, self.fan, self.dir[0], b4, self.temps[0], self.temps[1]]
 
     def can_clim_cmd(self):
         return 0x12D, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def can_clim_emf(self):
-        # recycle, ac off, off, auto air, auto (text), hide fan, ext air, dual
-        b1 = self.options['auto']<<3 | self.options['dual']
+        
+        # --- Calculate b1 with implicit states using multi-line expression ---
+        # Comment: recycle, ac off, off, auto air, auto (text), hide fan, ext air, dual
+        # Bit Assignments (Implemented/Inferred):
+        # 7: recycle (from self.options['recycle'])
+        # 6: ac off (NOT IMPLEMENTED IMPLICITLY - assumed 0)
+        # 5: off (inferred from self.fan == 0)
+        # 4: auto air (NOT IMPLEMENTED - assumed 0)
+        # 3: auto (text) (from self.options['auto'])
+        # 2: hide fan (inferred from self.fan == 0)
+        # 1: ext air (NOT IMPLEMENTED - assumed 0, opposite of recycle)
+        # 0: dual (from self.options['dual'])
+        b1 = (
+            (self.options['recycle'] & (not self.options['auto']))<<7 |        # recycle
+            (not self.fan)<<6 |                  # fan off
+            (not self.options['auto'])<<5 |     # ac off
+            self.options['auto']<<4 |           # auto air
+            self.options['auto']<<3 |           # auto
+            (not self.fan)<<2 |                       # hide fan when fan off
+            ((not self.options['recycle']) & (not self.options['auto']))<<1 |           # ext air
+            self.options['dual']                # dual            
+            )
+        # b1 = 0xFF
+        # 111010  3A auto off
+        # 110000  30 auto on
+
         # unfrost front, [3 bits] temperature offset, 4 bits unknown
-        b2 = self.options['unfrost_front']<<7
+        b2 = self.options['unfrost_front']<<7 #| self.options['unfrost_front']<<6
+        # b2 = 0xFF
         b3 = self.bits | self.temps[0] # unknown, 2 bits: if both 1: '--.-', 5 bits temperature // left seat + dual
         b4 = self.temps[1] # same as b4, right seat only
         b5 = self.dir[0]<<4 # 4 bits: direction, 4 bits unknown // left seat + dual

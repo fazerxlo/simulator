@@ -47,11 +47,11 @@
           allow_no_selection: False
           state: 'down'
           on_state: root.on_command('power_mode', 0x02)
-        ToggleButton:
-          text: 'wakeup'
-          group: 'pow_mode'
-          allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x03)
+#        ToggleButton:
+#          text: 'wakeup'
+#          group: 'pow_mode'
+#          allow_no_selection: False
+#          on_state: root.on_command('power_mode', 0x03)
 #        ToggleButton:
 #          text: 'com_off'
 #          group: 'pow_mode'
@@ -60,6 +60,11 @@
         ToggleButton:
           text: 'Reverse'
           on_state: root.on_command('reverse', self.state)
+        ToggleButton:
+          text: 'Obstacle'
+          on_state: root.on_onstacle(self.state)
+
+
 
     BoxLayout:
       orientation: 'horizontal'

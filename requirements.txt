@@ -1,0 +1,4 @@
+Kivy==2.0.0rc2
+python-can==3.3.4
+PyYAML==6.0
+

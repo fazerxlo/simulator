@@ -1,0 +1,24 @@
+BoxLayout:
+    orientation: 'vertical'
+    padding: '8dp'
+    spacing: '8dp'
+
+    Label:
+        text: 'CAN Bus Monitor'
+        size_hint_y: None
+        height: '32dp'
+        bold: True
+
+    ScrollView:
+        do_scroll_x: False
+        do_scroll_y: True
+
+        Label:
+            id: frame_list
+            text: 'Waiting for CAN frames...'
+            size_hint_y: None
+            text_size: self.width, None
+            halign: 'left'
+            valign: 'top'
+            padding: '8dp', '8dp'
+            height: self.texture_size[1]

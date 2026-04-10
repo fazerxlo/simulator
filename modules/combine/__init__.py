@@ -37,7 +37,7 @@ class Combine(TabbedPanelItem):
             'tyre': 0,
             'backlight': 0,
             'on': 0,
-            'low_beam': 0,
+            'low_beam': 1,
             'high_beam': 0,
             'fog_front': 0,
             'fog_rear': 0,
@@ -71,7 +71,7 @@ class Combine(TabbedPanelItem):
         b3 = opt['tyre']<<6
         b4 = opt['backlight']<<7 | opt['low_beam']<<6 | opt['high_beam']<<5 | opt['fog_front']<<4 | opt['fog_rear']<<3 | opt['clig_r']<<2 | opt['clig_l'] << 1
         b5 = opt['on']<<7
-        return 0x128, [b0, b1, b2, b3, b4, b5, 0x00, 0x00]
+        return 0x128, [b0, b1, b2, b3, b4, b5, 0xB0, 0x01]
 
     def can_combine_signals(self):
         opt = self.options

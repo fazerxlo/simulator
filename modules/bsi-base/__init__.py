@@ -34,6 +34,10 @@ class BSI_base(TabbedPanelItem):
         runner.register(100, self.parktronic)
         runner.register(50, self.can_fast)
         runner.register(100, self.can_temp_level)
+        #runner.register(100, self.can_126)
+        #runner.register(100, self.can_18C)
+        #runner.register(100, self.can_1CC)
+        runner.register(100, self.can_220)
 
         # COMMANDES_BSI values
         self.commands = {
@@ -42,7 +46,7 @@ class BSI_base(TabbedPanelItem):
             'dark_mode': 0,
             'reverse': 0,
             'lum': 10,
-            'power_mode': BSI_base._ignition_off
+            'power_mode': BSI_base._ignition_on
         }
 
         self.gauges = {
@@ -54,6 +58,13 @@ class BSI_base(TabbedPanelItem):
         }
         self.temperature = 20
 
+        self.obstacle = False
+
+        self.odometer = {
+            'speed': 120,
+            'dist': 123000
+        }
+
     def on_command(self, command, value):
         if not command in self.commands:
             print('command not found?!?')
@@ -64,6 +75,13 @@ class BSI_base(TabbedPanelItem):
         if command == 'power_mode':
             self.ignition(value)
         self.commands[command] = int(value)
+
+    def on_onstacle(self, value):
+        if value =='down':
+            self.obstacle = True
+        else:
+            self.obstacle = False
+
 
     def ignition(self, value):
         if self.commands['power_mode'] == BSI_base._ignition_off and value == BSI_base._ignition_on:
@@ -111,17 +129,21 @@ class BSI_base(TabbedPanelItem):
         coolant = int(self.gauges['coolant']+40)
         com = self.commands
         reverse = int(com['reverse'])<<7 | 0x01
-        return 0x0F6, [0x08, coolant, 0x00, 0x1F, 0x00, temp, temp, reverse]
+        odometer = int(self.odometer['dist']*10)
+        return 0x0F6, [0x08, coolant, odometer>>16&0xff, odometer>>8&0xff, odometer&0xff, 0x8e, temp, reverse]
 
     def can_fast(self):
-        rpm = int(self.gauges['rpm']*10)
+        rpm = int(self.gauges['rpm']*8)
         speed = int(self.gauges['speed']*100)
-        return 0x0B6, [rpm>>8, rpm&0xFF, speed>>8, speed&0xFF, 0x00, 0x00, 0x00, 0x00]
+        return 0x0B6, [(rpm>>8)&0xFF, rpm&0xFF, speed>>8, speed&0xFF, 0x00, 0x00, 0x00, 0x00]
     
     def parktronic(self):
         com = self.commands
         if int(com['reverse']) == 1:
-            return 0x0E1, [0x24, 0xD0, 0xCC, 0x11, 0x5C, 0xFE, 0xC2]
+            if self.obstacle:
+                return 0x0E1, [0x24, 0xD0, 0xCC, 0x11, 0x00, 0xFE, 0xC2]
+            else:
+                return 0x0E1, [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
         else:
             return 0x0E1, None
         # 0x0E1, [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
@@ -142,3 +164,43 @@ class BSI_base(TabbedPanelItem):
     def can_temp_level(self):
         oil = self.gauges['oil']+40
         return 0x161, [0x00, 0x00, oil, self.gauges['fuel'], 0xff, 0xff, 0xff, 0xff]
+    
+    def can_126(self): 
+        return 0x126, [0x00, 0xB0, 0x00]
+    
+    def can_18C(self):
+        return 0x18C, [0x00, 0x00]
+    
+    def can_1CC(self):
+        return 0x1CC, [0x00, 0x00]
+    
+    def can_220(self):
+        if self.obstacle:
+            return 0x220, [0b11100000, 0x00]
+        else:
+            return 0x220, [0x04]
+    
+
+    
+    #120 - 3 rodzaje na przemian
+    #126 - stale 00 B0 00 
+    #14C - 2 rozne 00 00 00 00 00 / 00 00 00 00 80 
+    #18C - stale 00 00 
+    #1A8 - 2 rozne 00 FF FF 00 00 FF FF FF / 00 FF FF 00 00 13 E2 2D 
+    #1CC - stale 00 00 
+    #220 - stale 04
+    #227 - stale 00 00 10 00 
+    #260 - 3 rodzaje
+    #2A0 - stale 00
+    #2E1 - stale DD C4 40 1C 00 
+    #361 - stale 01 01 91 40 30 10 
+    #3A7 - stale 00 00 00 03 EE 01 3C 05 
+    #412 - stale 5 razy 00 00
+    #4A0 - 2 rozne wartosci
+    #512 - stale 01 00 00 00 00 00 00 00 
+    #5D2 - 1 razy B0 00 00 00 01 0A 06 16 
+
+
+
+
+
