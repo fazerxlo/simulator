@@ -6,8 +6,9 @@ modules:
   #- radio-gen
   #- radio-fm
   # - clim
-  - combine
+  # - combine
   - tyres
+  - doors
   #- kml
   #- bte
   #- radio-cd
