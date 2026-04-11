@@ -2,11 +2,12 @@ modules:
   - bsi-base
   - parktronic
   - bsi-trip
-  - bsi-log
+  #- bsi-log
   #- radio-gen
   #- radio-fm
-  - clim
-  #- combine
+  # - clim
+  - combine
+  - tyres
   #- kml
   #- bte
   #- radio-cd

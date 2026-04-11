@@ -1,0 +1,170 @@
+<Tyres>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: 10
+    spacing: 5
+
+    # --- Generic 0x1A1 system message controls ---
+    BoxLayout:
+      orientation: 'vertical'
+      size_hint_y: 0.25
+
+      Label:
+        text: 'System Messages (0x1A1)'
+        font_size: '14sp'
+        bold: True
+        size_hint_y: 0.25
+
+      BoxLayout:
+        orientation: 'horizontal'
+        size_hint_y: 0.35
+        Button:
+          text: '-'
+          on_press: root.dec_mess()
+          size_hint_x: 0.08
+        Button:
+          text: '+'
+          on_press: root.inc_mess()
+          size_hint_x: 0.08
+        Slider:
+          id: slider_mess
+          min: 0
+          max: 255
+          value: 0
+          step: 1
+          on_value: root.on_mess(args[1])
+        Label:
+          id: cur_mess
+          text: '0'
+          size_hint_x: 0.08
+        Button:
+          id: send
+          text: 'send'
+          on_release: root.show_msg(root.mess)
+          size_hint_x: 0.25
+
+      Label:
+        id: status_msg
+        text: '-'
+        font_size: '14sp'
+        color: 0.5, 0.5, 0.5, 1
+        size_hint_y: 0.4
+
+    # --- Tyre warnings ---
+    Label:
+      text: 'Tyre Pressure Warnings'
+      size_hint_y: 0.05
+      font_size: '14sp'
+      bold: True
+
+    GridLayout:
+      cols: 2
+      spacing: 10
+      size_hint_y: 0.15
+
+      Button:
+        text: 'Not MONITORED'
+        on_release: root.send_tyre_message('not_monitored')
+      Button:
+        text: 'OK'
+        on_release: root.send_tyre_message('ok')
+      Button:
+        text: 'FLAT TIRE'
+        on_release: root.send_tyre_message('flat_tire')
+      Button:
+        text: 'LOW PRESSURE'
+        on_release: root.send_tyre_message('low_pressure')
+
+    GridLayout:
+      cols: 2
+      spacing: 20
+      padding: 10
+      size_hint_y: 0.55
+
+      # Front Left
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 5
+        Label:
+          text: 'Front Left'
+          font_size: '14sp'
+          bold: True
+          size_hint_y: 0.3
+        Label:
+          id: state_fl
+          text: 'OK'
+          font_size: '16sp'
+          color: 0, 1, 0, 1
+          size_hint_y: 0.3
+        Spinner:
+          id: spinner_fl
+          text: 'OK'
+          values: ['OK', 'LOW', 'FLAT', 'NO DATA']
+          on_text: root.on_state_change('fl', self.text)
+          size_hint_y: 0.4
+
+      # Front Right
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 5
+        Label:
+          text: 'Front Right'
+          font_size: '14sp'
+          bold: True
+          size_hint_y: 0.3
+        Label:
+          id: state_fr
+          text: 'OK'
+          font_size: '16sp'
+          color: 0, 1, 0, 1
+          size_hint_y: 0.3
+        Spinner:
+          id: spinner_fr
+          text: 'OK'
+          values: ['OK', 'LOW', 'FLAT', 'NO DATA']
+          on_text: root.on_state_change('fr', self.text)
+          size_hint_y: 0.4
+
+      # Rear Left
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 5
+        Label:
+          text: 'Rear Left'
+          font_size: '14sp'
+          bold: True
+          size_hint_y: 0.3
+        Label:
+          id: state_rl
+          text: 'OK'
+          font_size: '16sp'
+          color: 0, 1, 0, 1
+          size_hint_y: 0.3
+        Spinner:
+          id: spinner_rl
+          text: 'OK'
+          values: ['OK', 'LOW', 'FLAT', 'NO DATA']
+          on_text: root.on_state_change('rl', self.text)
+          size_hint_y: 0.4
+
+      # Rear Right
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 5
+        Label:
+          text: 'Rear Right'
+          font_size: '14sp'
+          bold: True
+          size_hint_y: 0.3
+        Label:
+          id: state_rr
+          text: 'OK'
+          font_size: '16sp'
+          color: 0, 1, 0, 1
+          size_hint_y: 0.3
+        Spinner:
+          id: spinner_rr
+          text: 'OK'
+          values: ['OK', 'LOW', 'FLAT', 'NO DATA']
+          on_text: root.on_state_change('rr', self.text)
+          size_hint_y: 0.4

@@ -6,7 +6,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from .messages import messages
+from modules.messages_1a1 import messages
 
 _modname = 'BSI_log'
 _modversion = '0.0.1'
@@ -16,6 +16,7 @@ class BSI_log(TabbedPanelItem):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
         self.text = 'BSI/Log'
+        self.runner = runner
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/bsi.kv')
@@ -61,6 +62,10 @@ class BSI_log(TabbedPanelItem):
             self.msg_id = 0x00
 
     def can_message(self):
+        if getattr(self.runner, 'tyres_display_active', False):
+            return 0x1A1, None
+        if self.msg_flag == 0xFF:
+            return 0x1A1, None
         b2 = 0xf0 if self.msg_flag != 0xFF else 0x00
         return 0x1A1, [self.msg_flag, self.msg_id, b2, 0x00, 0x00, 0x00, 0x00, 0x00]
 
