@@ -72,6 +72,7 @@ class Tyres(TabbedPanelItem):
         self.msg_flag = 0xFF
         self.msg_id = 0x00
         self.mess = 0x00
+        self._pending_msg_ev = None
         self.runner.tyres_display_active = False
 
         self._update_labels()
@@ -108,25 +109,53 @@ class Tyres(TabbedPanelItem):
         self.show_msg(msg_id)
 
     def show_msg(self, id=None):
-        if id and self.msg_flag == 0xFF:
-            self.msg_id = int(id)
-            self.msg_flag = 0x80
-            self._update_status()
-            self._sync_runner_display_state()
-            self._send_manual_frame('active')
-            Clock.schedule_once(self.show_msg, 2)
-        elif id == self.msg_id and self.msg_flag != 0xFF:
-            pass  # double call guard
-        elif self.msg_flag == 0x80:
+        if id is None:
+            return
+
+        requested_id = int(id)
+        self._cancel_pending_msg_event()
+
+        if self.msg_flag != 0xFF:
+            # Refresh visible popup context before showing updated tyre warning.
             self.msg_flag = 0x00
             self._sync_runner_display_state()
             self._send_manual_frame('clear')
-            Clock.schedule_once(self.show_msg, 0.2)
-        elif self.msg_flag == 0x00:
-            self.msg_flag = 0xFF
-            self.msg_id = 0x00
-            self._update_status()
-            self._sync_runner_display_state()
+            self._pending_msg_ev = Clock.schedule_once(lambda _dt: self._activate_message(requested_id), 0.05)
+            return
+
+        self._activate_message(requested_id)
+
+    def _activate_message(self, msg_id):
+        self._pending_msg_ev = None
+        self.msg_id = int(msg_id)
+        self.msg_flag = 0x80
+        self._update_status()
+        self._sync_runner_display_state()
+        self._send_manual_frame('active')
+        self._pending_msg_ev = Clock.schedule_once(self._clear_active_message, 2)
+
+    def _clear_active_message(self, _dt):
+        self._pending_msg_ev = None
+        if self.msg_flag != 0x80:
+            return
+        self.msg_flag = 0x00
+        self._sync_runner_display_state()
+        self._send_manual_frame('clear')
+        self._pending_msg_ev = Clock.schedule_once(self._reset_message_state, 0.2)
+
+    def _reset_message_state(self, _dt):
+        self._pending_msg_ev = None
+        if self.msg_flag != 0x00:
+            return
+        self.msg_flag = 0xFF
+        self.msg_id = 0x00
+        self._update_status()
+        self._sync_runner_display_state()
+
+    def _cancel_pending_msg_event(self):
+        if self._pending_msg_ev is not None:
+            self._pending_msg_ev.cancel()
+            self._pending_msg_ev = None
 
     def _update_status(self):
         if 'status_msg' in self.ids:
@@ -160,7 +189,7 @@ class Tyres(TabbedPanelItem):
         self.tyre_state[tyre] = idx
         self._update_label(tyre)
 
-        # self._trigger_warning()  # commented out: suppress 0x1A1 on tyre state change
+        self._trigger_warning()
 
         self._send_0x120_status()
 
