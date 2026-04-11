@@ -127,20 +127,20 @@
           state: 'down'
           allow_no_selection: False
 
-
-	BoxLayout:
-      orientation: 'horizontal'
-      Slider:
-        #min: 50.00
-        #max: 152.30
-        #step: 0.05
-        #value: 96.5
-        min: 0
-        max: 2046
-        step: 1
-        value: 50
-        on_value: root.on_freq(args[1])
-      Label:
-        id: cur_freq
-        text: '50.00mhz'
-        size_hint: 0.17,1
+      BoxLayout:
+        orientation: 'horizontal'
+        Slider:
+          id: slider_freq
+          #min: 50.00
+          #max: 152.30
+          #step: 0.05
+          #value: 96.5
+          min: 0
+          max: 2046
+          step: 1
+          value: 50
+          on_value: root.on_freq(args[1])
+        Label:
+          id: cur_freq
+          text: '50.00mhz'
+          size_hint: 0.17,1

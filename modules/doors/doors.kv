@@ -1,0 +1,65 @@
+<Doors>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: 10
+    spacing: 8
+
+    Label:
+      text: 'Door / Body Status (CAN2004 0x220 + 0x1A1)'
+      size_hint_y: 0.1
+      bold: True
+
+    Label:
+      id: door_summary
+      text: 'Open: none'
+      size_hint_y: 0.1
+      color: 0, 1, 0, 1
+
+    GridLayout:
+      cols: 2
+      spacing: 10
+      size_hint_y: 0.6
+
+      ToggleButton:
+        id: door_front_left
+        text: 'Front Left'
+        on_state: root.on_toggle('front_left', self.state)
+      ToggleButton:
+        id: door_front_right
+        text: 'Front Right'
+        on_state: root.on_toggle('front_right', self.state)
+      ToggleButton:
+        id: door_rear_left
+        text: 'Rear Left'
+        on_state: root.on_toggle('rear_left', self.state)
+      ToggleButton:
+        id: door_rear_right
+        text: 'Rear Right'
+        on_state: root.on_toggle('rear_right', self.state)
+      ToggleButton:
+        id: door_boot
+        text: 'Boot / Trunk'
+        on_state: root.on_toggle('boot', self.state)
+      ToggleButton:
+        id: door_bonnet
+        text: 'Bonnet / Hood'
+        on_state: root.on_toggle('bonnet', self.state)
+      ToggleButton:
+        id: door_rear_window
+        text: 'Rear Window'
+        on_state: root.on_toggle('rear_window', self.state)
+      ToggleButton:
+        id: door_fuel_flap
+        text: 'Fuel Flap'
+        on_state: root.on_toggle('fuel_flap', self.state)
+
+    BoxLayout:
+      size_hint_y: 0.2
+      spacing: 8
+
+      Button:
+        text: 'Open All'
+        on_release: root.open_all()
+      Button:
+        text: 'Close All'
+        on_release: root.close_all()

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import sys
+import argparse
 import kivy
 import can
 import datetime
@@ -16,7 +18,21 @@ from kivy.clock import Clock
 
 from can_runner import CanRunner
 
+
+def parse_args():
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument('mode', nargs='?', choices=['monitor'], help='Run mode')
+    parser.add_argument('--monitor', action='store_true', help='Monitor CAN bus only, do not send outgoing frames')
+    args, unknown = parser.parse_known_args()
+    sys.argv = [sys.argv[0]] + unknown
+    return args
+
+
 class PeugeotSim(App):
+    def __init__(self, monitor=False, **kwargs):
+        super().__init__(**kwargs)
+        self.monitor = monitor
+
     def build(self):
         return Builder.load_file('main.kv')
 
@@ -29,19 +45,24 @@ class PeugeotSim(App):
             self.conf = yaml.load(conf_file, Loader=yaml.FullLoader)
 
         # Init CAN runner
-        self.can_runner = CanRunner()
+        self.can_runner = CanRunner(monitor=self.monitor)
         self.can_runner.run()
+        Clock.schedule_interval(self.can_runner.process_events, 0)
 
         # Init modules
         self.modules = {}
         for name in self.conf['modules']:
             module = importlib.import_module(f'modules.{name}')
-            self.modules[name] = getattr(module, module._modname)(self.can_runner)
+            module_instance = getattr(module, module._modname)(self.can_runner)
+            self.modules[name] = module_instance
+            if hasattr(module_instance, 'on_can_message'):
+                self.can_runner.listen(None, module_instance.on_can_message)
+
             if not tabs.tab_list:
-                tabs.add_widget(self.modules[name])
-                Clock.schedule_once(partial(tabs.switch_to, self.modules[name]))
+                tabs.add_widget(module_instance)
+                Clock.schedule_once(partial(tabs.switch_to, module_instance))
             else:
-                tabs.add_widget(self.modules[name])
+                tabs.add_widget(module_instance)
 
     def on_stop(self):
         print('closing app')
@@ -49,4 +70,6 @@ class PeugeotSim(App):
         self.thread_exit = True
 
 if __name__ == '__main__':
-    PeugeotSim().run()
+    args = parse_args()
+    monitor_mode = args.monitor or args.mode == 'monitor'
+    PeugeotSim(monitor=monitor_mode).run()

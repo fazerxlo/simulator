@@ -188,9 +188,52 @@ class Radio_gen(TabbedPanelItem):
         b6 = (self.audio['menu'] == 'ambiance')<<6 | self.ambiances_codes[self.audio['ambiance']]
         return 0x1E5, [b0, b1, b2, 0x00, b4, b5, b6]
 
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x1A5 and len(msg.data) >= 1:
+            self.on_volume(msg.data[0] & 0x1F)
+        elif msg.arbitration_id == 0x165 and len(msg.data) >= 3:
+            input_code = msg.data[2] >> 4
+            for name, code in self.inputs.items():
+                if code == input_code:
+                    self.on_input(name)
+                    break
+        elif msg.arbitration_id == 0x225 and len(msg.data) >= 5:
+            self.band = msg.data[2]
+            freq = (msg.data[3] << 8) | msg.data[4]
+            self.on_freq(freq)
+        elif msg.arbitration_id == 0x1E5 and len(msg.data) >= 7:
+            if msg.data[0] & 0x80:
+                self.audio['menu'] = 'lr-bal'
+                self.audio['lr-bal'] = msg.data[0] & 0x7F
+            elif msg.data[1] & 0x80:
+                self.audio['menu'] = 'rf-bal'
+                self.audio['rf-bal'] = msg.data[1] & 0x7F
+            elif msg.data[2] & 0x80:
+                self.audio['menu'] = 'bass'
+                self.audio['bass'] = msg.data[2] & 0x7F
+            elif msg.data[4] & 0x80:
+                self.audio['menu'] = 'treble'
+                self.audio['treble'] = msg.data[4] & 0x7F
+            elif msg.data[5] & 0x10:
+                self.audio['menu'] = 'volume'
+                self.audio['volume'] = msg.data[5] & 0x0F
+            elif msg.data[5] & 0x40:
+                self.audio['menu'] = 'loudness'
+                self.audio['loudness'] = (msg.data[5] >> 6) & 1
+            elif msg.data[6] & 0x40:
+                self.audio['menu'] = 'ambiance'
+                for name, code in self.ambiances_codes.items():
+                    if code == (msg.data[6] & 0x3F):
+                        self.audio['ambiance'] = name
+                        break
+            self.ids['cur_menu'].text = f'menu: {self.audio["menu"]}'
+            for param in ['ambiance', 'volume', 'lr-bal', 'rf-bal', 'loudness', 'treble', 'bass']:
+                key = f'cur_param_{param}'
+                if key in self.ids:
+                    value = self.audio[param]
+                    if param in ['lr-bal', 'rf-bal', 'bass', 'treble']:
+                        value = value - 0x3F
+                    self.ids[key].text = f'{param}: {value}'
+
     def can_test(self):
         return [0x01, 0x01, 0x00, 0x10, 0x00, 116, 101, 115]
-
-    def can_test_tp(self):
-        print('received')
-        return None

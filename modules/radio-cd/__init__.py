@@ -127,3 +127,25 @@ class Radio_cd(TabbedPanelItem):
 
     def can_radio(self):
         return 0x1E0, [int('00100100',2), 0x00, 0x00, 0x00, 0x20]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x1A5 and len(msg.data) >= 1:
+            self.on_volume(msg.data[0] & 0x1F)
+        elif msg.arbitration_id == 0x225 and len(msg.data) >= 5:
+            self.band = msg.data[2]
+            freq = (msg.data[3] << 8) | msg.data[4]
+            self.on_freq(freq)
+        elif msg.arbitration_id == 0x3E5 and len(msg.data) >= 6:
+            b0, b1, b2, _, _, b5 = msg.data[:6]
+            self.panel['menu'] = (b0 >> 6) & 1
+            self.panel['tel'] = (b0 >> 4) & 1
+            self.panel['clim'] = b0 & 1
+            self.panel['trip'] = (b1 >> 6) & 1
+            self.panel['mode'] = (b1 >> 4) & 1
+            self.panel['audio'] = b1 & 1
+            self.panel['ok'] = (b2 >> 6) & 1
+            self.panel['esc'] = (b2 >> 4) & 1
+            self.panel['up'] = (b5 >> 6) & 1
+            self.panel['down'] = (b5 >> 4) & 1
+            self.panel['right'] = (b5 >> 2) & 1
+            self.panel['left'] = (b5 >> 0) & 1

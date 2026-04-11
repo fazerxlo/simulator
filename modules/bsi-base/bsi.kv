@@ -8,12 +8,15 @@
         orientation: 'vertical'
         size_hint: 0.3,1
         ToggleButton:
+          id: economy
           text: 'economy'
           on_state: root.on_command('economy', self.state)
         ToggleButton:
+          id: dash_lights
           text: 'dash lights'
           on_state: root.on_command('dash_lights', self.state)
         ToggleButton:
+          id: dark_mode
           text: 'dark mode'
           on_state: root.on_command('dark_mode', self.state)
       BoxLayout:
@@ -22,6 +25,7 @@
           id: cur_lum
           text: 'lum: 10'
         Slider:
+          id: slider_lum
           min: 0
           max: 15
           step: 1
@@ -32,34 +36,28 @@
         Label:
           text: 'power mgmt'
         ToggleButton:
+          id: sleeping
           text: 'sleeping'
           group: 'pow_mode'
           allow_no_selection: False
           on_state: root.on_command('power_mode', 0x00)
         ToggleButton:
-          text: 'ignition on'
-          group: 'pow_mode'
+          id: ignition
+          text: 'Ignition'
           allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x01)
+          on_state: root.on_command('power_mode', 0x01 if self.state == 'down' else 0x02)
         ToggleButton:
-          text: 'ignition off'
-          group: 'pow_mode'
-          allow_no_selection: False
-          state: 'down'
-          on_state: root.on_command('power_mode', 0x02)
-        ToggleButton:
+          id: wakeup
           text: 'wakeup'
           group: 'pow_mode'
           allow_no_selection: False
           on_state: root.on_command('power_mode', 0x03)
-#        ToggleButton:
-#          text: 'com_off'
-#          group: 'pow_mode'
-#          allow_no_selection: False
-#          on_state: root.on_command('power_mode', 0x04)
         ToggleButton:
-          text: 'Reverse'
-          on_state: root.on_command('reverse', self.state)
+          id: engine
+          text: 'Engine'
+          disabled: True
+          allow_no_selection: True
+          on_state: root.toggle_engine(self.state)
 
     BoxLayout:
       orientation: 'horizontal'
@@ -72,6 +70,7 @@
         on_press: root.on_temp(True, +0.5)
         size_hint: 0.2,1
       Slider:
+        id: slider_temp
         min: -40.0
         max: 85.0
         step: 0.5
@@ -90,6 +89,7 @@
           id: cur_rpm
           text: 'RPM: 0'
         Slider:
+          id: slider_rpm
           min: 0
           max: 6500
           step: 1
@@ -101,6 +101,7 @@
           id: cur_speed
           text: 'Speed: 0 km/h'
         Slider:
+          id: slider_speed
           min: 0
           max: 220
           step: 1
@@ -112,6 +113,7 @@
           id: cur_fuel
           text: 'Fuel: 0%'
         Slider:
+          id: slider_fuel
           min: 0
           max: 100
           step: 1
@@ -123,6 +125,7 @@
           id: cur_oil
           text: 'Oil temp: 0 deg'
         Slider:
+          id: slider_oil
           min: 60
           max: 160
           step: 1
@@ -134,8 +137,10 @@
           id: cur_coolant
           text: 'Coolant temp: 0 deg'
         Slider:
+          id: slider_coolant
           min: 60
           max: 120
           step: 1
           value: 60
           on_value: root.on_val('coolant', args[1])
+
