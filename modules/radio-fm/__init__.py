@@ -40,6 +40,8 @@ class Radio_fm(TabbedPanelItem):
         self.freq = int(freq)#int((freq-50)/0.05)
         disp_freq = freq*0.05+50
         self.ids['cur_freq'].text = self.band == 0x50 and f'{int(freq)} kHz' or f'{disp_freq:10.2f} MHz'
+        if 'slider_freq' in self.ids and self.ids['slider_freq'].value != self.freq:
+            self.ids['slider_freq'].value = self.freq
 
     def on_band(self, state, value):
         self.on_toggle('band', state, value)
@@ -67,3 +69,9 @@ class Radio_fm(TabbedPanelItem):
 
     def can_radio(self):
         return 0x1E0, [int('00100100',2), 0x00, 0x00, 0x00, 0x20]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x225 and len(msg.data) >= 5:
+            self.band = msg.data[2]
+            freq = (msg.data[3] << 8) | msg.data[4]
+            self.on_freq(freq)

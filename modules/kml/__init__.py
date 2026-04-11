@@ -69,3 +69,21 @@ class KML(TabbedPanelItem):
         b6 = 0x02
         b7 = 0
         return 0x323, [b1, b2, b3, b4, b5, b6, b7]
+
+    def on_can_message(self, msg):
+        if msg.arbitration_id == 0x1A3 and len(msg.data) >= 2:
+            self.opt = (msg.data[1] >> 2) & 1
+            if 'opt' in self.ids:
+                self.ids['opt'].state = 'down' if self.opt else 'normal'
+        elif msg.arbitration_id == 0x223 and len(msg.data) >= 1:
+            self.bits = msg.data[0]
+            for bit in range(8):
+                key = f'b{bit}'
+                if key in self.ids:
+                    self.ids[key].state = 'down' if (self.bits >> bit) & 1 else 'normal'
+        elif msg.arbitration_id == 0x323 and len(msg.data) >= 1:
+            self.bits = msg.data[0]
+            for bit in range(8):
+                key = f'b{bit}'
+                if key in self.ids:
+                    self.ids[key].state = 'down' if (self.bits >> bit) & 1 else 'normal'
