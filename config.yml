@@ -5,6 +5,7 @@ modules:
   #- radio-gen
   #- radio-fm
   - clim
+  - bsi-tyre
   #- combine
   #- kml
   #- bte
