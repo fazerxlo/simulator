@@ -3,7 +3,7 @@ import os
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-_modname = 'BSI_tyre'
+_modname = 'Tyres'
 _modversion = '0.0.1'
 
 # CAN 0x120 - AEE2004 BSI Alerts Journal - Block 2 (tyre-specific alerts)
@@ -35,7 +35,7 @@ CAN_ID_DASH3       = 0x168
 BLOCK2_ID = 0x80
 
 
-class BSI_tyre(TabbedPanelItem):
+class Tyres(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
         super(TabbedPanelItem, self).__init__(**kwargs)
         self.text = 'BSI/Tyre'
