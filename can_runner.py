@@ -96,6 +96,11 @@ class CanRunner():
     def listen(self, can_id, callback):
         self.listeners.append({'id': can_id, 'callback': callback})
 
+    def send_message(self, arbitration_id, data):
+        if self.monitor or data is None:
+            return
+        self.bus.send(can.Message(arbitration_id=arbitration_id, data=data, is_extended_id=False))
+
     def run(self):
         if not self.monitor:
             self.sender.start()

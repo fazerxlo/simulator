@@ -30,6 +30,27 @@ TYRE_QUICK_MESSAGES = {
     'low_pressure': MSG_PRESSURE_LOW,
 }
 
+TYRE_MESSAGE_PAYLOADS = {
+    MSG_DIAGNOSTIC_OK: {
+        'active': [0x80, 0x00, 0x58, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+        'clear': [0x00, 0x00, 0x58, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF],
+    },
+    MSG_PRESSURE_NOT_MONITORED: {
+        'active': [0x80, 0xE5, 0xC7, 0x1E, 0x40, 0x00, 0x00, 0x00],
+        'clear': [0x00, 0xE5, 0x47, 0x1E, 0x40, 0x00, 0x00, 0x00],
+    },
+    MSG_PRESSURE_LOW: {
+        'active': [0x80, 0x8D, 0xC7, 0x1E, 0x40, 0x00, 0x00, 0x00],
+        'clear': [0x00, 0x8D, 0x47, 0x1E, 0x40, 0x00, 0x00, 0x00],
+    },
+    MSG_MULTIPLE_FLAT: {
+        'active': [0x80, 0x0D, 0xC7, 0x1E, 0x40, 0x00, 0x00, 0x00],
+        'clear': [0x00, 0x0D, 0x47, 0x1E, 0x40, 0x00, 0x00, 0x00],
+    },
+}
+
+TYRE_ORDER = ('fl', 'fr', 'rr', 'rl')
+
 
 class Tyres(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
@@ -54,8 +75,6 @@ class Tyres(TabbedPanelItem):
         self.runner.tyres_display_active = False
 
         self._update_labels()
-
-        runner.register(100, self.can_message)
 
     # --- Generic 0x1A1 system message controls (like bsi-log) ---
 
@@ -94,14 +113,16 @@ class Tyres(TabbedPanelItem):
             self.msg_flag = 0x80
             self._update_status()
             self._sync_runner_display_state()
+            self._send_manual_frame('active')
             Clock.schedule_once(self.show_msg, 2)
         elif id == self.msg_id and self.msg_flag != 0xFF:
             pass  # double call guard
         elif self.msg_flag == 0x80:
-            self.msg_flag = 0x7F
+            self.msg_flag = 0x00
             self._sync_runner_display_state()
+            self._send_manual_frame('clear')
             Clock.schedule_once(self.show_msg, 0.2)
-        elif self.msg_flag == 0x7F:
+        elif self.msg_flag == 0x00:
             self.msg_flag = 0xFF
             self.msg_id = 0x00
             self._update_status()
@@ -119,11 +140,18 @@ class Tyres(TabbedPanelItem):
     def _sync_runner_display_state(self):
         self.runner.tyres_display_active = (self.msg_flag != 0xFF)
 
-    def can_message(self):
-        if self.msg_flag == 0xFF:
-            return 0x1A1, None
-        b2 = 0xF0 if self.msg_flag != 0xFF else 0x00
-        return 0x1A1, [self.msg_flag, self.msg_id, b2, 0x00, 0x00, 0x00, 0x00, 0x00]
+    def _send_manual_frame(self, phase):
+        payload = self._build_payload(self.msg_id, phase)
+        self.runner.send_message(0x1A1, payload)
+
+    def _build_payload(self, msg_id, phase):
+        template = TYRE_MESSAGE_PAYLOADS.get(msg_id)
+        if template is not None:
+            return list(template[phase])
+
+        if phase == 'active':
+            return [0x80, msg_id, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        return [0x00, msg_id, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 
     # --- Tyre state controls ---
 
@@ -131,7 +159,67 @@ class Tyres(TabbedPanelItem):
         idx = TIRE_STATES.index(state_text)
         self.tyre_state[tyre] = idx
         self._update_label(tyre)
-        self._trigger_warning()
+
+        # self._trigger_warning()  # commented out: suppress 0x1A1 on tyre state change
+
+        self._send_0x120_status()
+
+    def _send_0x120_status(self):
+        self.runner.send_message(0x120, self._build_0x120_block2())
+        self.runner.send_message(0x120, self._build_0x120_block3())
+
+    def _build_0x120_block2(self):
+        payload = [0xBC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+        puncture_bits = {
+            'fl': (1, 4),
+            'fr': (1, 3),
+            'rr': (1, 2),
+            'rl': (1, 1),
+        }
+        low_bits = {
+            'fl': (5, 1),
+            'fr': (5, 0),
+            'rr': (6, 7),
+            'rl': (6, 5),
+        }
+
+        for tyre in TYRE_ORDER:
+            state = self.tyre_state[tyre]
+            if state == TIRE_FLAT:
+                byte_index, bit_index = puncture_bits[tyre]
+                payload[byte_index] |= 1 << bit_index
+            elif state == TIRE_LOW:
+                byte_index, bit_index = low_bits[tyre]
+                payload[byte_index] |= 1 << bit_index
+
+        return payload
+
+    def _build_0x120_block3(self):
+        payload = [0xFC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+        monitor_fault_bits = {
+            'fl': (5, 3),
+            'fr': (5, 2),
+            'rr': (5, 1),
+            'rl': (5, 0),
+        }
+        underinflation_bits = {
+            'fl': (7, 7),
+            'fr': (7, 6),
+            'rr': (7, 5),
+        }
+
+        for tyre in TYRE_ORDER:
+            state = self.tyre_state[tyre]
+            if state == TIRE_NO_DATA:
+                byte_index, bit_index = monitor_fault_bits[tyre]
+                payload[byte_index] |= 1 << bit_index
+            elif state == TIRE_LOW and tyre in underinflation_bits:
+                byte_index, bit_index = underinflation_bits[tyre]
+                payload[byte_index] |= 1 << bit_index
+
+        return payload
 
     def _trigger_warning(self):
         worst = TIRE_OK
