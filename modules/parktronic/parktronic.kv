@@ -1,0 +1,118 @@
+<Parktronic>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: '8dp'
+    spacing: '8dp'
+
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: None
+      height: '40dp'
+      Label:
+        text: 'Parktronic sensors (0 = closest, 7 = clear/inactive)'
+      Label:
+        id: reverse_state
+        text: 'Reverse: off'
+        size_hint_x: 0.25
+
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: None
+      height: '42dp'
+      ToggleButton:
+        id: park_reverse
+        text: 'Reverse'
+        on_state: root.on_reverse_toggle(self.state)
+      ToggleButton:
+        id: park_display
+        text: 'Display'
+        on_state: root.on_toggle('display', self.state)
+      ToggleButton:
+        id: park_front_active
+        text: 'Front active'
+        on_state: root.on_toggle('front_active', self.state)
+      ToggleButton:
+        id: park_rear_active
+        text: 'Rear active'
+        on_state: root.on_toggle('rear_active', self.state)
+      Button:
+        text: 'Clear sensors'
+        on_press: root.clear_sensors()
+
+    GridLayout:
+      cols: 2
+      row_force_default: True
+      row_default_height: '68dp'
+      spacing: '6dp'
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_rear_left
+          text: 'Rear left: 7'
+        Slider:
+          id: slider_park_rear_left
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('rear_left', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_rear_center
+          text: 'Rear center: 7'
+        Slider:
+          id: slider_park_rear_center
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('rear_center', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_rear_right
+          text: 'Rear right: 7'
+        Slider:
+          id: slider_park_rear_right
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('rear_right', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_front_left
+          text: 'Front left: 7'
+        Slider:
+          id: slider_park_front_left
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('front_left', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_front_center
+          text: 'Front center: 7'
+        Slider:
+          id: slider_park_front_center
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('front_center', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_front_right
+          text: 'Front right: 7'
+        Slider:
+          id: slider_park_front_right
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('front_right', args[1])

@@ -1,5 +1,6 @@
 modules:
   - bsi-base
+  - parktronic
   - bsi-trip
   - bsi-log
   #- radio-gen

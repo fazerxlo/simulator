@@ -14,7 +14,6 @@ class BSI_base(TabbedPanelItem):
     _ignition_on = 0x01
     _ignition_off = 0x02
     _ignition_wakeup = 0x03
-
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
@@ -31,7 +30,6 @@ class BSI_base(TabbedPanelItem):
         runner.register(100, self.can_vin_vis)
         runner.register(100, self.can_vin_wmi)
         runner.register(100, self.can_vin_vds)
-        runner.register(100, self.parktronic)
         runner.register(50, self.can_fast)
         runner.register(100, self.can_temp_level)
 
@@ -161,15 +159,6 @@ class BSI_base(TabbedPanelItem):
         speed = int(self.gauges['speed']*100)
         return 0x0B6, [rpm>>8, rpm&0xFF, speed>>8, speed&0xFF, 0x00, 0x00, 0x00, 0x00]
     
-    def parktronic(self):
-        com = self.commands
-        if int(com['reverse']) == 1:
-            return 0x0E1, [0x24, 0xD0, 0xCC, 0x11, 0x5C, 0xFE, 0xC2]
-        else:
-            return 0x0E1, None
-        # 0x0E1, [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
-        # D8 00 3F FC FC FC 00
-
     def can_vin_vis(self):
         #32 31 37 31 35 33 38 33
         return 0x2B6, [0x32, 0x31, 0x37, 0x31, 0x35, 0x33, 0x38, 0x33]
@@ -218,8 +207,6 @@ class BSI_base(TabbedPanelItem):
         elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
             reverse = (msg.data[7] >> 7) & 1
             self.commands['reverse'] = reverse
-            if 'reverse' in self.ids:
-                self.ids['reverse'].state = 'down' if reverse else 'normal'
             coolant = int(msg.data[1])
             temp = int(msg.data[5])
             self.on_val('coolant', coolant - 40)

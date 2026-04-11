@@ -6,7 +6,7 @@ import sched
 import queue
 
 class CanRunner():
-    def __init__(self, channel='can0', interface='socketcan', bitrate=125000, monitor=False):
+    def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
         self.bus = can.Bus(channel=channel, interface=interface, bitrate=bitrate)
         #can.interfaces.serial.serial_can.SerialBus(channel, baudrate=115200, timeout=0.1, rtscts=False, *args, **kwargs)

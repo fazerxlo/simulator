@@ -58,10 +58,6 @@
           disabled: True
           allow_no_selection: True
           on_state: root.toggle_engine(self.state)
-        ToggleButton:
-          id: reverse
-          text: 'Reverse'
-          on_state: root.on_command('reverse', self.state)
 
     BoxLayout:
       orientation: 'horizontal'
@@ -147,3 +143,4 @@
           step: 1
           value: 60
           on_value: root.on_val('coolant', args[1])
+
