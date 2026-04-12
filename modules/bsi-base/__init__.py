@@ -14,10 +14,15 @@ class BSI_base(TabbedPanelItem):
     _ignition_on = 0x01
     _ignition_off = 0x02
     _ignition_wakeup = 0x03
+    _ignition_settled_off = 0x00
+
+    _settle_off_delay_s = 14.0
+    _wakeup_pulse_s = 0.04
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
         self.text = 'BSI/Base'
+        self.runner = runner
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/bsi.kv')
@@ -27,11 +32,17 @@ class BSI_base(TabbedPanelItem):
         print('registering BSI calls')
         runner.register(50, self.can_commandes)
         runner.register(100, self.can_slow)
-        runner.register(100, self.can_vin_vis)
-        runner.register(100, self.can_vin_wmi)
-        runner.register(100, self.can_vin_vds)
+        runner.register(1000, self.can_vin_vis)
+        runner.register(1000, self.can_vin_wmi)
+        runner.register(1000, self.can_vin_vds)
         runner.register(50, self.can_fast)
         runner.register(100, self.can_temp_level)
+        runner.register(100, self.can_110)
+        runner.register(200, self.can_190)
+        runner.register(500, self.can_1d0)
+        runner.register(200, self.can_1e3)
+        runner.register(100, self.can_217)
+        runner.register(1000, self.can_52d)
 
         # COMMANDES_BSI values
         self.commands = {
@@ -53,6 +64,11 @@ class BSI_base(TabbedPanelItem):
         }
         self.temperature = 20
         self._updating_power_buttons = False
+        self._set_off_event = None
+        self._ignition_finalize_event = None
+        self._rolling_190 = 0
+        self.runner.ignition_on = False
+        self.set_power_mode(self.commands['power_mode'])
 
     def on_command(self, command, value):
         if command in ['economy', 'dash_lights', 'dark_mode', 'reverse']:
@@ -62,13 +78,47 @@ class BSI_base(TabbedPanelItem):
         if command == 'power_mode':
             if self._updating_power_buttons:
                 return
-            self.set_power_mode(value)
+            self.transition_power_mode(value)
             return
         self.commands[command] = int(value)
+
+    def _cancel_power_timers(self):
+        if self._set_off_event is not None:
+            self._set_off_event.cancel()
+            self._set_off_event = None
+        if self._ignition_finalize_event is not None:
+            self._ignition_finalize_event.cancel()
+            self._ignition_finalize_event = None
+
+    def transition_power_mode(self, value):
+        target_mode = int(value)
+        self._cancel_power_timers()
+
+        if target_mode == BSI_base._ignition_on:
+            # Real traces show a short wakeup pulse before stable ignition ON.
+            self.set_power_mode(BSI_base._ignition_wakeup)
+            self._ignition_finalize_event = Clock.schedule_once(
+                lambda _dt: self.set_power_mode(BSI_base._ignition_on),
+                BSI_base._wakeup_pulse_s,
+            )
+            return
+
+        if target_mode == BSI_base._ignition_off:
+            # Real cold-start settles from 0x02 to 0x00 after startup.
+            self.set_power_mode(BSI_base._ignition_off)
+            self._set_off_event = Clock.schedule_once(
+                lambda _dt: self.set_power_mode(BSI_base._ignition_settled_off),
+                BSI_base._settle_off_delay_s,
+            )
+            return
+
+        self.set_power_mode(target_mode)
 
     def set_power_mode(self, value):
         power_mode = int(value)
         self.commands['power_mode'] = power_mode
+        self.runner.ignition_on = (power_mode == BSI_base._ignition_on)
+        self.runner.power_mode = power_mode
         self._updating_power_buttons = True
         self.commands['power_mode'] = power_mode
         if power_mode == BSI_base._ignition_on:
@@ -174,6 +224,37 @@ class BSI_base(TabbedPanelItem):
     def can_temp_level(self):
         oil = self.gauges['oil']+40
         return 0x161, [0x00, 0x00, oil, self.gauges['fuel'], 0xff, 0xff, 0xff, 0xff]
+
+    def can_110(self):
+        return 0x110, [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
+
+    def can_190(self):
+        mode = int(self.commands['power_mode'])
+        if mode == BSI_base._ignition_on:
+            # Keep low bit rolling as seen on real bus in ignition-on state.
+            d4 = 0x7E | self._rolling_190
+            self._rolling_190 ^= 0x01
+        else:
+            d4 = 0x77
+            self._rolling_190 = 0
+        return 0x190, [0xFF, 0xFF, 0x02, d4, 0xFF, 0xFF, 0xFF, 0xFF]
+
+    def can_1d0(self):
+        return 0x1D0, [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
+
+    def can_1e3(self):
+        d2 = 0x30 if int(self.commands['power_mode']) == BSI_base._ignition_on else 0x40
+        return 0x1E3, [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
+
+    def can_217(self):
+        if int(self.commands['power_mode']) == BSI_base._ignition_on:
+            return 0x217, [0xA1, 0x00, 0x80, 0x00, 0x00, 0xFF, 0xFF, 0xE0]
+        return 0x217, [0xA0, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00]
+
+    def can_52d(self):
+        if int(self.commands['power_mode']) == BSI_base._ignition_on:
+            return 0x52D, [0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]
+        return 0x52D, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x036 and len(msg.data) >= 5:

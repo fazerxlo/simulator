@@ -143,6 +143,8 @@ class Tyres(TabbedPanelItem):
         self.runner.tyres_display_active = (self.msg_flag != 0xFF)
 
     def _send_manual_frame(self, phase):
+        if getattr(self.runner, 'doors_display_active', False):
+            return
         payload = self._build_payload(self.msg_id, phase)
         self.runner.send_message(0x1A1, payload)
 
@@ -206,7 +208,9 @@ class Tyres(TabbedPanelItem):
         any_pressure = 1 if self._any_low_or_nodata() else 0
         d1 = (any_pressure << 7) | (any_flat << 6)
         self.runner.tyres_alert_0x168_b1 = d1
-        self.runner.send_message(0x168, [0x00, d1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        # Combine is the primary 0x168 sender when enabled.
+        if not getattr(self.runner, 'combine_active_0x168', False):
+            self.runner.send_message(0x168, [0x00, d1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def _build_0x120_block2(self):
         payload = [0xBC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]

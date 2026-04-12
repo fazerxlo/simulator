@@ -9,10 +9,13 @@ _modname = 'Clim'
 _version = '0.0.1'
 
 class Clim(TabbedPanelItem):
+    _ignition_on = 0x01
+
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
         self.text = 'Clim'
+        self.runner = runner
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/clim.kv')
@@ -54,31 +57,63 @@ class Clim(TabbedPanelItem):
 
         self.bits = 0
 
+    def _is_ignition_on(self):
+        return bool(getattr(self.runner, 'ignition_on', False))
+
+    def _set_off_state(self):
+        self.fan = 0
+        self.dir = [0, 0]
+        self.bits = 0
+        self.options['unfrost_front'] = 0
+        self.options['unfrost_read'] = 0
+        self.options['recycle'] = 0
+        self.options['auto'] = 0
+        self.options['dual'] = 0
+        self.temps = [0, 0]
+        self._update_fan(self.fan)
+        self._update_temps()
+        self._update_options()
+        self._update_dir_buttons()
+
     def on_dir(self, seat, dir):
+        if not self._is_ignition_on():
+            return
         self.dir[seat] = dir
 
     def on_temp(self, zone, dir):
+        if not self._is_ignition_on():
+            return
         if not (self.temps[zone] == 0 and dir == -1) and not (self.temps[zone] == 20 and dir == +1):
             self.temps[zone] += dir
             self.ids[f'cur_temp{zone}'].text = f'{self.temp_disp[self.temps[zone]]}c'
 
     def on_option(self, option, value):
+        if not self._is_ignition_on():
+            return
         self.options[option] = 1 if value == 'down' else 0
 
     def on_toggle(self, bit, value):
+        if not self._is_ignition_on():
+            return
         if value == 'down':
             self.bits |= 1<<bit
         else:
             self.bits &= ~(1<<bit)
 
     def can_clim_panel(self):
+        if not self._is_ignition_on():
+            return 0x1D0, None
         b4 = self.options['recycle']<<5 | self.options['unfrost_front']<<4
         return 0x1D0, [0x00, 0x00, self.fan, self.dir[0], b4, self.temps[0], self.temps[1]]
 
     def can_clim_cmd(self):
+        if not self._is_ignition_on():
+            return 0x12D, None
         return 0x12D, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def can_clim_emf(self):
+        if not self._is_ignition_on():
+            return 0x1E3, None
         # recycle, ac off, off, auto air, auto (text), hide fan, ext air, dual
         b1 = self.options['auto']<<3 | self.options['dual']
         # unfrost front, [3 bits] temperature offset, 4 bits unknown
@@ -141,7 +176,10 @@ class Clim(TabbedPanelItem):
             self.ids['dual'].state = 'down' if self.options['dual'] else 'normal'
 
     def on_can_message(self, msg):
-        if msg.arbitration_id == 0x1D0 and len(msg.data) >= 7:
+        if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
+            if int(msg.data[4]) != self._ignition_on:
+                self._set_off_state()
+        elif msg.arbitration_id == 0x1D0 and len(msg.data) >= 7:
             self._update_fan(self._normalize_fan(msg.data[2]))
             self.dir[0] = msg.data[3]
             self.options['recycle'] = (msg.data[4] >> 5) & 1

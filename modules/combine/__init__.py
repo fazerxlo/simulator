@@ -9,6 +9,8 @@ _modname = 'Combine'
 _version = '0.0.1'
 
 class Combine(TabbedPanelItem):
+    _ignition_on = 0x01
+
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
@@ -17,6 +19,7 @@ class Combine(TabbedPanelItem):
 
         if not hasattr(self.runner, 'tyres_alert_0x168_b1'):
             self.runner.tyres_alert_0x168_b1 = 0
+        self.runner.combine_active_0x168 = True
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/combine.kv')
@@ -26,6 +29,8 @@ class Combine(TabbedPanelItem):
         print('registering radio calls')
         runner.register(100, self.can_combine_indicators)
         runner.register(100, self.can_combine_signals)
+
+        self._last_ignition_state = None
 
         self.options = {
             'airbag_pass': 0,
@@ -64,6 +69,15 @@ class Combine(TabbedPanelItem):
             'obd_blink': 0,
         }
 
+        # Sync UI with options on startup
+        self._sync_ui_from_options()
+
+    def _sync_ui_from_options(self):
+        """Update all UI elements to match current options state."""
+        for key, value in self.options.items():
+            if key in self.ids:
+                self.ids[key].state = 'down' if value else 'normal'
+
     def on_option(self, option, value):
         self.options[option] = 1 if value == 'down' else 0
 
@@ -89,7 +103,19 @@ class Combine(TabbedPanelItem):
         return 0x168, [b0, b1, 0x00, b3, b4, 0x00, b6, b7]
 
     def on_can_message(self, msg):
-        if msg.arbitration_id == 0x128 and len(msg.data) >= 6:
+        if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
+            # Keep combine ignition icon in sync with BSI power mode.
+            current_ignition = 1 if int(msg.data[4]) == self._ignition_on else 0
+            self.options['on'] = current_ignition
+            if 'on' in self.ids:
+                self.ids['on'].state = 'down' if self.options['on'] else 'normal'
+            # When ignition state changes, refresh display to ensure UI is visible/active
+            if self._last_ignition_state != current_ignition:
+                self._last_ignition_state = current_ignition
+                if current_ignition:
+                    # Force UI refresh when ignition turns on to make indicators visible
+                    self._sync_ui_from_options()
+        elif msg.arbitration_id == 0x128 and len(msg.data) >= 6:
             data = msg.data
             self.options['airbag_pass'] = (data[0] >> 7) & 1
             self.options['seatbelt'] = (data[0] >> 6) & 1
