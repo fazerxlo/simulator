@@ -22,6 +22,7 @@ class Doors(TabbedPanelItem):
         self._ui_sync = False
         self._pending_clear_ev = None
         self._pending_show_ev = None
+        self.runner.doors_display_active = False
         self.door_state = {
             'front_left': 0,
             'front_right': 0,
@@ -153,11 +154,13 @@ class Doors(TabbedPanelItem):
             self._pending_clear_ev = None
 
         if self._any_open():
+            self.runner.doors_display_active = True
             # Some clusters keep the first opened-door context until popup is refreshed.
             self.runner.send_message(0x1A1, [0x7F, MSG_DOORS_OPEN, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
             self._pending_show_ev = Clock.schedule_once(self._send_popup_show, 0.05)
             return
 
+        self.runner.doors_display_active = True
         self.runner.send_message(0x1A1, [0x7F, MSG_DOORS_OPEN, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._pending_clear_ev = Clock.schedule_once(self._send_popup_clear, 0.2)
 
@@ -171,6 +174,7 @@ class Doors(TabbedPanelItem):
     def _send_popup_clear(self, _dt):
         self._pending_clear_ev = None
         self.runner.send_message(0x1A1, [0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.runner.doors_display_active = False
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x220 and len(msg.data) >= 2:

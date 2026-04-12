@@ -22,6 +22,7 @@ class Parktronic(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
         super(TabbedPanelItem, self).__init__(**kwargs)
         self.text = 'Parktronic'
+        self.runner = runner
 
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/parktronic.kv')
         Builder.apply(self)
@@ -40,6 +41,8 @@ class Parktronic(TabbedPanelItem):
             'front_right': 7,
         }
         self.reverse = 0
+        if not hasattr(self.runner, 'reverse'):
+            self.runner.reverse = 0
 
     def _sync_reverse_toggle(self):
         if 'park_reverse' in self.ids:
@@ -49,19 +52,13 @@ class Parktronic(TabbedPanelItem):
         if 'reverse_state' in self.ids:
             self.ids['reverse_state'].text = f'Reverse: {"on" if self.reverse else "off"}'
 
-    def _push_reverse_to_bsi(self):
-        app = App.get_running_app()
-        if not app or not hasattr(app, 'modules'):
-            return
-        bsi_module = app.modules.get('bsi-base')
-        if not bsi_module:
-            return
-        bsi_module.commands['reverse'] = int(self.reverse)
+    def _push_reverse_to_bus_state(self):
+        self.runner.reverse = int(self.reverse)
 
     def on_reverse_toggle(self, state):
         self.reverse = 1 if state == 'down' else 0
         self._sync_reverse_toggle()
-        self._push_reverse_to_bsi()
+        self._push_reverse_to_bus_state()
         if self.reverse:
             if not self.parktronic_state['display']:
                 self._update_toggle('display', 1)
@@ -122,8 +119,8 @@ class Parktronic(TabbedPanelItem):
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
-            previous_reverse = self.reverse
             self.reverse = (msg.data[7] >> 7) & 0x01
+            self.runner.reverse = int(self.reverse)
             self._sync_reverse_toggle()
         elif msg.arbitration_id == 0x0E1 and len(msg.data) >= 6:
             self._update_toggle('rear_active', (msg.data[1] >> 6) & 0x01)

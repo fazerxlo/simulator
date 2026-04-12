@@ -73,6 +73,9 @@ class Tyres(TabbedPanelItem):
         self.msg_id = 0x00
         self.mess = 0x00
         self.runner.tyres_display_active = False
+        self.runner.tyres_alert_0x168_b1 = 0
+        self._last_120_block2 = None
+        self._last_120_block3 = None
 
         self._update_labels()
 
@@ -114,6 +117,7 @@ class Tyres(TabbedPanelItem):
             self._update_status()
             self._sync_runner_display_state()
             self._send_manual_frame('active')
+            self._send_0x168_alert()
             Clock.schedule_once(self.show_msg, 2)
         elif id == self.msg_id and self.msg_flag != 0xFF:
             pass  # double call guard
@@ -141,17 +145,37 @@ class Tyres(TabbedPanelItem):
         self.runner.tyres_display_active = (self.msg_flag != 0xFF)
 
     def _send_manual_frame(self, phase):
+        if getattr(self.runner, 'doors_display_active', False):
+            return
         payload = self._build_payload(self.msg_id, phase)
         self.runner.send_message(0x1A1, payload)
 
     def _build_payload(self, msg_id, phase):
         template = TYRE_MESSAGE_PAYLOADS.get(msg_id)
         if template is not None:
-            return list(template[phase])
+            payload = list(template[phase])
+        elif phase == 'active':
+            payload = [0x80, msg_id, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        else:
+            payload = [0x00, msg_id, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 
-        if phase == 'active':
-            return [0x80, msg_id, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-        return [0x00, msg_id, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        # Dynamically set byte 3 for tyre-specific messages using a bitmask.
+        # According to arduino-psa-comfort-can-adapter:
+        #   bit 7: Front Left, bit 6: Front Right, bit 5: Rear Right, bit 4: Rear Left
+        if msg_id in (MSG_PRESSURE_LOW, MSG_PRESSURE_NOT_MONITORED, MSG_MULTIPLE_FLAT):
+            param = 0x00
+            if self.tyre_state['fl'] != TIRE_OK:
+                param |= 0x80
+            if self.tyre_state['fr'] != TIRE_OK:
+                param |= 0x40
+            if self.tyre_state['rr'] != TIRE_OK:
+                param |= 0x20
+            if self.tyre_state['rl'] != TIRE_OK:
+                param |= 0x10
+            if param != 0:
+                payload[3] = param
+
+        return payload
 
     # --- Tyre state controls ---
 
@@ -160,13 +184,35 @@ class Tyres(TabbedPanelItem):
         self.tyre_state[tyre] = idx
         self._update_label(tyre)
 
-        # self._trigger_warning()  # commented out: suppress 0x1A1 on tyre state change
-
+        # self._trigger_warning()
+        
+        self._send_0x168_alert()
         self._send_0x120_status()
 
     def _send_0x120_status(self):
         self.runner.send_message(0x120, self._build_0x120_block2())
         self.runner.send_message(0x120, self._build_0x120_block3())
+
+    def _any_flat(self):
+        """Check if any tyre is in FLAT state."""
+        return any(state == TIRE_FLAT for state in self.tyre_state.values())
+
+    def _any_low_or_nodata(self):
+        """Check if any tyre is in LOW or NO_DATA state (pressure warning)."""
+        return any(state in (TIRE_LOW, TIRE_NO_DATA) for state in self.tyre_state.values())
+
+    def _send_0x168_alert(self):
+        """Send generic tyre dashboard alert (0x168).
+        Byte 1, bit 7: pressure alert (any LOW or NO_DATA)
+        Byte 1, bit 6: flat/puncture alert (any FLAT)
+        """
+        any_flat = 1 if self._any_flat() else 0
+        any_pressure = 1 if self._any_low_or_nodata() else 0
+        d1 = (any_pressure << 7) | (any_flat << 6)
+        self.runner.tyres_alert_0x168_b1 = d1
+        # Combine is the primary 0x168 sender when enabled.
+        if not getattr(self.runner, 'combine_active_0x168', False):
+            self.runner.send_message(0x168, [0x00, d1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def _build_0x120_block2(self):
         payload = [0xBC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
@@ -265,7 +311,87 @@ class Tyres(TabbedPanelItem):
 
     # --- Monitor mode ---
 
+    def _apply_state_priority(self, tyre, state):
+        # Keep the most severe state when combining block2 and block3 snapshots.
+        if state > self.tyre_state[tyre]:
+            self.tyre_state[tyre] = state
+
+    def _decode_0x120_block2(self, data):
+        # Reset only states encoded in block2 (LOW and FLAT), NO_DATA is handled by block3.
+        for tyre in TYRE_ORDER:
+            if self.tyre_state[tyre] in (TIRE_LOW, TIRE_FLAT):
+                self.tyre_state[tyre] = TIRE_OK
+
+        puncture_bits = {
+            'fl': (1, 4),
+            'fr': (1, 3),
+            'rr': (1, 2),
+            'rl': (1, 1),
+        }
+        low_bits = {
+            'fl': (5, 1),
+            'fr': (5, 0),
+            'rr': (6, 7),
+            'rl': (6, 5),
+        }
+
+        for tyre in TYRE_ORDER:
+            p_byte, p_bit = puncture_bits[tyre]
+            l_byte, l_bit = low_bits[tyre]
+            is_flat = (data[p_byte] >> p_bit) & 0x01
+            is_low = (data[l_byte] >> l_bit) & 0x01
+            if is_flat:
+                self._apply_state_priority(tyre, TIRE_FLAT)
+            elif is_low:
+                self._apply_state_priority(tyre, TIRE_LOW)
+
+    def _decode_0x120_block3(self, data):
+        monitor_fault_bits = {
+            'fl': (5, 3),
+            'fr': (5, 2),
+            'rr': (5, 1),
+            'rl': (5, 0),
+        }
+
+        # Underinflation bits in this frame are only defined for fl/fr/rr in current sender logic.
+        underinflation_bits = {
+            'fl': (7, 7),
+            'fr': (7, 6),
+            'rr': (7, 5),
+        }
+
+        for tyre in TYRE_ORDER:
+            byte_index, bit_index = monitor_fault_bits[tyre]
+            if ((data[byte_index] >> bit_index) & 0x01) == 1:
+                self._apply_state_priority(tyre, TIRE_NO_DATA)
+
+        for tyre, (byte_index, bit_index) in underinflation_bits.items():
+            if ((data[byte_index] >> bit_index) & 0x01) == 1:
+                self._apply_state_priority(tyre, TIRE_LOW)
+
+    def _refresh_tyre_labels(self):
+        for tyre in TYRE_ORDER:
+            self._update_label(tyre)
+
     def on_can_message(self, msg):
+        if msg.arbitration_id == 0x120 and len(msg.data) >= 8:
+            data = list(msg.data)
+            # 0x120 alternates blocks; decode whichever one is present.
+            if data[0] == 0xBC:
+                self._last_120_block2 = data
+                self._decode_0x120_block2(data)
+                if self._last_120_block3 is not None:
+                    self._decode_0x120_block3(self._last_120_block3)
+                self._refresh_tyre_labels()
+                return
+            if data[0] == 0xFC:
+                self._last_120_block3 = data
+                self._decode_0x120_block3(data)
+                if self._last_120_block2 is not None:
+                    self._decode_0x120_block2(self._last_120_block2)
+                self._refresh_tyre_labels()
+                return
+
         if msg.arbitration_id != 0x1A1 or len(msg.data) < 2:
             return
         self.msg_flag = msg.data[0]
