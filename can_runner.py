@@ -5,14 +5,14 @@ import threading
 import sched
 import queue
 
+from car_state import VirtualCar
+
 class CanRunner():
     PRE_IGNITION_ALLOWED_IDS = {0x036, 0x110, 0x190, 0x1D0, 0x1E3, 0x217, 0x52D}
 
     def __init__(self, channel='can0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
         self.bus = can.Bus(channel=channel, interface=interface, bitrate=bitrate)
-        self.ignition_on = False
-        self.power_mode = 0x02
         #can.interfaces.serial.serial_can.SerialBus(channel, baudrate=115200, timeout=0.1, rtscts=False, *args, **kwargs)
         #self.bus = can.Bus(channel='/dev/ttyACM0', interface='serial', bitrate=125000, baudrate=9600)
         self.sender = threading.Thread(target=self.sender)
@@ -25,6 +25,81 @@ class CanRunner():
         self.modules = {}
         self.event_queue = queue.Queue()
 
+        # Shared virtual-car state.  All modules read and write car state
+        # through this object rather than storing ad-hoc attributes on the
+        # runner, keeping each subsystem's state in one authoritative place.
+        self.car = VirtualCar()
+
+        # Track which callable "owns" each CAN ID so duplicate registrations
+        # can be detected and reported early.
+        self._can_id_owners: dict = {}
+
+    # ------------------------------------------------------------------
+    # Backward-compatibility properties
+    # Existing modules that accessed runner.ignition_on / runner.power_mode /
+    # runner.reverse directly continue to work; the values are now stored in
+    # runner.car.bsi.* and these properties are thin delegating wrappers.
+    # ------------------------------------------------------------------
+
+    @property
+    def ignition_on(self):
+        return self.car.bsi.ignition_on
+
+    @ignition_on.setter
+    def ignition_on(self, value):
+        self.car.bsi.ignition_on = value
+
+    @property
+    def power_mode(self):
+        return self.car.bsi.power_mode
+
+    @power_mode.setter
+    def power_mode(self, value):
+        self.car.bsi.power_mode = value
+
+    @property
+    def reverse(self):
+        return self.car.bsi.reverse
+
+    @reverse.setter
+    def reverse(self, value):
+        self.car.bsi.reverse = value
+
+    # Cross-module display-arbitration flags (stored in car sub-objects,
+    # exposed here for backward compatibility with existing module code).
+
+    @property
+    def tyres_display_active(self):
+        return self.car.tyres.display_active
+
+    @tyres_display_active.setter
+    def tyres_display_active(self, value):
+        self.car.tyres.display_active = value
+
+    @property
+    def doors_display_active(self):
+        return self.car.doors.display_active
+
+    @doors_display_active.setter
+    def doors_display_active(self, value):
+        self.car.doors.display_active = value
+
+    @property
+    def tyres_alert_0x168_b1(self):
+        return self.car.tyres.alert_0x168_b1
+
+    @tyres_alert_0x168_b1.setter
+    def tyres_alert_0x168_b1(self, value):
+        self.car.tyres.alert_0x168_b1 = value
+
+    @property
+    def combine_active_0x168(self):
+        return self.car.dashboard.active
+
+    @combine_active_0x168.setter
+    def combine_active_0x168(self, value):
+        self.car.dashboard.active = value
+
     def can_send(self, arbitration_id, data):
         if data is None:
             return False
@@ -34,6 +109,14 @@ class CanRunner():
         return True
 
     def reg(self, func, id, schedule, tp_id=None, tp_callback=None, *args, **kwargs):
+        if id in self._can_id_owners:
+            existing = self._can_id_owners[id]
+            print(
+                f'WARNING: CAN ID 0x{id:03X} already registered by '
+                f'{getattr(existing, "__qualname__", existing)}, '
+                f'now overridden by {getattr(func, "__qualname__", func)}'
+            )
+        self._can_id_owners[id] = func
         new_module = {
             'id': id,
             'timer': datetime.datetime.now(),

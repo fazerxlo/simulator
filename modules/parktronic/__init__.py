@@ -29,50 +29,49 @@ class Parktronic(TabbedPanelItem):
 
         runner.register(100, self.can_parktronic)
 
-        self.parktronic_state = {
-            'display': 0,
-            'front_active': 0,
-            'rear_active': 0,
-            'rear_left': 7,
-            'rear_center': 7,
-            'rear_right': 7,
-            'front_left': 7,
-            'front_center': 7,
-            'front_right': 7,
-        }
-        self.reverse = 0
-        if not hasattr(self.runner, 'reverse'):
-            self.runner.reverse = 0
+        # Initialise parktronic state on the shared VirtualCar.
+        park = runner.car.parktronic
+        park.display = 0
+        park.front_active = 0
+        park.rear_active = 0
+        park.rear_left = 7
+        park.rear_center = 7
+        park.rear_right = 7
+        park.front_left = 7
+        park.front_center = 7
+        park.front_right = 7
+
+    @property
+    def _park(self):
+        """Convenience accessor for the shared parktronic car state."""
+        return self.runner.car.parktronic
 
     def _sync_reverse_toggle(self):
+        reverse = self.runner.car.bsi.reverse
         if 'park_reverse' in self.ids:
-            desired_state = 'down' if self.reverse else 'normal'
+            desired_state = 'down' if reverse else 'normal'
             if self.ids['park_reverse'].state != desired_state:
                 self.ids['park_reverse'].state = desired_state
         if 'reverse_state' in self.ids:
-            self.ids['reverse_state'].text = f'Reverse: {"on" if self.reverse else "off"}'
-
-    def _push_reverse_to_bus_state(self):
-        self.runner.reverse = int(self.reverse)
+            self.ids['reverse_state'].text = f'Reverse: {"on" if reverse else "off"}'
 
     def on_reverse_toggle(self, state):
-        self.reverse = 1 if state == 'down' else 0
+        self.runner.car.bsi.reverse = 1 if state == 'down' else 0
         self._sync_reverse_toggle()
-        self._push_reverse_to_bus_state()
-        if self.reverse:
-            if not self.parktronic_state['display']:
+        if self.runner.car.bsi.reverse:
+            if not self._park.display:
                 self._update_toggle('display', 1)
-            if not self.parktronic_state['rear_active']:
+            if not self._park.rear_active:
                 self._update_toggle('rear_active', 1)
         else:
             self.clear_sensors()
 
     def _zone_has_detection(self, sensor_names):
-        return any(self.parktronic_state[name] < 7 for name in sensor_names)
+        return any(getattr(self._park, name) < 7 for name in sensor_names)
 
     def _update_toggle(self, name, enabled):
         value = 1 if int(enabled) else 0
-        self.parktronic_state[name] = value
+        setattr(self._park, name, value)
         widget_id = f'park_{name}'
         if widget_id in self.ids:
             desired_state = 'down' if value else 'normal'
@@ -84,7 +83,7 @@ class Parktronic(TabbedPanelItem):
 
     def _update_sensor(self, name, value):
         sensor_value = max(0, min(7, int(value)))
-        self.parktronic_state[name] = sensor_value
+        setattr(self._park, name, sensor_value)
         label_id = f'cur_park_{name}'
         slider_id = f'slider_park_{name}'
         if label_id in self.ids:
@@ -103,24 +102,24 @@ class Parktronic(TabbedPanelItem):
             self._update_sensor(sensor_name, 7)
 
     def can_parktronic(self):
-        rear_active = self.parktronic_state['rear_active']
-        front_active = self.parktronic_state['front_active']
-        display_active = self.parktronic_state['display']
+        park = self._park
+        rear_active = park.rear_active
+        front_active = park.front_active
+        display_active = park.display
 
         if not display_active and not rear_active and not front_active:
             return 0x0E1, self._inactive_frame
 
-        sensor_a = ((self.parktronic_state['rear_left'] & 0x07) << 5) | ((self.parktronic_state['rear_center'] & 0x07) << 2)
-        sensor_b = ((self.parktronic_state['rear_right'] & 0x07) << 5) | ((self.parktronic_state['front_left'] & 0x07) << 2)
-        sensor_c = ((self.parktronic_state['front_center'] & 0x07) << 5) | ((self.parktronic_state['front_right'] & 0x07) << 2) | 0x02
+        sensor_a = ((park.rear_left & 0x07) << 5) | ((park.rear_center & 0x07) << 2)
+        sensor_b = ((park.rear_right & 0x07) << 5) | ((park.front_left & 0x07) << 2)
+        sensor_c = ((park.front_center & 0x07) << 5) | ((park.front_right & 0x07) << 2) | 0x02
         zone_flags = (0x40 if rear_active else 0x00) | (0x10 if front_active else 0x00)
         # _inactive_frame = [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
         return 0x0E1, [0x24, zone_flags, 0x3F, sensor_a, sensor_b, sensor_c, 0x00]
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
-            self.reverse = (msg.data[7] >> 7) & 0x01
-            self.runner.reverse = int(self.reverse)
+            self.runner.car.bsi.reverse = (msg.data[7] >> 7) & 0x01
             self._sync_reverse_toggle()
         elif msg.arbitration_id == 0x0E1 and len(msg.data) >= 6:
             self._update_toggle('rear_active', (msg.data[1] >> 6) & 0x01)

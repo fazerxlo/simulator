@@ -62,9 +62,9 @@ class BSI_log(TabbedPanelItem):
             self.msg_id = 0x00
 
     def can_message(self):
-        if getattr(self.runner, 'tyres_display_active', False):
+        if self.runner.car.tyres.display_active:
             return 0x1A1, None
-        if getattr(self.runner, 'doors_display_active', False):
+        if self.runner.car.doors.display_active:
             return 0x1A1, None
         if self.msg_flag == 0xFF:
             return 0x1A1, None
