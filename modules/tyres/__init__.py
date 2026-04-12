@@ -73,6 +73,7 @@ class Tyres(TabbedPanelItem):
         self.msg_id = 0x00
         self.mess = 0x00
         self.runner.tyres_display_active = False
+        self.runner.tyres_alert_0x168_b1 = 0
 
         self._update_labels()
 
@@ -204,6 +205,7 @@ class Tyres(TabbedPanelItem):
         any_flat = 1 if self._any_flat() else 0
         any_pressure = 1 if self._any_low_or_nodata() else 0
         d1 = (any_pressure << 7) | (any_flat << 6)
+        self.runner.tyres_alert_0x168_b1 = d1
         self.runner.send_message(0x168, [0x00, d1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def _build_0x120_block2(self):

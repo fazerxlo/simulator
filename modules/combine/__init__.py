@@ -13,6 +13,10 @@ class Combine(TabbedPanelItem):
         # Base init (super and name)
         super(TabbedPanelItem, self).__init__(**kwargs)
         self.text = 'Combine'
+        self.runner = runner
+
+        if not hasattr(self.runner, 'tyres_alert_0x168_b1'):
+            self.runner.tyres_alert_0x168_b1 = 0
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/combine.kv')
@@ -76,7 +80,8 @@ class Combine(TabbedPanelItem):
     def can_combine_signals(self):
         opt = self.options
         b0 = opt['coolant']<<7 | opt['oil_blink']<<6 | opt['coolant_blink']<<5 | opt['oil']<<3
-        b1 = opt['tyre']<<6
+        tyre_overlay = int(getattr(self.runner, 'tyres_alert_0x168_b1', 0)) & 0xC0
+        b1 = tyre_overlay if tyre_overlay else (opt['tyre']<<6)
         b3 = opt['abs']<<5 | opt['esp']<<4 | opt['obd']<<1 | opt['gas_water']
         b4 = opt['airbag']<<5 | opt['battery']<<1
         b6 = opt['dae']<<5 | opt['eco_blink']<<1 | opt['eco']
