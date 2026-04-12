@@ -30,15 +30,29 @@ class BSI_trip(TabbedPanelItem):
             'hide_dist': 0,
             'com_left': 0,
             'com_right': 0,
-            'fuel': 0,
-            'autonomy': 0,
-            'dist': 0
+            'fuel': 7.1,
+            'autonomy': 740,
+            'dist': 120
         }
 
         self.history = [
-            {'speed': 0, 'dist': 0, 'fuel': 0},
-            {'speed': 0, 'dist': 0, 'fuel': 0}
+            {'speed': 37, 'dist': 569, 'fuel': 7.3},
+            {'speed': 35, 'dist': 921, 'fuel': 7.9}
         ]
+
+        self._apply_initial_values()
+
+    def _apply_initial_values(self):
+        # Seed UI with realistic trip values so startup state is not all zeros.
+        self.on_inst_param('fuel', self.inst_params['fuel'])
+        self.on_inst_param('autonomy', self.inst_params['autonomy'])
+        self.on_inst_param('dist', self.inst_params['dist'])
+        self.on_hist_param(0, 'speed', self.history[0]['speed'])
+        self.on_hist_param(0, 'dist', self.history[0]['dist'])
+        self.on_hist_param(0, 'fuel', self.history[0]['fuel'])
+        self.on_hist_param(1, 'speed', self.history[1]['speed'])
+        self.on_hist_param(1, 'dist', self.history[1]['dist'])
+        self.on_hist_param(1, 'fuel', self.history[1]['fuel'])
 
     def on_inst_button(self, name, value):
         self.inst_params[name] = 1 if value == 'down' else 0
