@@ -147,11 +147,29 @@ class Tyres(TabbedPanelItem):
     def _build_payload(self, msg_id, phase):
         template = TYRE_MESSAGE_PAYLOADS.get(msg_id)
         if template is not None:
-            return list(template[phase])
+            payload = list(template[phase])
+        elif phase == 'active':
+            payload = [0x80, msg_id, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        else:
+            payload = [0x00, msg_id, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
 
-        if phase == 'active':
-            return [0x80, msg_id, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
-        return [0x00, msg_id, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+        # Dynamically set byte 3 for tyre-specific messages using a bitmask.
+        # According to arduino-psa-comfort-can-adapter:
+        #   bit 7: Front Left, bit 6: Front Right, bit 5: Rear Right, bit 4: Rear Left
+        if msg_id in (MSG_PRESSURE_LOW, MSG_PRESSURE_NOT_MONITORED, MSG_MULTIPLE_FLAT):
+            param = 0x00
+            if self.tyre_state['fl'] != TIRE_OK:
+                param |= 0x80
+            if self.tyre_state['fr'] != TIRE_OK:
+                param |= 0x40
+            if self.tyre_state['rr'] != TIRE_OK:
+                param |= 0x20
+            if self.tyre_state['rl'] != TIRE_OK:
+                param |= 0x10
+            if param != 0:
+                payload[3] = param
+
+        return payload
 
     # --- Tyre state controls ---
 
@@ -160,8 +178,7 @@ class Tyres(TabbedPanelItem):
         self.tyre_state[tyre] = idx
         self._update_label(tyre)
 
-        # self._trigger_warning()  # commented out: suppress 0x1A1 on tyre state change
-
+        self._trigger_warning()
         self._send_0x120_status()
 
     def _send_0x120_status(self):
