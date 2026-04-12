@@ -1,12 +1,88 @@
 <BSI_base>:
   BoxLayout:
     orientation: 'vertical'
+    spacing: 6
+    padding: 6
 
     BoxLayout:
       orientation: 'horizontal'
+      spacing: 6
+      size_hint_y: 0.32
+
+      GridLayout:
+        cols: 2
+        size_hint_x: 0.33
+        Label:
+          text: 'power mode'
+        ToggleButton:
+          id: sleeping
+          text: 'sleeping'
+          group: 'pow_mode'
+          allow_no_selection: False
+          on_state: root.on_command('power_mode', 0x00)
+        Label:
+          text: 'ignition'
+        ToggleButton:
+          id: ignition
+          text: 'Ignition'
+          allow_no_selection: False
+          on_state: root.on_command('power_mode', 0x01 if self.state == 'down' else 0x02)
+        Label:
+          text: 'wakeup'
+        ToggleButton:
+          id: wakeup
+          text: 'wakeup'
+          group: 'pow_mode'
+          allow_no_selection: False
+          on_state: root.on_command('power_mode', 0x03)
+        Label:
+          text: 'engine'
+        ToggleButton:
+          id: engine
+          text: 'Engine'
+          disabled: True
+          allow_no_selection: True
+          on_state: root.toggle_engine(self.state)
+
+      GridLayout:
+        cols: 2
+        size_hint_x: 0.33
+        Label:
+          text: 'lights'
+        Label:
+          text: ''
+        ToggleButton:
+          id: lights_off
+          text: 'OFF'
+          group: 'lights_mode'
+          allow_no_selection: False
+          state: 'down'
+          on_state: root.on_command('light_mode', 0) if self.state == 'down' else None
+        ToggleButton:
+          id: lights_side
+          text: 'Side'
+          group: 'lights_mode'
+          allow_no_selection: False
+          on_state: root.on_command('light_mode', 1) if self.state == 'down' else None
+        ToggleButton:
+          id: lights_low
+          text: 'Low beam'
+          group: 'lights_mode'
+          allow_no_selection: False
+          on_state: root.on_command('light_mode', 2) if self.state == 'down' else None
+        ToggleButton:
+          id: lights_high
+          text: 'High beam'
+          group: 'lights_mode'
+          allow_no_selection: False
+          on_state: root.on_command('light_mode', 3) if self.state == 'down' else None
+
       BoxLayout:
         orientation: 'vertical'
-        size_hint: 0.3,1
+        size_hint_x: 0.34
+        spacing: 4
+        Label:
+          text: 'flags'
         ToggleButton:
           id: economy
           text: 'economy'
@@ -19,48 +95,25 @@
           id: dark_mode
           text: 'dark mode'
           on_state: root.on_command('dark_mode', self.state)
-      BoxLayout:
-        orientation: 'vertical'
-        Label:
-          id: cur_lum
-          text: 'lum: 10'
-        Slider:
-          id: slider_lum
-          min: 0
-          max: 15
-          step: 1
-          value: 10
-          on_value: root.on_command('lum', args[1])
-      GridLayout:
-        cols: 2
-        Label:
-          text: 'power mgmt'
-        ToggleButton:
-          id: sleeping
-          text: 'sleeping'
-          group: 'pow_mode'
-          allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x00)
-        ToggleButton:
-          id: ignition
-          text: 'Ignition'
-          allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x01 if self.state == 'down' else 0x02)
-        ToggleButton:
-          id: wakeup
-          text: 'wakeup'
-          group: 'pow_mode'
-          allow_no_selection: False
-          on_state: root.on_command('power_mode', 0x03)
-        ToggleButton:
-          id: engine
-          text: 'Engine'
-          disabled: True
-          allow_no_selection: True
-          on_state: root.toggle_engine(self.state)
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: 0.16
+      spacing: 6
+      Label:
+        id: cur_lum
+        text: 'lum: 10'
+        size_hint_x: 0.2
+      Slider:
+        id: slider_lum
+        min: 0
+        max: 15
+        step: 1
+        value: 10
+        on_value: root.on_command('lum', args[1])
 
     BoxLayout:
       orientation: 'horizontal'
+      size_hint_y: 0.16
       Button:
         text: '<'
         on_press: root.on_temp(True, -0.5)
@@ -83,6 +136,7 @@
 
     BoxLayout:
       orientation: 'horizontal'
+      size_hint_y: 0.36
       BoxLayout:
         orientation: 'vertical'
         Label:

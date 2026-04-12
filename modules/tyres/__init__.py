@@ -74,6 +74,8 @@ class Tyres(TabbedPanelItem):
         self.mess = 0x00
         self.runner.tyres_display_active = False
         self.runner.tyres_alert_0x168_b1 = 0
+        self._last_120_block2 = None
+        self._last_120_block3 = None
 
         self._update_labels()
 
@@ -309,7 +311,87 @@ class Tyres(TabbedPanelItem):
 
     # --- Monitor mode ---
 
+    def _apply_state_priority(self, tyre, state):
+        # Keep the most severe state when combining block2 and block3 snapshots.
+        if state > self.tyre_state[tyre]:
+            self.tyre_state[tyre] = state
+
+    def _decode_0x120_block2(self, data):
+        # Reset only states encoded in block2 (LOW and FLAT), NO_DATA is handled by block3.
+        for tyre in TYRE_ORDER:
+            if self.tyre_state[tyre] in (TIRE_LOW, TIRE_FLAT):
+                self.tyre_state[tyre] = TIRE_OK
+
+        puncture_bits = {
+            'fl': (1, 4),
+            'fr': (1, 3),
+            'rr': (1, 2),
+            'rl': (1, 1),
+        }
+        low_bits = {
+            'fl': (5, 1),
+            'fr': (5, 0),
+            'rr': (6, 7),
+            'rl': (6, 5),
+        }
+
+        for tyre in TYRE_ORDER:
+            p_byte, p_bit = puncture_bits[tyre]
+            l_byte, l_bit = low_bits[tyre]
+            is_flat = (data[p_byte] >> p_bit) & 0x01
+            is_low = (data[l_byte] >> l_bit) & 0x01
+            if is_flat:
+                self._apply_state_priority(tyre, TIRE_FLAT)
+            elif is_low:
+                self._apply_state_priority(tyre, TIRE_LOW)
+
+    def _decode_0x120_block3(self, data):
+        monitor_fault_bits = {
+            'fl': (5, 3),
+            'fr': (5, 2),
+            'rr': (5, 1),
+            'rl': (5, 0),
+        }
+
+        # Underinflation bits in this frame are only defined for fl/fr/rr in current sender logic.
+        underinflation_bits = {
+            'fl': (7, 7),
+            'fr': (7, 6),
+            'rr': (7, 5),
+        }
+
+        for tyre in TYRE_ORDER:
+            byte_index, bit_index = monitor_fault_bits[tyre]
+            if ((data[byte_index] >> bit_index) & 0x01) == 1:
+                self._apply_state_priority(tyre, TIRE_NO_DATA)
+
+        for tyre, (byte_index, bit_index) in underinflation_bits.items():
+            if ((data[byte_index] >> bit_index) & 0x01) == 1:
+                self._apply_state_priority(tyre, TIRE_LOW)
+
+    def _refresh_tyre_labels(self):
+        for tyre in TYRE_ORDER:
+            self._update_label(tyre)
+
     def on_can_message(self, msg):
+        if msg.arbitration_id == 0x120 and len(msg.data) >= 8:
+            data = list(msg.data)
+            # 0x120 alternates blocks; decode whichever one is present.
+            if data[0] == 0xBC:
+                self._last_120_block2 = data
+                self._decode_0x120_block2(data)
+                if self._last_120_block3 is not None:
+                    self._decode_0x120_block3(self._last_120_block3)
+                self._refresh_tyre_labels()
+                return
+            if data[0] == 0xFC:
+                self._last_120_block3 = data
+                self._decode_0x120_block3(data)
+                if self._last_120_block2 is not None:
+                    self._decode_0x120_block2(self._last_120_block2)
+                self._refresh_tyre_labels()
+                return
+
         if msg.arbitration_id != 0x1A1 or len(msg.data) < 2:
             return
         self.msg_flag = msg.data[0]

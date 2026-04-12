@@ -15,6 +15,17 @@ class BSI_base(TabbedPanelItem):
     _ignition_off = 0x02
     _ignition_wakeup = 0x03
     _ignition_settled_off = 0x00
+    _lights_off = 0
+    _lights_side = 1
+    _lights_low = 2
+    _lights_high = 3
+
+    _lights_to_128 = {
+        _lights_off: 0x00,
+        _lights_side: 0x80,
+        _lights_low: 0xC0,
+        _lights_high: 0xE0,
+    }
 
     _settle_off_delay_s = 14.0
     _wakeup_pulse_s = 0.04
@@ -38,6 +49,7 @@ class BSI_base(TabbedPanelItem):
         runner.register(50, self.can_fast)
         runner.register(100, self.can_temp_level)
         runner.register(100, self.can_110)
+        runner.register(200, self.can_128)
         runner.register(200, self.can_190)
         runner.register(500, self.can_1d0)
         runner.register(200, self.can_1e3)
@@ -49,7 +61,7 @@ class BSI_base(TabbedPanelItem):
             'economy': 0,
             'dash_lights': 0,
             'dark_mode': 0,
-            'reverse': 0,
+            'light_mode': BSI_base._lights_off,
             'lum': 10,
             'power_mode': BSI_base._ignition_off,
             'engine_running': 0
@@ -64,15 +76,24 @@ class BSI_base(TabbedPanelItem):
         }
         self.temperature = 20
         self._updating_power_buttons = False
+        self._updating_light_buttons = False
         self._set_off_event = None
         self._ignition_finalize_event = None
         self._rolling_190 = 0
         self.runner.ignition_on = False
+        if not hasattr(self.runner, 'reverse'):
+            self.runner.reverse = 0
         self.set_power_mode(self.commands['power_mode'])
+        self._apply_monitor_ui_lock()
 
     def on_command(self, command, value):
-        if command in ['economy', 'dash_lights', 'dark_mode', 'reverse']:
+        if command in ['economy', 'dash_lights', 'dark_mode']:
             value = 1 if value == 'down' else 0
+        if command == 'light_mode':
+            if self._updating_light_buttons:
+                return
+            self.set_light_mode(int(value), update_ui=True)
+            return
         if command == 'lum':
             self.ids['cur_lum'].text = f'lum: {value}'
         if command == 'power_mode':
@@ -81,6 +102,63 @@ class BSI_base(TabbedPanelItem):
             self.transition_power_mode(value)
             return
         self.commands[command] = int(value)
+
+    def _apply_monitor_ui_lock(self):
+        if not getattr(self.runner, 'monitor', False):
+            return
+        control_ids = [
+            'economy', 'dash_lights', 'dark_mode',
+            'lights_off', 'lights_side', 'lights_low', 'lights_high',
+            'sleeping', 'ignition', 'wakeup', 'engine',
+            'slider_lum', 'slider_temp', 'slider_rpm', 'slider_speed',
+            'slider_fuel', 'slider_oil', 'slider_coolant',
+        ]
+        for wid in control_ids:
+            if wid in self.ids:
+                self.ids[wid].disabled = True
+
+    def set_light_mode(self, mode, update_ui=False, sync_dash=True):
+        mode = int(mode)
+        if mode < BSI_base._lights_off:
+            mode = BSI_base._lights_off
+        if mode > BSI_base._lights_high:
+            mode = BSI_base._lights_high
+
+        self.commands['light_mode'] = mode
+
+        # Keep this behavior for local UI actions, but do not force lum/dash when
+        # synchronizing from received 0x128 frames.
+        if sync_dash:
+            if mode == BSI_base._lights_off:
+                self.commands['dash_lights'] = 0
+                self.commands['dark_mode'] = 0
+                self.commands['lum'] = 15
+            else:
+                self.commands['dash_lights'] = 1
+                self.commands['dark_mode'] = 0
+                self.commands['lum'] = 10
+
+        if not update_ui:
+            return
+
+        self._updating_light_buttons = True
+        if 'lights_off' in self.ids:
+            self.ids['lights_off'].state = 'down' if mode == BSI_base._lights_off else 'normal'
+        if 'lights_side' in self.ids:
+            self.ids['lights_side'].state = 'down' if mode == BSI_base._lights_side else 'normal'
+        if 'lights_low' in self.ids:
+            self.ids['lights_low'].state = 'down' if mode == BSI_base._lights_low else 'normal'
+        if 'lights_high' in self.ids:
+            self.ids['lights_high'].state = 'down' if mode == BSI_base._lights_high else 'normal'
+        self._updating_light_buttons = False
+        if 'dash_lights' in self.ids:
+            self.ids['dash_lights'].state = 'down' if self.commands['dash_lights'] else 'normal'
+        if 'dark_mode' in self.ids:
+            self.ids['dark_mode'].state = 'down' if self.commands['dark_mode'] else 'normal'
+        if 'cur_lum' in self.ids:
+            self.ids['cur_lum'].text = f"lum: {self.commands['lum']}"
+        if 'slider_lum' in self.ids and self.ids['slider_lum'].value != self.commands['lum']:
+            self.ids['slider_lum'].value = self.commands['lum']
 
     def _cancel_power_timers(self):
         if self._set_off_event is not None:
@@ -151,8 +229,6 @@ class BSI_base(TabbedPanelItem):
             self.on_val('fuel', 30)
             self.on_val('oil', 65)
             self.on_val('coolant', 60)
-            if 'engine' in self.ids:
-                self.ids['engine'].text = 'Stop Engine'
         else:
             self.commands['engine_running'] = 0
             self.on_val('rpm', 0)
@@ -200,8 +276,7 @@ class BSI_base(TabbedPanelItem):
     def can_slow(self):
         temp = int((self.temperature+40)*2)
         coolant = int(self.gauges['coolant']+40)
-        com = self.commands
-        reverse = int(com['reverse'])<<7 | 0x01
+        reverse = (int(getattr(self.runner, 'reverse', 0)) << 7) | 0x01
         return 0x0F6, [0x08, coolant, 0x00, 0x1F, 0x00, temp, temp, reverse]
 
     def can_fast(self):
@@ -227,6 +302,10 @@ class BSI_base(TabbedPanelItem):
 
     def can_110(self):
         return 0x110, [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
+
+    def can_128(self):
+        d5 = BSI_base._lights_to_128.get(self.commands['light_mode'], 0x00)
+        return 0x128, [0x91, 0xE0, 0x00, 0x00, d5, 0x80, 0xB0, 0x01]
 
     def can_190(self):
         mode = int(self.commands['power_mode'])
@@ -282,12 +361,14 @@ class BSI_base(TabbedPanelItem):
             speed = (msg.data[2] << 8) | msg.data[3]
             self.on_val('rpm', int(rpm / 10))
             self.on_val('speed', int(speed / 100))
+            engine_running = 1 if rpm > 0 else 0
+            self.commands['engine_running'] = engine_running
+            if 'engine' in self.ids:
+                self.ids['engine'].state = 'down' if engine_running else 'normal'
         elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
             self.on_val('oil', int(msg.data[2]) - 40)
             self.on_val('fuel', int(msg.data[3]))
         elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
-            reverse = (msg.data[7] >> 7) & 1
-            self.commands['reverse'] = reverse
             coolant = int(msg.data[1])
             temp = int(msg.data[5])
             self.on_val('coolant', coolant - 40)
@@ -296,3 +377,14 @@ class BSI_base(TabbedPanelItem):
             raw_bytes = ' '.join(f'{b:02X}' for b in msg.data)
             if 'cur_217_raw' in self.ids:
                 self.ids['cur_217_raw'].text = f'0x217: {raw_bytes}'
+        elif msg.arbitration_id == 0x128 and len(msg.data) >= 5:
+            d5 = int(msg.data[4]) & 0xE0
+            if d5 & 0x20:
+                light_mode = BSI_base._lights_high
+            elif d5 & 0x40:
+                light_mode = BSI_base._lights_low
+            elif d5 & 0x80:
+                light_mode = BSI_base._lights_side
+            else:
+                light_mode = BSI_base._lights_off
+            self.set_light_mode(light_mode, update_ui=True, sync_dash=False)
