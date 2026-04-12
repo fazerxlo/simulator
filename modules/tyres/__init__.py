@@ -114,6 +114,7 @@ class Tyres(TabbedPanelItem):
             self._update_status()
             self._sync_runner_display_state()
             self._send_manual_frame('active')
+            self._send_0x168_alert()
             Clock.schedule_once(self.show_msg, 2)
         elif id == self.msg_id and self.msg_flag != 0xFF:
             pass  # double call guard
@@ -178,12 +179,32 @@ class Tyres(TabbedPanelItem):
         self.tyre_state[tyre] = idx
         self._update_label(tyre)
 
-        self._trigger_warning()
+        # self._trigger_warning()
+        
+        self._send_0x168_alert()
         self._send_0x120_status()
 
     def _send_0x120_status(self):
         self.runner.send_message(0x120, self._build_0x120_block2())
         self.runner.send_message(0x120, self._build_0x120_block3())
+
+    def _any_flat(self):
+        """Check if any tyre is in FLAT state."""
+        return any(state == TIRE_FLAT for state in self.tyre_state.values())
+
+    def _any_low_or_nodata(self):
+        """Check if any tyre is in LOW or NO_DATA state (pressure warning)."""
+        return any(state in (TIRE_LOW, TIRE_NO_DATA) for state in self.tyre_state.values())
+
+    def _send_0x168_alert(self):
+        """Send generic tyre dashboard alert (0x168).
+        Byte 1, bit 7: pressure alert (any LOW or NO_DATA)
+        Byte 1, bit 6: flat/puncture alert (any FLAT)
+        """
+        any_flat = 1 if self._any_flat() else 0
+        any_pressure = 1 if self._any_low_or_nodata() else 0
+        d1 = (any_pressure << 7) | (any_flat << 6)
+        self.runner.send_message(0x168, [0x00, d1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def _build_0x120_block2(self):
         payload = [0xBC, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
