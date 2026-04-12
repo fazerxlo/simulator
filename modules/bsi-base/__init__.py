@@ -6,6 +6,11 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
+from can_messages import (
+    Msg036, Msg0B6, Msg0F6, Msg110, Msg12D, Msg128, Msg161, Msg168,
+    Msg190, Msg1A1, Msg1D0, Msg1E3, Msg217, Msg2B6, Msg336, Msg3B6, Msg52D,
+)
+
 _modname = 'BSI_base'
 _modversion = '0.0.1'
 
@@ -40,22 +45,27 @@ class BSI_base(TabbedPanelItem):
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/bsi.kv')
         Builder.apply(self)
 
-        # Register CAN callbacks
+        # Register per-CAN-ID message objects.  Each class owns exactly one
+        # arbitration ID; the runner calls encode() periodically and decode()
+        # when a matching frame is received.
         print('registering BSI calls')
-        runner.register(50, self.can_commandes)
-        runner.register(100, self.can_slow)
-        runner.register(1000, self.can_vin_vis)
-        runner.register(1000, self.can_vin_wmi)
-        runner.register(1000, self.can_vin_vds)
-        runner.register(50, self.can_fast)
-        runner.register(100, self.can_temp_level)
-        runner.register(100, self.can_110)
-        runner.register(200, self.can_128)
-        runner.register(200, self.can_190)
-        runner.register(500, self.can_1d0)
-        runner.register(200, self.can_1e3)
-        runner.register(100, self.can_217)
-        runner.register(1000, self.can_52d)
+        runner.register_message(Msg036())
+        runner.register_message(Msg0B6())
+        runner.register_message(Msg0F6())
+        runner.register_message(Msg110())
+        runner.register_message(Msg128())
+        runner.register_message(Msg161())
+        runner.register_message(Msg168())
+        runner.register_message(Msg190())
+        runner.register_message(Msg1A1())
+        runner.register_message(Msg1D0())
+        runner.register_message(Msg1E3())
+        runner.register_message(Msg12D())
+        runner.register_message(Msg217())
+        runner.register_message(Msg2B6())
+        runner.register_message(Msg336())
+        runner.register_message(Msg3B6())
+        runner.register_message(Msg52D())
 
         # Initialise BSI state on the shared VirtualCar.  All reads and
         # writes go through runner.car.bsi so that other modules (e.g.
@@ -81,7 +91,6 @@ class BSI_base(TabbedPanelItem):
         self._updating_light_buttons = False
         self._set_off_event = None
         self._ignition_finalize_event = None
-        self._rolling_190 = 0
         self.set_power_mode(bsi.power_mode)
         self._apply_monitor_ui_lock()
 
@@ -342,18 +351,14 @@ class BSI_base(TabbedPanelItem):
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
-            b2 = msg.data[2]
             b3 = msg.data[3]
             b4 = msg.data[4]
-            economy = (b2 >> 7) & 1
+            economy = (msg.data[2] >> 7) & 1
             dash_lights = (b3 >> 5) & 1
             dark_mode = (b3 >> 4) & 1
             lum = b3 & 0x0F
             power_mode = b4
-            self._bsi.economy = economy
-            self._bsi.dash_lights = dash_lights
-            self._bsi.dark_mode = dark_mode
-            self._bsi.lum = lum
+            # Car state already updated by Msg036.decode(); just sync UI.
             self.ids['economy'].state = 'down' if economy else 'normal'
             self.ids['dash_lights'].state = 'down' if dash_lights else 'normal'
             self.ids['dark_mode'].state = 'down' if dark_mode else 'normal'
@@ -367,7 +372,6 @@ class BSI_base(TabbedPanelItem):
             self.on_val('rpm', int(rpm / 10))
             self.on_val('speed', int(speed / 100))
             engine_running = 1 if rpm > 0 else 0
-            self._bsi.engine_running = engine_running
             if 'engine' in self.ids:
                 self.ids['engine'].state = 'down' if engine_running else 'normal'
         elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
@@ -383,14 +387,6 @@ class BSI_base(TabbedPanelItem):
             if 'cur_217_raw' in self.ids:
                 self.ids['cur_217_raw'].text = f'0x217: {raw_bytes}'
         elif msg.arbitration_id == 0x128 and len(msg.data) >= 5:
-            d5 = int(msg.data[4]) & 0xE0
-            if d5 & 0x20:
-                light_mode = BSI_base._lights_high
-            elif d5 & 0x40:
-                light_mode = BSI_base._lights_low
-            elif d5 & 0x80:
-                light_mode = BSI_base._lights_side
-            else:
-                light_mode = BSI_base._lights_off
-            self.set_light_mode(light_mode, update_ui=True, sync_dash=False)
+            # Msg128.decode() already updated car state; just sync the light mode UI.
+            self.set_light_mode(self._bsi.light_mode, update_ui=True, sync_dash=False)
 

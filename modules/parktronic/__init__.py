@@ -4,6 +4,8 @@ from kivy.app import App
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
+from can_messages import Msg0E1
+
 _modname = 'Parktronic'
 _modversion = '0.0.1'
 
@@ -17,7 +19,6 @@ class Parktronic(TabbedPanelItem):
         'front_center': 'Front center',
         'front_right': 'Front right',
     }
-    _inactive_frame = [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
 
     def __init__(self, runner, **kwargs):
         super(TabbedPanelItem, self).__init__(**kwargs)
@@ -27,7 +28,7 @@ class Parktronic(TabbedPanelItem):
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/parktronic.kv')
         Builder.apply(self)
 
-        runner.register(100, self.can_parktronic)
+        runner.register_message(Msg0E1())
 
         # Initialise parktronic state on the shared VirtualCar.
         park = runner.car.parktronic
@@ -101,33 +102,18 @@ class Parktronic(TabbedPanelItem):
         for sensor_name in self._sensor_labels:
             self._update_sensor(sensor_name, 7)
 
-    def can_parktronic(self):
-        park = self._park
-        rear_active = park.rear_active
-        front_active = park.front_active
-        display_active = park.display
-
-        if not display_active and not rear_active and not front_active:
-            return 0x0E1, self._inactive_frame
-
-        sensor_a = ((park.rear_left & 0x07) << 5) | ((park.rear_center & 0x07) << 2)
-        sensor_b = ((park.rear_right & 0x07) << 5) | ((park.front_left & 0x07) << 2)
-        sensor_c = ((park.front_center & 0x07) << 5) | ((park.front_right & 0x07) << 2) | 0x02
-        zone_flags = (0x40 if rear_active else 0x00) | (0x10 if front_active else 0x00)
-        # _inactive_frame = [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
-        return 0x0E1, [0x24, zone_flags, 0x3F, sensor_a, sensor_b, sensor_c, 0x00]
-
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
-            self.runner.car.bsi.reverse = (msg.data[7] >> 7) & 0x01
+            # Msg0F6.decode() has already updated car.bsi.reverse; just sync UI.
             self._sync_reverse_toggle()
         elif msg.arbitration_id == 0x0E1 and len(msg.data) >= 6:
-            self._update_toggle('rear_active', (msg.data[1] >> 6) & 0x01)
-            self._update_toggle('front_active', (msg.data[1] >> 4) & 0x01)
-            self._update_toggle('display', 1 if (msg.data[5] & 0x02) else 0)
-            self._update_sensor('rear_left', (msg.data[3] >> 5) & 0x07)
-            self._update_sensor('rear_center', (msg.data[3] >> 2) & 0x07)
-            self._update_sensor('rear_right', (msg.data[4] >> 5) & 0x07)
-            self._update_sensor('front_left', (msg.data[4] >> 2) & 0x07)
-            self._update_sensor('front_center', (msg.data[5] >> 5) & 0x07)
-            self._update_sensor('front_right', (msg.data[5] >> 2) & 0x07)
+            # Msg0E1.decode() has already updated car.parktronic.*; just sync UI.
+            self._update_toggle('rear_active', self._park.rear_active)
+            self._update_toggle('front_active', self._park.front_active)
+            self._update_toggle('display', self._park.display)
+            self._update_sensor('rear_left', self._park.rear_left)
+            self._update_sensor('rear_center', self._park.rear_center)
+            self._update_sensor('rear_right', self._park.rear_right)
+            self._update_sensor('front_left', self._park.front_left)
+            self._update_sensor('front_center', self._park.front_center)
+            self._update_sensor('front_right', self._park.front_right)

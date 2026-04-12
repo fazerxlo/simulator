@@ -17,17 +17,15 @@ class Combine(TabbedPanelItem):
         self.text = 'Combine'
         self.runner = runner
 
-        # Mark dashboard as active so tyres module defers 0x168 to combine.
+        # Mark dashboard as active so that Msg128 and Msg168 (registered by
+        # bsi-base) switch to the full combine encoding.  No CAN TX callbacks
+        # are registered here — state mutations via runner.car.dashboard are
+        # sufficient.
         runner.car.dashboard.active = True
 
         # Load kv file
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/combine.kv')
         Builder.apply(self)
-
-        # Register CAN callbacks
-        print('registering radio calls')
-        runner.register(100, self.can_combine_indicators)
-        runner.register(100, self.can_combine_signals)
 
         self._last_ignition_state = None
 
@@ -91,28 +89,6 @@ class Combine(TabbedPanelItem):
     def on_option(self, option, value):
         setattr(self._dash, option, 1 if value == 'down' else 0)
 
-    def can_combine_indicators(self):
-        dash = self._dash
-        b0 = dash.airbag_pass << 7 | dash.seatbelt << 6 | dash.brakes << 5 | dash.low_fuel << 4 | dash.preheat << 2
-        b1 = dash.warn << 7 | dash.stop << 6 | dash.doors << 4
-        b2 = dash.esp << 5 | dash.esp_blink << 4
-        b3 = dash.tyre << 6
-        b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
-              dash.fog_front << 4 | dash.fog_rear << 3 | dash.clig_r << 2 | dash.clig_l << 1)
-        b5 = dash.on << 7
-        return 0x128, [b0, b1, b2, b3, b4, b5, 0x00, 0x00]
-
-    def can_combine_signals(self):
-        dash = self._dash
-        b0 = dash.coolant_warn << 7 | dash.oil_blink << 6 | dash.coolant_blink << 5 | dash.oil_warn << 3
-        tyre_overlay = int(self.runner.car.tyres.alert_0x168_b1) & 0xC0
-        b1 = tyre_overlay if tyre_overlay else (dash.tyre << 6)
-        b3 = dash.abs << 5 | dash.esp << 4 | dash.obd << 1 | dash.gas_water
-        b4 = dash.airbag << 5 | dash.battery << 1
-        b6 = dash.dae << 5 | dash.eco_blink << 1 | dash.eco
-        b7 = dash.battery_blink << 7 | dash.obd_blink << 6
-        return 0x168, [b0, b1, 0x00, b3, b4, 0x00, b6, b7]
-
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
             # Keep combine ignition icon in sync with BSI power mode.
@@ -127,46 +103,8 @@ class Combine(TabbedPanelItem):
                     # Force UI refresh when ignition turns on to make indicators visible
                     self._sync_ui_from_options()
         elif msg.arbitration_id == 0x128 and len(msg.data) >= 6:
-            data = msg.data
-            dash = self._dash
-            dash.airbag_pass = (data[0] >> 7) & 1
-            dash.seatbelt = (data[0] >> 6) & 1
-            dash.brakes = (data[0] >> 5) & 1
-            dash.low_fuel = (data[0] >> 4) & 1
-            dash.preheat = (data[0] >> 2) & 1
-            dash.warn = (data[1] >> 7) & 1
-            dash.stop = (data[1] >> 6) & 1
-            dash.doors = (data[1] >> 4) & 1
-            dash.esp = (data[2] >> 5) & 1
-            dash.esp_blink = (data[2] >> 4) & 1
-            dash.tyre = (data[3] >> 6) & 1
-            dash.backlight = (data[4] >> 7) & 1
-            dash.low_beam = (data[4] >> 6) & 1
-            dash.high_beam = (data[4] >> 5) & 1
-            dash.fog_front = (data[4] >> 4) & 1
-            dash.fog_rear = (data[4] >> 3) & 1
-            dash.clig_r = (data[4] >> 2) & 1
-            dash.clig_l = (data[4] >> 1) & 1
-            dash.on = (data[5] >> 7) & 1
+            # Car state already updated by Msg128.decode(); just sync the UI.
             self._sync_ui_from_options()
         elif msg.arbitration_id == 0x168 and len(msg.data) >= 8:
-            data = msg.data
-            dash = self._dash
-            dash.coolant_warn = (data[0] >> 7) & 1
-            dash.oil_blink = (data[0] >> 6) & 1
-            dash.coolant_blink = (data[0] >> 5) & 1
-            dash.oil_warn = (data[0] >> 3) & 1
-            dash.tyre = (data[1] >> 6) & 1
-            dash.abs = (data[3] >> 5) & 1
-            dash.esp = (data[3] >> 4) & 1
-            dash.obd = (data[3] >> 1) & 1
-            dash.gas_water = data[3] & 1
-            dash.airbag = (data[4] >> 5) & 1
-            dash.battery = (data[4] >> 1) & 1
-            dash.dae = (data[6] >> 5) & 1
-            dash.eco_blink = (data[6] >> 1) & 1
-            dash.eco = data[6] & 1
-            dash.battery_blink = (data[7] >> 7) & 1
-            dash.obd_blink = (data[7] >> 6) & 1
+            # Car state already updated by Msg168.decode(); just sync the UI.
             self._sync_ui_from_options()
-

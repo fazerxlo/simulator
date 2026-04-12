@@ -34,6 +34,11 @@ class CanRunner():
         # can be detected and reported early.
         self._can_id_owners: dict = {}
 
+        # CanMessage objects registered via register_message().
+        # Keys are CAN arbitration IDs; values are CanMessage instances.
+        self._can_message_objects: dict = {}
+        self._message_object_timers: dict = {}
+
     # ------------------------------------------------------------------
     # Backward-compatibility properties
     # Existing modules that accessed runner.ignition_on / runner.power_mode /
@@ -135,6 +140,23 @@ class CanRunner():
         }
         self.messages.append(new_module)
 
+    def register_message(self, msg):
+        """Register a :class:`~can_messages.CanMessage` object as the periodic
+        sender for its CAN arbitration ID.
+
+        Only one object may own each ID.  A second registration for the same
+        ID logs a warning and the new object takes over (last writer wins).
+        """
+        can_id = msg.can_id
+        if can_id in self._can_message_objects:
+            existing = self._can_message_objects[can_id]
+            print(
+                f'WARNING: CAN ID 0x{can_id:03X} already owned by '
+                f'{type(existing).__name__}, overriding with {type(msg).__name__}'
+            )
+        self._can_message_objects[can_id] = msg
+        self._message_object_timers[can_id] = datetime.datetime.now()
+
     def receiver(self):
         while True:
             if self.receiver_exit.is_set():
@@ -150,6 +172,15 @@ class CanRunner():
             for message in self.mess:
                 if message['tp_id'] == recvd['arbitration_id']:
                     self.event_queue.put((message['tp_callback'], recvd['data']))
+
+            # Call decode() on the matching CanMessage object (if any) so that
+            # car state is updated from the received frame.
+            msg_obj = self._can_message_objects.get(recvd.arbitration_id)
+            if msg_obj is not None:
+                try:
+                    msg_obj.decode(self.car, recvd.data)
+                except Exception as exc:
+                    print(f'CanRunner decode error for 0x{recvd.arbitration_id:03X}: {exc}')
 
 
     def process_events(self, dt=None):
@@ -184,6 +215,20 @@ class CanRunner():
                     if not self.monitor and self.can_send(id, data):
                         self.bus.send(can.Message(arbitration_id=id, data=data, is_extended_id=False))
                     message['timer'] = now
+
+            # CanMessage objects registered via register_message().
+            for can_id, msg_obj in list(self._can_message_objects.items()):
+                now = datetime.datetime.now()
+                timer = self._message_object_timers.get(can_id, now)
+                if (now - timer).total_seconds() >= msg_obj.period_ms / 1000:
+                    try:
+                        data = msg_obj.encode(self.car)
+                    except Exception as exc:
+                        print(f'CanRunner encode error for 0x{can_id:03X}: {exc}')
+                        data = None
+                    if not self.monitor and self.can_send(can_id, data):
+                        self.bus.send(can.Message(arbitration_id=can_id, data=data, is_extended_id=False))
+                    self._message_object_timers[can_id] = now
 
             # Wait until next round
             time.sleep(0.02)

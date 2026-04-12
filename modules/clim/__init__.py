@@ -23,9 +23,10 @@ class Clim(TabbedPanelItem):
 
         # Register CAN callbacks
         print('registering radio calls')
-        runner.register(100, self.can_clim_panel)
-        runner.register(100, self.can_clim_cmd)
-        runner.register(100, self.can_clim_emf)
+        # Note: Msg1D0, Msg1E3, and Msg12D are registered by bsi-base and switch
+        # to full climate encoding when car.clim.enabled is True.  No separate TX
+        # registration is needed here.
+        runner.car.clim.enabled = True
 
         # Initialise climate state on the shared VirtualCar.
         clim = runner.car.clim
@@ -118,33 +119,6 @@ class Clim(TabbedPanelItem):
             self._clim.bits |= 1 << bit
         else:
             self._clim.bits &= ~(1 << bit)
-
-    def can_clim_panel(self):
-        if not self._is_ignition_on():
-            return 0x1D0, None
-        clim = self._clim
-        b4 = clim.recycle << 5 | clim.unfrost_front << 4
-        return 0x1D0, [0x00, 0x00, clim.fan, clim.dir_left, b4, clim.temp_left, clim.temp_right]
-
-    def can_clim_cmd(self):
-        if not self._is_ignition_on():
-            return 0x12D, None
-        return 0x12D, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-
-    def can_clim_emf(self):
-        if not self._is_ignition_on():
-            return 0x1E3, None
-        clim = self._clim
-        # recycle, ac off, off, auto air, auto (text), hide fan, ext air, dual
-        b1 = clim.auto << 3 | clim.dual
-        # unfrost front, [3 bits] temperature offset, 4 bits unknown
-        b2 = clim.unfrost_front << 7
-        b3 = clim.bits | clim.temp_left  # unknown, 2 bits: if both 1: '--.-', 5 bits temperature // left seat + dual
-        b4 = clim.temp_right  # same as b4, right seat only
-        b5 = clim.dir_left << 4  # 4 bits: direction, 4 bits unknown // left seat + dual
-        b6 = clim.dir_right << 4  # 4 bits: direction, 4 bits unknown // right seat only
-        b7 = clim.fan  # 4 unknown, 4 bits: fan
-        return 0x1E3, [b1, b2, b3, b4, b5, b6, b7]
 
     def _normalize_fan(self, raw_value):
         if raw_value is None:

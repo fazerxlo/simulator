@@ -47,6 +47,9 @@ class Clim:
         self.auto = 0
         self.dual = 0
         self.bits = 0
+        # Set to True by the clim module so that Msg1D0/Msg1E3 switch from the
+        # BSI idle encoding to the full climate encoding.
+        self.enabled = False
 
 
 class Doors:
@@ -149,6 +152,80 @@ class Dashboard:
         self.active = False
 
 
+class Radio:
+    """Radio / head-unit state."""
+
+    # Maps input source names to the 0x165 byte-2 nibble codes.
+    INPUT_CODES = {
+        'TUN': 0x01, 'CD': 0x02, 'CDC': 0x03,
+        'AUX1': 0x04, 'AUX2': 0x05, 'USB': 0x06, 'BT': 0x07,
+    }
+
+    def __init__(self):
+        self.input = 'TUN'
+        self.volume = 15
+        # 0xE0 = stable; 0x00 = volume-change in progress
+        self.volflag = 0xE0
+        self.panel = {k: 0 for k in (
+            'mode', 'menu', 'ok', 'esc', 'up', 'down',
+            'right', 'left', 'audio', 'trip', 'clim', 'tel',
+        )}
+        self.audio = {
+            'bass': 0x3F, 'treble': 0x3F,
+            'rf-bal': 0x3F, 'lr-bal': 0x3F,
+            'loudness': 0, 'volume': 0, 'ambiance': 'none', 'menu': 'none',
+        }
+
+
+class Trip:
+    """Trip computer state."""
+
+    def __init__(self):
+        self.hide_fuel = 0
+        self.hide_dist = 0
+        self.com_left = 0
+        self.com_right = 0
+        self.fuel = 7.1
+        self.autonomy = 740
+        self.dist = 120
+        # Two historical trip records, each with speed / dist / fuel fields.
+        self.hist = [
+            {'speed': 37, 'dist': 569, 'fuel': 7.3},
+            {'speed': 35, 'dist': 921, 'fuel': 7.9},
+        ]
+
+
+class KMLState:
+    """Hands-free / KML module state."""
+
+    def __init__(self):
+        self.opt = 0
+        # Dynamic bits driven by the KML module UI toggles.
+        self.bits_223 = 0
+        # bits_323 is decoded from received 0x323 frames (read-only from bus).
+        self.bits_323 = 0
+
+
+class BTEState:
+    """BTE module state."""
+
+    def __init__(self):
+        self.bits = 0
+
+
+class MFDPopup:
+    """State for the BSI-log MFD popup messages (0x1A1 arbitration).
+
+    The bsi-log module drives ``flag`` / ``msg_id`` through its state
+    machine; the Msg1A1 message object reads from here to produce periodic
+    transmissions.  When ``flag`` is 0xFF no popup is pending.
+    """
+
+    def __init__(self):
+        self.flag = 0xFF   # 0xFF = inactive / no message pending
+        self.msg_id = 0x00
+
+
 class VirtualCar:
     """Shared virtual car state for the Peugeot 407 simulator.
 
@@ -174,3 +251,8 @@ class VirtualCar:
         self.parktronic = Parktronic()
         self.tyres = Tyres()
         self.dashboard = Dashboard()
+        self.radio = Radio()
+        self.trip = Trip()
+        self.kml = KMLState()
+        self.bte = BTEState()
+        self.mfd_popup = MFDPopup()

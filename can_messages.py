@@ -1,0 +1,871 @@
+"""CAN message objects for the Peugeot 407 CAN2004 comfort bus (125 kbps).
+
+Each class represents exactly one CAN arbitration ID.  Having a single
+class per ID makes it impossible for two modules to accidentally register
+conflicting senders for the same frame — the first caller that passes a
+message object to ``runner.register_message()`` owns that ID.
+
+Design principles
+-----------------
+* ``encode(car)`` builds the frame payload from ``VirtualCar`` state.
+  Return ``None`` to suppress transmission this cycle.
+* ``decode(car, data)`` updates ``VirtualCar`` state from a received frame.
+* Stateful messages (e.g. rolling counter) may keep internal state on the
+  object itself so that ``encode`` remains a pure function of *car* + *self*.
+* Messages that belong to two logical subsystems (e.g. 0x128 which bsi-base
+  sends in basic form but combine enhances) choose their encoding by
+  inspecting a flag on the car state object (e.g. ``car.dashboard.active``).
+"""
+
+from __future__ import annotations
+
+
+class CanMessage:
+    """Base class for a periodic CAN message.
+
+    Subclasses **must** set ``can_id`` and ``period_ms`` as class attributes
+    and override ``encode``.  Overriding ``decode`` is optional but strongly
+    recommended so that monitor mode and loopback testing work correctly.
+    """
+
+    #: CAN arbitration ID owned by this object.
+    can_id: int = 0
+
+    #: Transmit period in milliseconds.
+    period_ms: int = 100
+
+    def encode(self, car) -> list | None:
+        """Build frame byte payload from car state.
+
+        Return ``None`` to skip transmission this cycle.
+        """
+        return None
+
+    def decode(self, car, data: bytes) -> None:
+        """Update car state from a received frame with this *can_id*."""
+
+    def __repr__(self) -> str:
+        return f'{type(self).__name__}(can_id=0x{self.can_id:03X}, period_ms={self.period_ms})'
+
+
+# ---------------------------------------------------------------------------
+# 0x036 – COMMANDES_BSI (power mode, lights, economy, luminosity)
+# ---------------------------------------------------------------------------
+
+class Msg036(CanMessage):
+    """BSI command frame: power mode, lighting, economy, dashboard luminosity."""
+
+    can_id = 0x036
+    period_ms = 50
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        b2 = bsi.economy << 7
+        b3 = bsi.dash_lights << 5 | bsi.dark_mode << 4 | (bsi.lum & 0x0F)
+        b4 = bsi.power_mode
+        return [0x0E, 0x00, b2, b3, b4, 0x80, 0x00, 0xA0]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 5:
+            return
+        car.bsi.economy = (data[2] >> 7) & 1
+        car.bsi.dash_lights = (data[3] >> 5) & 1
+        car.bsi.dark_mode = (data[3] >> 4) & 1
+        car.bsi.lum = data[3] & 0x0F
+        car.bsi.power_mode = data[4]
+        car.bsi.ignition_on = (data[4] == 0x01)
+
+
+# ---------------------------------------------------------------------------
+# 0x0B6 – Fast dynamic data (RPM / Speed)
+# ---------------------------------------------------------------------------
+
+class Msg0B6(CanMessage):
+    """Fast dynamic data: engine RPM and vehicle speed."""
+
+    can_id = 0x0B6
+    period_ms = 50
+
+    def encode(self, car) -> list:
+        rpm = int(car.bsi.rpm * 10)
+        speed = int(car.bsi.speed * 100)
+        return [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF,
+                0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 4:
+            return
+        raw_rpm = (data[0] << 8) | data[1]
+        raw_speed = (data[2] << 8) | data[3]
+        car.bsi.rpm = int(raw_rpm / 10)
+        car.bsi.speed = int(raw_speed / 100)
+        car.bsi.engine_running = 1 if raw_rpm > 0 else 0
+
+
+# ---------------------------------------------------------------------------
+# 0x0E1 – Parktronic sensor data
+# ---------------------------------------------------------------------------
+
+class Msg0E1(CanMessage):
+    """Parking sensor distances and zone activation."""
+
+    can_id = 0x0E1
+    period_ms = 100
+
+    _INACTIVE = [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
+
+    def encode(self, car) -> list:
+        p = car.parktronic
+        if not p.display and not p.rear_active and not p.front_active:
+            return list(self._INACTIVE)
+        sensor_a = ((p.rear_left & 0x07) << 5) | ((p.rear_center & 0x07) << 2)
+        sensor_b = ((p.rear_right & 0x07) << 5) | ((p.front_left & 0x07) << 2)
+        sensor_c = ((p.front_center & 0x07) << 5) | ((p.front_right & 0x07) << 2) | 0x02
+        zone = (0x40 if p.rear_active else 0x00) | (0x10 if p.front_active else 0x00)
+        return [0x24, zone, 0x3F, sensor_a, sensor_b, sensor_c, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 6:
+            return
+        p = car.parktronic
+        p.rear_active = (data[1] >> 6) & 1
+        p.front_active = (data[1] >> 4) & 1
+        p.display = 1 if (data[5] & 0x02) else 0
+        p.rear_left = (data[3] >> 5) & 0x07
+        p.rear_center = (data[3] >> 2) & 0x07
+        p.rear_right = (data[4] >> 5) & 0x07
+        p.front_left = (data[4] >> 2) & 0x07
+        p.front_center = (data[5] >> 5) & 0x07
+        p.front_right = (data[5] >> 2) & 0x07
+
+
+# ---------------------------------------------------------------------------
+# 0x0F6 – Slow dynamic data (coolant, exterior temp, reverse)
+# ---------------------------------------------------------------------------
+
+class Msg0F6(CanMessage):
+    """Slow dynamic data: coolant temperature, exterior temperature, reverse gear."""
+
+    can_id = 0x0F6
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        temp = int((bsi.temperature + 40) * 2)
+        coolant = int(bsi.coolant + 40)
+        reverse = (int(bsi.reverse) << 7) | 0x01
+        return [0x08, coolant, 0x00, 0x1F, 0x00, temp, temp, reverse]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 8:
+            return
+        car.bsi.coolant = int(data[1]) - 40
+        car.bsi.temperature = int(data[5]) / 2.0 - 40
+        car.bsi.reverse = (data[7] >> 7) & 1
+
+
+# ---------------------------------------------------------------------------
+# 0x110 – Broadcast presence frame
+# ---------------------------------------------------------------------------
+
+class Msg110(CanMessage):
+    """BSI broadcast / presence frame."""
+
+    can_id = 0x110
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        return [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
+
+
+# ---------------------------------------------------------------------------
+# 0x12B – BTE module status
+# ---------------------------------------------------------------------------
+
+class Msg12B(CanMessage):
+    """BTE module status byte."""
+
+    can_id = 0x12B
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        return [car.bte.bits]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 1:
+            car.bte.bits = data[0]
+
+
+# ---------------------------------------------------------------------------
+# 0x12D – Climate controller command
+# ---------------------------------------------------------------------------
+
+class Msg12D(CanMessage):
+    """Climate controller command (suppressed when ignition is off)."""
+
+    can_id = 0x12D
+    period_ms = 100
+
+    def encode(self, car) -> list | None:
+        if not car.bsi.ignition_on:
+            return None
+        return [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+
+# ---------------------------------------------------------------------------
+# 0x128 – Dashboard indicators
+# ---------------------------------------------------------------------------
+
+class Msg128(CanMessage):
+    """Dashboard indicator lamps (0x128).
+
+    When *car.dashboard.active* is ``True`` (combine module is loaded) the
+    full instrument-cluster indicator set is encoded.  Otherwise the simpler
+    BSI lighting-only encoding is used.
+    """
+
+    can_id = 0x128
+    period_ms = 100
+
+    _LIGHTS_TO_BYTE = {0: 0x00, 1: 0x80, 2: 0xC0, 3: 0xE0}
+
+    def encode(self, car) -> list:
+        if car.dashboard.active:
+            dash = car.dashboard
+            b0 = (dash.airbag_pass << 7 | dash.seatbelt << 6 | dash.brakes << 5 |
+                  dash.low_fuel << 4 | dash.preheat << 2)
+            b1 = dash.warn << 7 | dash.stop << 6 | dash.doors << 4
+            b2 = dash.esp << 5 | dash.esp_blink << 4
+            b3 = dash.tyre << 6
+            b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
+                  dash.fog_front << 4 | dash.fog_rear << 3 |
+                  dash.clig_r << 2 | dash.clig_l << 1)
+            b5 = dash.on << 7
+            return [b0, b1, b2, b3, b4, b5, 0x00, 0x00]
+        d5 = self._LIGHTS_TO_BYTE.get(car.bsi.light_mode, 0x00)
+        return [0x91, 0xE0, 0x00, 0x00, d5, 0x80, 0xB0, 0x01]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 6:
+            return
+        if car.dashboard.active:
+            dash = car.dashboard
+            dash.airbag_pass = (data[0] >> 7) & 1
+            dash.seatbelt = (data[0] >> 6) & 1
+            dash.brakes = (data[0] >> 5) & 1
+            dash.low_fuel = (data[0] >> 4) & 1
+            dash.preheat = (data[0] >> 2) & 1
+            dash.warn = (data[1] >> 7) & 1
+            dash.stop = (data[1] >> 6) & 1
+            dash.doors = (data[1] >> 4) & 1
+            dash.esp = (data[2] >> 5) & 1
+            dash.esp_blink = (data[2] >> 4) & 1
+            dash.tyre = (data[3] >> 6) & 1
+            dash.backlight = (data[4] >> 7) & 1
+            dash.low_beam = (data[4] >> 6) & 1
+            dash.high_beam = (data[4] >> 5) & 1
+            dash.fog_front = (data[4] >> 4) & 1
+            dash.fog_rear = (data[4] >> 3) & 1
+            dash.clig_r = (data[4] >> 2) & 1
+            dash.clig_l = (data[4] >> 1) & 1
+            dash.on = (data[5] >> 7) & 1
+        else:
+            d5 = int(data[4]) & 0xE0
+            if d5 & 0x20:
+                car.bsi.light_mode = 3
+            elif d5 & 0x40:
+                car.bsi.light_mode = 2
+            elif d5 & 0x80:
+                car.bsi.light_mode = 1
+            else:
+                car.bsi.light_mode = 0
+
+
+# ---------------------------------------------------------------------------
+# 0x161 – Fuel and oil temperature levels
+# ---------------------------------------------------------------------------
+
+class Msg161(CanMessage):
+    """Oil temperature and fuel level."""
+
+    can_id = 0x161
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        oil = car.bsi.oil + 40
+        return [0x00, 0x00, oil, car.bsi.fuel, 0xFF, 0xFF, 0xFF, 0xFF]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 4:
+            car.bsi.oil = int(data[2]) - 40
+            car.bsi.fuel = int(data[3])
+
+
+# ---------------------------------------------------------------------------
+# 0x165 – Radio source / input status
+# ---------------------------------------------------------------------------
+
+class Msg165(CanMessage):
+    """Radio source / input status."""
+
+    can_id = 0x165
+    period_ms = 50
+
+    def encode(self, car) -> list:
+        b2 = car.radio.INPUT_CODES.get(car.radio.input, 0x01) << 4
+        return [0xCC, 0x54, b2, 0x02]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 3:
+            return
+        input_code = data[2] >> 4
+        for name, code in car.radio.INPUT_CODES.items():
+            if code == input_code:
+                car.radio.input = name
+                return
+
+
+# ---------------------------------------------------------------------------
+# 0x168 – Dashboard warning signals
+# ---------------------------------------------------------------------------
+
+class Msg168(CanMessage):
+    """Dashboard warning / signal lamps (0x168).
+
+    When *car.dashboard.active* is ``True`` (combine module loaded) the full
+    warning-lamp set is encoded.  Otherwise only the tyre pressure overlay
+    byte is included (when non-zero).
+    """
+
+    can_id = 0x168
+    period_ms = 100
+
+    def encode(self, car) -> list | None:
+        if car.dashboard.active:
+            dash = car.dashboard
+            b0 = (dash.coolant_warn << 7 | dash.oil_blink << 6 |
+                  dash.coolant_blink << 5 | dash.oil_warn << 3)
+            tyre_overlay = int(car.tyres.alert_0x168_b1) & 0xC0
+            b1 = tyre_overlay if tyre_overlay else (dash.tyre << 6)
+            b3 = dash.abs << 5 | dash.esp << 4 | dash.obd << 1 | dash.gas_water
+            b4 = dash.airbag << 5 | dash.battery << 1
+            b6 = dash.dae << 5 | dash.eco_blink << 1 | dash.eco
+            b7 = dash.battery_blink << 7 | dash.obd_blink << 6
+            return [b0, b1, 0x00, b3, b4, 0x00, b6, b7]
+        tyre_overlay = int(car.tyres.alert_0x168_b1) & 0xC0
+        if not tyre_overlay:
+            return None
+        return [0x00, tyre_overlay, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 8 or not car.dashboard.active:
+            return
+        dash = car.dashboard
+        dash.coolant_warn = (data[0] >> 7) & 1
+        dash.oil_blink = (data[0] >> 6) & 1
+        dash.coolant_blink = (data[0] >> 5) & 1
+        dash.oil_warn = (data[0] >> 3) & 1
+        dash.tyre = (data[1] >> 6) & 1
+        dash.abs = (data[3] >> 5) & 1
+        dash.esp = (data[3] >> 4) & 1
+        dash.obd = (data[3] >> 1) & 1
+        dash.gas_water = data[3] & 1
+        dash.airbag = (data[4] >> 5) & 1
+        dash.battery = (data[4] >> 1) & 1
+        dash.dae = (data[6] >> 5) & 1
+        dash.eco_blink = (data[6] >> 1) & 1
+        dash.eco = data[6] & 1
+        dash.battery_blink = (data[7] >> 7) & 1
+        dash.obd_blink = (data[7] >> 6) & 1
+
+
+# ---------------------------------------------------------------------------
+# 0x190 – Status frame with rolling counter
+# ---------------------------------------------------------------------------
+
+class Msg190(CanMessage):
+    """BSI status frame.  The low bit of byte 3 rolls when ignition is on."""
+
+    can_id = 0x190
+    period_ms = 200
+
+    def __init__(self) -> None:
+        self._rolling = 0
+
+    def encode(self, car) -> list:
+        if car.bsi.power_mode == 0x01:
+            d4 = 0x7E | self._rolling
+            self._rolling ^= 0x01
+        else:
+            d4 = 0x77
+            self._rolling = 0
+        return [0xFF, 0xFF, 0x02, d4, 0xFF, 0xFF, 0xFF, 0xFF]
+
+
+# ---------------------------------------------------------------------------
+# 0x1A1 – MFD popup / BSI log messages
+# ---------------------------------------------------------------------------
+
+class Msg1A1(CanMessage):
+    """MFD popup message with three-level arbitration.
+
+    Priority order (highest first):
+    1. Tyre pressure warning  — ``car.tyres.display_active`` is True
+    2. Door open warning      — ``car.doors.display_active`` is True
+    3. BSI log popup          — ``car.mfd_popup.flag`` is not 0xFF
+
+    When a higher-priority source is active this message returns ``None``
+    (suppressed) so that the owner module can send event-driven frames via
+    ``runner.send_message()`` without colliding with the periodic sender.
+    """
+
+    can_id = 0x1A1
+    period_ms = 100
+
+    def encode(self, car) -> list | None:
+        # Tyres and doors use event-driven send_message() — yield to them.
+        if car.tyres.display_active or car.doors.display_active:
+            return None
+        p = car.mfd_popup
+        if p.flag == 0xFF:
+            return None
+        b2 = 0xF0 if p.flag != 0xFF else 0x00
+        return [p.flag, p.msg_id, b2, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 2:
+            car.mfd_popup.flag = data[0]
+            car.mfd_popup.msg_id = data[1]
+
+
+# ---------------------------------------------------------------------------
+# 0x1A3 – KML / hands-free phone status
+# ---------------------------------------------------------------------------
+
+class Msg1A3(CanMessage):
+    """KML / hands-free phone module status."""
+
+    can_id = 0x1A3
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        return [0x80, car.kml.opt << 2, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 2:
+            car.kml.opt = (data[1] >> 2) & 1
+
+
+# ---------------------------------------------------------------------------
+# 0x1A5 – Radio volume
+# ---------------------------------------------------------------------------
+
+class Msg1A5(CanMessage):
+    """Radio volume level."""
+
+    can_id = 0x1A5
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        return [car.radio.volflag | (car.radio.volume & 0x1F)]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 1:
+            car.radio.volume = data[0] & 0x1F
+
+
+# ---------------------------------------------------------------------------
+# 0x1D0 – Climate panel (BSI idle / full climate)
+# ---------------------------------------------------------------------------
+
+class Msg1D0(CanMessage):
+    """Climate panel frame (0x1D0).
+
+    Sends the BSI idle frame when the clim module is not loaded or ignition
+    is off.  When ``car.clim.enabled`` is ``True`` and ignition is on, the
+    full climate panel state is encoded instead.
+    """
+
+    can_id = 0x1D0
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        if not car.clim.enabled or not car.bsi.ignition_on:
+            return [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
+        clim = car.clim
+        b4 = clim.recycle << 5 | clim.unfrost_front << 4
+        return [0x00, 0x00, clim.fan, clim.dir_left, b4,
+                clim.temp_left, clim.temp_right, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 7:
+            return
+        car.clim.fan = data[2]
+        car.clim.dir_left = data[3]
+        car.clim.recycle = (data[4] >> 5) & 1
+        car.clim.unfrost_front = (data[4] >> 4) & 1
+        car.clim.temp_left = data[5]
+        car.clim.temp_right = data[6]
+
+
+# ---------------------------------------------------------------------------
+# 0x1E3 – Climate EMF status
+# ---------------------------------------------------------------------------
+
+class Msg1E3(CanMessage):
+    """Climate EMF status frame (0x1E3).
+
+    Same conditional logic as :class:`Msg1D0`: uses the BSI standby frame
+    unless ``car.clim.enabled`` is ``True`` and ignition is on.
+    """
+
+    can_id = 0x1E3
+    period_ms = 200
+
+    def encode(self, car) -> list:
+        if not car.clim.enabled or not car.bsi.ignition_on:
+            d2 = 0x30 if car.bsi.ignition_on else 0x40
+            return [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
+        clim = car.clim
+        b1 = clim.auto << 3 | clim.dual
+        b2 = clim.unfrost_front << 7
+        b3 = clim.bits | clim.temp_left
+        b4 = clim.temp_right
+        b5 = clim.dir_left << 4
+        b6 = clim.dir_right << 4
+        b7 = clim.fan
+        return [b1, b2, b3, b4, b5, b6, b7, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 7:
+            return
+        car.clim.fan = data[6]
+        car.clim.dir_left = data[4] >> 4
+        car.clim.dir_right = data[5] >> 4
+        car.clim.auto = (data[0] >> 3) & 1
+        car.clim.dual = data[0] & 1
+        car.clim.unfrost_front = (data[1] >> 7) & 1
+        car.clim.temp_left = data[2] & 0x1F
+        car.clim.temp_right = data[3]
+
+
+# ---------------------------------------------------------------------------
+# 0x1E5 – Radio audio settings
+# ---------------------------------------------------------------------------
+
+class Msg1E5(CanMessage):
+    """Radio audio settings: balance, bass, treble, loudness, ambiance."""
+
+    can_id = 0x1E5
+    period_ms = 100
+
+    _AMBIANCE_CODES = {
+        'none': 0x03, 'classical': 0x07, 'jazz-blues': 0x0B,
+        'pop-rock': 0x0F, 'vocal': 0x13, 'techno': 0x17,
+    }
+
+    def encode(self, car) -> list:
+        a = car.radio.audio
+        b0 = (1 << 7 if a['menu'] == 'lr-bal' else 0) | (a['lr-bal'] & 0x7F)
+        b1 = (1 << 7 if a['menu'] == 'rf-bal' else 0) | (a['rf-bal'] & 0x7F)
+        b2 = (1 << 7 if a['menu'] == 'bass' else 0) | (a['bass'] & 0x7F)
+        b4 = (1 << 7 if a['menu'] == 'treble' else 0) | (a['treble'] & 0x7F)
+        b5 = ((1 << 7 if a['menu'] == 'loudness' else 0) |
+              (a['loudness'] << 6) |
+              (1 << 4 if a['menu'] == 'volume' else 0) |
+              (a['volume'] & 0x0F))
+        b6 = ((1 << 6 if a['menu'] == 'ambiance' else 0) |
+              self._AMBIANCE_CODES.get(a['ambiance'], 0x03))
+        return [b0, b1, b2, 0x00, b4, b5, b6]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 7:
+            return
+        a = car.radio.audio
+        if data[0] & 0x80:
+            a['menu'] = 'lr-bal'
+            a['lr-bal'] = data[0] & 0x7F
+        elif data[1] & 0x80:
+            a['menu'] = 'rf-bal'
+            a['rf-bal'] = data[1] & 0x7F
+        elif data[2] & 0x80:
+            a['menu'] = 'bass'
+            a['bass'] = data[2] & 0x7F
+        elif data[4] & 0x80:
+            a['menu'] = 'treble'
+            a['treble'] = data[4] & 0x7F
+        elif data[5] & 0x10:
+            a['menu'] = 'volume'
+            a['volume'] = data[5] & 0x0F
+        elif data[5] & 0x40:
+            a['menu'] = 'loudness'
+            a['loudness'] = (data[5] >> 6) & 1
+        elif data[6] & 0x40:
+            a['menu'] = 'ambiance'
+            target = data[6] & 0x3F
+            for name, code in self._AMBIANCE_CODES.items():
+                if code == target:
+                    a['ambiance'] = name
+                    break
+
+
+# ---------------------------------------------------------------------------
+# 0x217 – BSI status (varies with ignition state)
+# ---------------------------------------------------------------------------
+
+class Msg217(CanMessage):
+    """BSI status frame, content varies with ignition state."""
+
+    can_id = 0x217
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        if car.bsi.power_mode == 0x01:
+            return [0xA1, 0x00, 0x80, 0x00, 0x00, 0xFF, 0xFF, 0xE0]
+        return [0xA0, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00]
+
+
+# ---------------------------------------------------------------------------
+# 0x220 – Door open status
+# ---------------------------------------------------------------------------
+
+class Msg220(CanMessage):
+    """Door open/closed status byte."""
+
+    can_id = 0x220
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        d = car.doors
+        b0 = (d.front_left << 7 | d.front_right << 6 | d.rear_left << 5 |
+              d.rear_right << 4 | d.boot << 3 | d.bonnet << 2 |
+              d.rear_window << 1 | d.fuel_flap)
+        return [b0, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 1:
+            return
+        b0 = data[0]
+        car.doors.front_left = (b0 >> 7) & 1
+        car.doors.front_right = (b0 >> 6) & 1
+        car.doors.rear_left = (b0 >> 5) & 1
+        car.doors.rear_right = (b0 >> 4) & 1
+        car.doors.boot = (b0 >> 3) & 1
+        car.doors.bonnet = (b0 >> 2) & 1
+        car.doors.rear_window = (b0 >> 1) & 1
+        car.doors.fuel_flap = b0 & 1
+
+
+# ---------------------------------------------------------------------------
+# 0x221 – Trip computer instantaneous data
+# ---------------------------------------------------------------------------
+
+class Msg221(CanMessage):
+    """Trip computer: instantaneous fuel consumption, autonomy, distance."""
+
+    can_id = 0x221
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        t = car.trip
+        b0 = t.hide_fuel << 7 | t.hide_dist << 6 | t.com_right << 3 | t.com_left
+        fuel = int(t.fuel * 10)
+        autonomy = int(t.autonomy)
+        distance = int(t.dist * 10)
+        return [b0, fuel >> 8, fuel & 0xFF,
+                autonomy >> 8, autonomy & 0xFF,
+                distance >> 8, distance & 0xFF]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 7:
+            return
+        t = car.trip
+        t.hide_fuel = (data[0] >> 7) & 1
+        t.hide_dist = (data[0] >> 6) & 1
+        t.com_right = (data[0] >> 3) & 1
+        t.com_left = data[0] & 1
+        t.fuel = ((data[1] << 8) | data[2]) / 10.0
+        t.autonomy = (data[3] << 8) | data[4]
+        t.dist = ((data[5] << 8) | data[6]) / 10.0
+
+
+# ---------------------------------------------------------------------------
+# 0x223 – KML data frame
+# ---------------------------------------------------------------------------
+
+class Msg223(CanMessage):
+    """KML module data frame."""
+
+    can_id = 0x223
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        return [car.kml.bits_223, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 1:
+            car.kml.bits_223 = data[0]
+
+
+# ---------------------------------------------------------------------------
+# 0x2A1 – Trip computer history record 1
+# ---------------------------------------------------------------------------
+
+class Msg2A1(CanMessage):
+    """Trip computer historical record 1."""
+
+    can_id = 0x2A1
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        hist = car.trip.hist[0]
+        dist = int(hist['dist'])
+        fuel = int(hist['fuel'] * 10)
+        return [int(hist['speed']), dist >> 8, dist & 0xFF,
+                fuel >> 8, fuel & 0xFF, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 5:
+            h = car.trip.hist[0]
+            h['speed'] = data[0]
+            h['dist'] = (data[1] << 8) | data[2]
+            h['fuel'] = ((data[3] << 8) | data[4]) / 10.0
+
+
+# ---------------------------------------------------------------------------
+# 0x261 – Trip computer history record 2
+# ---------------------------------------------------------------------------
+
+class Msg261(CanMessage):
+    """Trip computer historical record 2."""
+
+    can_id = 0x261
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        hist = car.trip.hist[1]
+        dist = int(hist['dist'])
+        fuel = int(hist['fuel'] * 10)
+        return [int(hist['speed']), dist >> 8, dist & 0xFF,
+                fuel >> 8, fuel & 0xFF, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 5:
+            h = car.trip.hist[1]
+            h['speed'] = data[0]
+            h['dist'] = (data[1] << 8) | data[2]
+            h['fuel'] = ((data[3] << 8) | data[4]) / 10.0
+
+
+# ---------------------------------------------------------------------------
+# 0x2B6 – VIN VIS (Vehicle Indicator Section)
+# ---------------------------------------------------------------------------
+
+class Msg2B6(CanMessage):
+    """VIN — Vehicle Indicator Section."""
+
+    can_id = 0x2B6
+    period_ms = 1000
+
+    def encode(self, car) -> list:
+        return [0x32, 0x31, 0x37, 0x31, 0x35, 0x33, 0x38, 0x33]
+
+
+# ---------------------------------------------------------------------------
+# 0x323 – KML data frame 2
+# ---------------------------------------------------------------------------
+
+class Msg323(CanMessage):
+    """KML module data frame 2 (mostly fixed content)."""
+
+    can_id = 0x323
+    period_ms = 100
+
+    _FIXED = [0x66, 0x08, 0x68, 0x00, 0x02, 0x02, 0x00]
+
+    def encode(self, car) -> list:
+        return list(self._FIXED)
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) >= 1:
+            car.kml.bits_323 = data[0]
+
+
+# ---------------------------------------------------------------------------
+# 0x336 – VIN WMI (World Manufacturer Identifier)
+# ---------------------------------------------------------------------------
+
+class Msg336(CanMessage):
+    """VIN — World Manufacturer Identifier."""
+
+    can_id = 0x336
+    period_ms = 1000
+
+    def encode(self, car) -> list:
+        return [0x56, 0x46, 0x33]
+
+
+# ---------------------------------------------------------------------------
+# 0x3B6 – VIN VDS (Vehicle Descriptor Section)
+# ---------------------------------------------------------------------------
+
+class Msg3B6(CanMessage):
+    """VIN — Vehicle Descriptor Section."""
+
+    can_id = 0x3B6
+    period_ms = 1000
+
+    def encode(self, car) -> list:
+        return [0x36, 0x4A, 0x52, 0x48, 0x52, 0x48]
+
+
+# ---------------------------------------------------------------------------
+# 0x3E5 – Steering wheel panel buttons
+# ---------------------------------------------------------------------------
+
+class Msg3E5(CanMessage):
+    """Steering wheel control panel buttons."""
+
+    can_id = 0x3E5
+    period_ms = 50
+
+    def encode(self, car) -> list:
+        k = car.radio.panel
+        b0 = k['menu'] << 6 | k['tel'] << 4 | k['clim']
+        b1 = k['trip'] << 6 | k['mode'] << 4 | k['audio']
+        b2 = k['ok'] << 6 | k['esc'] << 4
+        b5 = k['up'] << 6 | k['down'] << 4 | k['right'] << 2 | k['left']
+        return [b0, b1, b2, 0x00, 0x00, b5]
+
+
+# ---------------------------------------------------------------------------
+# 0x52D – BSI wake/sleep frame
+# ---------------------------------------------------------------------------
+
+class Msg52D(CanMessage):
+    """BSI wake / sleep state frame."""
+
+    can_id = 0x52D
+    period_ms = 1000
+
+    def encode(self, car) -> list:
+        if car.bsi.power_mode == 0x01:
+            return [0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]
+        return [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+
+# ---------------------------------------------------------------------------
+# Convenience registry: all well-known message classes keyed by CAN ID.
+# ---------------------------------------------------------------------------
+
+#: Maps CAN arbitration IDs to their :class:`CanMessage` subclass.
+ALL_MESSAGES: dict[int, type] = {
+    cls.can_id: cls
+    for cls in (
+        Msg036, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
+        Msg128, Msg161, Msg165, Msg168, Msg190, Msg1A1, Msg1A3,
+        Msg1A5, Msg1D0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
+        Msg223, Msg2A1, Msg261, Msg2B6, Msg323, Msg336, Msg3B6,
+        Msg3E5, Msg52D,
+    )
+}

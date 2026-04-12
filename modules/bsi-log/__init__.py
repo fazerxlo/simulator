@@ -24,10 +24,9 @@ class BSI_log(TabbedPanelItem):
 
         # Register CAN callbacks
         print('registering BSI calls')
-        runner.register(100, self.can_message)
+        # Note: Msg1A1 is registered by bsi-base.  This module drives the
+        # mfd_popup state; show_msg() writes car.mfd_popup.flag / .msg_id.
 
-        self.msg_flag = 0xFF
-        self.msg_id = 0x00
         self.mess = 0x00
 
     def on_mess(self, mess):
@@ -45,40 +44,31 @@ class BSI_log(TabbedPanelItem):
             self.ids['send'].text = 'send (inconnu)'
 
     def show_msg(self, id=None):
-        print(f'called with id={id} and flag={self.msg_flag}')
-        if id and self.msg_flag == 0xFF:
-            self.msg_id = int(id)
-            self.msg_flag = 0x80
+        print(f'called with id={id} and flag={self.runner.car.mfd_popup.flag}')
+        mfd = self.runner.car.mfd_popup
+        if id and mfd.flag == 0xFF:
+            mfd.msg_id = int(id)
+            mfd.flag = 0x80
             Clock.schedule_once(self.show_msg, 2)
-        elif id == self.msg_id and self.msg_flag != 0xFF:
+        elif id == mfd.msg_id and mfd.flag != 0xFF:
             print('double call')
-        elif self.msg_flag == 0x80:
+        elif mfd.flag == 0x80:
             print('reset flag')
-            self.msg_flag = 0x7F
+            mfd.flag = 0x7F
             Clock.schedule_once(self.show_msg, 0.2)
-        elif self.msg_flag == 0x7F:
+        elif mfd.flag == 0x7F:
             print('reset msg')
-            self.msg_flag = 0xFF
-            self.msg_id = 0x00
-
-    def can_message(self):
-        if self.runner.car.tyres.display_active:
-            return 0x1A1, None
-        if self.runner.car.doors.display_active:
-            return 0x1A1, None
-        if self.msg_flag == 0xFF:
-            return 0x1A1, None
-        b2 = 0xf0 if self.msg_flag != 0xFF else 0x00
-        return 0x1A1, [self.msg_flag, self.msg_id, b2, 0x00, 0x00, 0x00, 0x00, 0x00]
+            mfd.flag = 0xFF
+            mfd.msg_id = 0x00
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x1A1 and len(msg.data) >= 2:
-            self.msg_flag = msg.data[0]
-            self.msg_id = msg.data[1]
-            self.ids['cur_mess'].text = f'{self.msg_id}'
-            if self.ids['slider_mess'].value != self.msg_id:
-                self.ids['slider_mess'].value = self.msg_id
-            if self.msg_id in messages:
-                self.ids['send'].text = f'send {messages[self.msg_id]}'
+            # Msg1A1.decode() already updated car.mfd_popup; sync UI.
+            mfd = self.runner.car.mfd_popup
+            self.ids['cur_mess'].text = f'{mfd.msg_id}'
+            if self.ids['slider_mess'].value != mfd.msg_id:
+                self.ids['slider_mess'].value = mfd.msg_id
+            if mfd.msg_id in messages:
+                self.ids['send'].text = f'send {messages[mfd.msg_id]}'
             else:
                 self.ids['send'].text = 'send (inconnu)'
