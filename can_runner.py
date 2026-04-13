@@ -23,6 +23,7 @@ class CanRunner():
         self.mess = []
         self.listeners = []
         self.modules = {}
+        self.enabled_modules = set()
         self.event_queue = queue.Queue()
 
         # Shared virtual-car state.  All modules read and write car state
@@ -38,6 +39,18 @@ class CanRunner():
         # Keys are CAN arbitration IDs; values are CanMessage instances.
         self._can_message_objects: dict = {}
         self._message_object_timers: dict = {}
+
+    def set_enabled_modules(self, modules):
+        self.enabled_modules = {str(module) for module in modules}
+
+    def is_module_enabled(self, module_name):
+        return module_name in self.enabled_modules
+
+    def message_enabled(self, msg):
+        required_modules = getattr(msg, 'required_modules', frozenset())
+        if not required_modules:
+            return True
+        return any(module_name in self.enabled_modules for module_name in required_modules)
 
     # ------------------------------------------------------------------
     # Backward-compatibility properties
@@ -218,6 +231,8 @@ class CanRunner():
 
             # CanMessage objects registered via register_message().
             for can_id, msg_obj in list(self._can_message_objects.items()):
+                if not self.message_enabled(msg_obj):
+                    continue
                 now = datetime.datetime.now()
                 timer = self._message_object_timers.get(can_id, now)
                 if (now - timer).total_seconds() >= msg_obj.period_ms / 1000:

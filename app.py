@@ -46,6 +46,7 @@ class PeugeotSim(App):
 
         # Init CAN runner
         self.can_runner = CanRunner(monitor=self.monitor)
+        self.can_runner.set_enabled_modules(self.conf.get('modules', []))
         self.can_runner.run()
         Clock.schedule_interval(self.can_runner.process_events, 0)
 
@@ -55,6 +56,7 @@ class PeugeotSim(App):
             module = importlib.import_module(f'modules.{name}')
             module_instance = getattr(module, module._modname)(self.can_runner)
             self.modules[name] = module_instance
+            self.can_runner.modules[name] = module_instance
             if hasattr(module_instance, 'on_can_message'):
                 self.can_runner.listen(None, module_instance.on_can_message)
 

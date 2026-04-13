@@ -205,7 +205,7 @@ from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
-                          Msg110, Msg0F6, Msg161, Msg217)
+                          Msg110, Msg0F6, Msg161, Msg217, Msg12D)
 
 
 class TestCanMessageDefaults:
@@ -500,6 +500,23 @@ class TestCanRunnerVirtualCar:
         out = capsys.readouterr().out
         assert 'WARNING' in out
         assert '0x036' in out
+
+    def test_module_specific_message_disabled_when_module_missing(self):
+        runner = self._make_runner()
+        runner.set_enabled_modules(['bsi-base'])
+        assert runner.message_enabled(Msg1D0()) is False
+        assert runner.message_enabled(Msg12D()) is False
+
+    def test_module_specific_message_enabled_when_module_present(self):
+        runner = self._make_runner()
+        runner.set_enabled_modules(['bsi-base', 'clim'])
+        assert runner.message_enabled(Msg1D0()) is True
+        assert runner.message_enabled(Msg12D()) is True
+
+    def test_base_message_not_gated_by_module_list(self):
+        runner = self._make_runner()
+        runner.set_enabled_modules(['clim'])
+        assert runner.message_enabled(Msg036()) is True
 
 
 class TestCanRunnerDuplicateDetection:

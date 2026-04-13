@@ -26,6 +26,10 @@ class CanMessage:
     Subclasses **must** set ``can_id`` and ``period_ms`` as class attributes
     and override ``encode``.  Overriding ``decode`` is optional but strongly
     recommended so that monitor mode and loopback testing work correctly.
+
+    ``required_modules`` may be set to one or more config-module names.
+    When non-empty, the runner only transmits this message while at least
+    one of those modules is enabled in ``config.yml``.
     """
 
     #: CAN arbitration ID owned by this object.
@@ -33,6 +37,9 @@ class CanMessage:
 
     #: Transmit period in milliseconds.
     period_ms: int = 100
+
+    #: Config-module names that must be enabled for this message to transmit.
+    required_modules: frozenset[str] = frozenset()
 
     def encode(self, car) -> list | None:
         """Build frame byte payload from car state.
@@ -111,6 +118,7 @@ class Msg0E1(CanMessage):
 
     can_id = 0x0E1
     period_ms = 100
+    required_modules = frozenset({'parktronic'})
 
     _INACTIVE = [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
 
@@ -187,6 +195,7 @@ class Msg12B(CanMessage):
 
     can_id = 0x12B
     period_ms = 100
+    required_modules = frozenset({'bte'})
 
     def encode(self, car) -> list:
         return [car.bte.bits]
@@ -205,6 +214,7 @@ class Msg12D(CanMessage):
 
     can_id = 0x12D
     period_ms = 100
+    required_modules = frozenset({'clim'})
 
     def encode(self, car) -> list | None:
         if not car.bsi.ignition_on:
@@ -310,6 +320,7 @@ class Msg165(CanMessage):
 
     can_id = 0x165
     period_ms = 50
+    required_modules = frozenset({'radio-gen'})
 
     def encode(self, car) -> list:
         b2 = car.radio.INPUT_CODES.get(car.radio.input, 0x01) << 4
@@ -447,6 +458,7 @@ class Msg1A3(CanMessage):
 
     can_id = 0x1A3
     period_ms = 100
+    required_modules = frozenset({'kml'})
 
     def encode(self, car) -> list:
         return [0x80, car.kml.opt << 2, 0x00, 0x00, 0x00, 0x00, 0x00]
@@ -465,6 +477,7 @@ class Msg1A5(CanMessage):
 
     can_id = 0x1A5
     period_ms = 100
+    required_modules = frozenset({'radio-gen'})
 
     def encode(self, car) -> list:
         return [car.radio.volflag | (car.radio.volume & 0x1F)]
@@ -488,6 +501,7 @@ class Msg1D0(CanMessage):
 
     can_id = 0x1D0
     period_ms = 100
+    required_modules = frozenset({'clim'})
 
     def encode(self, car) -> list:
         if not car.clim.enabled or not car.bsi.ignition_on:
@@ -521,6 +535,7 @@ class Msg1E3(CanMessage):
 
     can_id = 0x1E3
     period_ms = 200
+    required_modules = frozenset({'clim'})
 
     def encode(self, car) -> list:
         if not car.clim.enabled or not car.bsi.ignition_on:
@@ -558,6 +573,7 @@ class Msg1E5(CanMessage):
 
     can_id = 0x1E5
     period_ms = 100
+    required_modules = frozenset({'radio-gen'})
 
     _AMBIANCE_CODES = {
         'none': 0x03, 'classical': 0x07, 'jazz-blues': 0x0B,
@@ -665,6 +681,7 @@ class Msg221(CanMessage):
 
     can_id = 0x221
     period_ms = 100
+    required_modules = frozenset({'bsi-trip'})
 
     def encode(self, car) -> list:
         t = car.trip
@@ -698,6 +715,7 @@ class Msg223(CanMessage):
 
     can_id = 0x223
     period_ms = 100
+    required_modules = frozenset({'kml'})
 
     def encode(self, car) -> list:
         return [car.kml.bits_223, 0x00, 0x00, 0x00, 0x00, 0x00]
@@ -716,6 +734,7 @@ class Msg2A1(CanMessage):
 
     can_id = 0x2A1
     period_ms = 100
+    required_modules = frozenset({'bsi-trip'})
 
     def encode(self, car) -> list:
         hist = car.trip.hist[0]
@@ -741,6 +760,7 @@ class Msg261(CanMessage):
 
     can_id = 0x261
     period_ms = 100
+    required_modules = frozenset({'bsi-trip'})
 
     def encode(self, car) -> list:
         hist = car.trip.hist[1]
@@ -780,6 +800,7 @@ class Msg323(CanMessage):
 
     can_id = 0x323
     period_ms = 100
+    required_modules = frozenset({'kml'})
 
     _FIXED = [0x66, 0x08, 0x68, 0x00, 0x02, 0x02, 0x00]
 
@@ -828,6 +849,7 @@ class Msg3E5(CanMessage):
 
     can_id = 0x3E5
     period_ms = 50
+    required_modules = frozenset({'radio-gen'})
 
     def encode(self, car) -> list:
         k = car.radio.panel
