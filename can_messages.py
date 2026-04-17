@@ -473,18 +473,25 @@ class Msg1A3(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg1A5(CanMessage):
-    """Radio volume level."""
+    """Radio / buttons volume level."""
 
     can_id = 0x1A5
     period_ms = 100
-    required_modules = frozenset({'radio-gen'})
+    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd'})
 
     def encode(self, car) -> list:
+        if car.buttons.active:
+            car.buttons.step_volume()
+            return [car.buttons.volflag | (car.buttons.volume & 0x1F)]
         return [car.radio.volflag | (car.radio.volume & 0x1F)]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 1:
-            car.radio.volume = data[0] & 0x1F
+            volume = data[0] & 0x1F
+            if car.buttons.active:
+                car.buttons.volume = volume
+            else:
+                car.radio.volume = volume
 
 
 # ---------------------------------------------------------------------------
@@ -850,19 +857,67 @@ class Msg3B6(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg3E5(CanMessage):
-    """Steering wheel control panel buttons."""
+    """Steering wheel control panel buttons.
+
+    Encodes from ``car.buttons`` when the ``buttons`` module is active
+    (different bit layout and key set); otherwise encodes from
+    ``car.radio.panel`` for ``radio-gen`` / ``radio-cd``.
+    """
 
     can_id = 0x3E5
     period_ms = 50
-    required_modules = frozenset({'radio-gen'})
+    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd'})
 
     def encode(self, car) -> list:
+        if car.buttons.active:
+            p = car.buttons.panel
+            car.buttons.step_pulses()
+            b0 = (p['tel'] << 4) | p['clima']
+            b1 = (p['trip'] << 6) | (p['source'] << 4) | p['dark']
+            b2 = (p['ok'] << 6) | (p['esc'] << 4) | (p['next'] << 2) | p['prev']
+            b5 = (p['up'] << 6) | (p['down'] << 4) | (p['right'] << 2) | p['left']
+            return [b0, b1, b2, 0x00, 0x00, b5]
         k = car.radio.panel
         b0 = k['menu'] << 6 | k['tel'] << 4 | k['clim']
         b1 = k['trip'] << 6 | k['mode'] << 4 | k['audio']
         b2 = k['ok'] << 6 | k['esc'] << 4
         b5 = k['up'] << 6 | k['down'] << 4 | k['right'] << 2 | k['left']
         return [b0, b1, b2, 0x00, 0x00, b5]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 6:
+            return
+        if car.buttons.active:
+            b0, b1, b2 = data[0], data[1], data[2]
+            b5 = data[5]
+            car.buttons.panel['tel'] = (b0 >> 4) & 1
+            car.buttons.panel['clima'] = b0 & 1
+            car.buttons.panel['trip'] = (b1 >> 6) & 1
+            car.buttons.panel['source'] = (b1 >> 4) & 1
+            car.buttons.panel['dark'] = b1 & 1
+            car.buttons.panel['ok'] = (b2 >> 6) & 1
+            car.buttons.panel['esc'] = (b2 >> 4) & 1
+            car.buttons.panel['next'] = (b2 >> 2) & 1
+            car.buttons.panel['prev'] = b2 & 1
+            car.buttons.panel['up'] = (b5 >> 6) & 1
+            car.buttons.panel['down'] = (b5 >> 4) & 1
+            car.buttons.panel['right'] = (b5 >> 2) & 1
+            car.buttons.panel['left'] = b5 & 1
+            return
+        b0, b1, b2 = data[0], data[1], data[2]
+        b5 = data[5]
+        car.radio.panel['menu'] = (b0 >> 6) & 1
+        car.radio.panel['tel'] = (b0 >> 4) & 1
+        car.radio.panel['clim'] = b0 & 1
+        car.radio.panel['trip'] = (b1 >> 6) & 1
+        car.radio.panel['mode'] = (b1 >> 4) & 1
+        car.radio.panel['audio'] = b1 & 1
+        car.radio.panel['ok'] = (b2 >> 6) & 1
+        car.radio.panel['esc'] = (b2 >> 4) & 1
+        car.radio.panel['up'] = (b5 >> 6) & 1
+        car.radio.panel['down'] = (b5 >> 4) & 1
+        car.radio.panel['right'] = (b5 >> 2) & 1
+        car.radio.panel['left'] = b5 & 1
 
 
 # ---------------------------------------------------------------------------

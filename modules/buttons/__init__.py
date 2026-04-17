@@ -16,46 +16,35 @@ class Buttons(TabbedPanelItem):
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/buttons.kv')
         Builder.apply(self)
 
-        runner.register(100, self.can_panel)
-        runner.register(100, self.can_volume)
+        # Mark the buttons subsystem as active so Msg1A5 / Msg3E5 use the
+        # buttons encoding path rather than the radio-gen path.
+        runner.car.buttons.active = True
 
-        self.panel = {
-            'source': 0,
-            'trip': 0,
-            'clima': 0,
-            'tel': 0,
-            'dark': 0,
-            'ok': 0,
-            'esc': 0,
-            'up': 0,
-            'down': 0,
-            'next': 0,
-            'prev': 0,
-            'right': 0,
-            'left': 0,
-        }
-        self._button_ids = {f'btn_{k}': k for k in self.panel.keys()}
-        self._pulse_ticks = {k: 0 for k in self.panel.keys()}
-        self._pulse_window_ticks = 3
+        # No register_message() call here — bsi-base already registered Msg1A5
+        # and Msg3E5 for all modules.  Setting car.buttons.active switches the
+        # encoding inside those objects automatically.
 
-        self.volume = 15
-        self.volflag = 0xE0
-        self._volume_action_ticks = 0
+        self._button_ids = {f'btn_{k}': k for k in runner.car.buttons.panel}
 
         self._sync_ui_from_state()
 
+    @property
+    def _buttons(self):
+        """Convenience accessor for the shared buttons car state."""
+        return self.runner.car.buttons
+
     def _sync_ui_from_state(self):
+        b = self._buttons
         for wid, key in self._button_ids.items():
-            value = self.panel[key]
             if wid in self.ids:
-                desired = 'down' if value else 'normal'
+                desired = 'down' if b.panel.get(key) else 'normal'
                 if self.ids[wid].state != desired:
                     self.ids[wid].state = desired
         self._update_pressed_label()
-        self.ids['cur_vol'].text = f'volume: {self.volume}'
+        self.ids['cur_vol'].text = f'volume: {b.volume}'
 
     def _update_pressed_label(self):
-        pressed = [name for name, value in self.panel.items() if value]
+        pressed = [k for k, v in self._buttons.panel.items() if v]
         self.ids['pressed_keys'].text = ', '.join(pressed) if pressed else '-'
 
     def _set_button_state(self, key, pressed):
@@ -66,76 +55,33 @@ class Buttons(TabbedPanelItem):
                 self.ids[wid].state = desired
 
     def press_key(self, key):
-        if key not in self.panel:
+        b = self._buttons
+        if key not in b.panel:
             return
-        self.panel[key] = 1
-        self._pulse_ticks[key] = self._pulse_window_ticks
+        b.press(key)
         self._set_button_state(key, True)
         self._update_pressed_label()
 
-    def _step_pulses(self):
-        changed = False
-        for key in self.panel:
-            if self._pulse_ticks[key] > 0:
-                self._pulse_ticks[key] -= 1
-                if self._pulse_ticks[key] == 0 and self.panel[key] != 0:
-                    self.panel[key] = 0
-                    self._set_button_state(key, False)
-                    changed = True
-        if changed:
-            self._update_pressed_label()
-
     def pulse_volume(self, direction):
+        b = self._buttons
         if direction == 'up':
-            self.volume = min(30, self.volume + 1)
+            b.volume_up()
         else:
-            self.volume = max(0, self.volume - 1)
-        self.volflag = 0x00
-        self._volume_action_ticks = 3
-        self.ids['cur_vol'].text = f'volume: {self.volume}'
-
-    def can_volume(self):
-        if self._volume_action_ticks > 0:
-            self._volume_action_ticks -= 1
-            if self._volume_action_ticks == 0:
-                self.volflag = 0xE0
-        return 0x1A5, [self.volflag | self.volume]
-
-    def can_panel(self):
-        p = self.panel
-        b0 = (p['tel'] << 4) | p['clima']
-        b1 = (p['trip'] << 6) | (p['source'] << 4) | p['dark']
-        b2 = (p['ok'] << 6) | (p['esc'] << 4) | (p['next'] << 2) | p['prev']
-        b5 = (p['up'] << 6) | (p['down'] << 4) | (p['right'] << 2) | p['left']
-        self._step_pulses()
-        return 0x3E5, [b0, b1, b2, 0x00, 0x00, b5]
+            b.volume_down()
+        self.ids['cur_vol'].text = f'volume: {b.volume}'
 
     def on_can_message(self, msg):
+        b = self._buttons
         if msg.arbitration_id == 0x1A5 and len(msg.data) >= 1:
-            self.volume = int(msg.data[0]) & 0x1F
-            self.ids['cur_vol'].text = f'volume: {self.volume}'
+            # Msg1A5.decode() has already updated car.buttons.volume; sync UI.
+            self.ids['cur_vol'].text = f'volume: {b.volume}'
             return
 
         if msg.arbitration_id != 0x3E5 or len(msg.data) < 6:
             return
 
-        b1 = msg.data[1]
-        b2 = msg.data[2]
-        b5 = msg.data[5]
-        b0 = msg.data[0]
-
-        self.panel['trip'] = (b1 >> 6) & 1
-        self.panel['source'] = (b1 >> 4) & 1
-        self.panel['dark'] = b1 & 1
-        self.panel['tel'] = (b0 >> 4) & 1
-        self.panel['clima'] = b0 & 1
-        self.panel['ok'] = (b2 >> 6) & 1
-        self.panel['esc'] = (b2 >> 4) & 1
-        self.panel['next'] = (b2 >> 2) & 1
-        self.panel['prev'] = b2 & 1
-        self.panel['up'] = (b5 >> 6) & 1
-        self.panel['down'] = (b5 >> 4) & 1
-        self.panel['right'] = (b5 >> 2) & 1
-        self.panel['left'] = b5 & 1
-
-        self._sync_ui_from_state()
+        # Msg3E5.decode() has already updated car.buttons.panel; sync UI.
+        # Also reflect any pulse-timer-cleared keys in the UI.
+        for key, value in b.panel.items():
+            self._set_button_state(key, bool(value))
+        self._update_pressed_label()

@@ -39,8 +39,9 @@ def make_can_mock():
 # car_state tests
 # ---------------------------------------------------------------------------
 
-from car_state import (BSI, Clim, Dashboard, Doors, MFDPopup, Parktronic,
-                       Tyres, VirtualCar, Radio, Trip, KMLState, BTEState)
+from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
+                       Parktronic, Tyres, VirtualCar, Radio, Trip,
+                       KMLState, BTEState)
 from modules.clim import Clim as ClimModule
 
 
@@ -110,6 +111,15 @@ class TestVirtualCarDefaults:
     def test_bte_defaults(self):
         car = VirtualCar()
         assert car.bte.bits == 0
+
+    def test_buttons_defaults(self):
+        car = VirtualCar()
+        assert car.buttons.active is False
+        assert car.buttons.volume == 15
+        assert car.buttons.volflag == 0xE0
+        assert car.buttons._volume_action_ticks == 0
+        for key in car.buttons.panel:
+            assert car.buttons.panel[key] == 0
 
     def test_mfd_popup_defaults(self):
         car = VirtualCar()
@@ -185,6 +195,35 @@ class TestVirtualCarMutation:
         car.mfd_popup.msg_id = 0x42
         assert car.mfd_popup.flag == 0x80
         assert car.mfd_popup.msg_id == 0x42
+
+    def test_buttons_mutation(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.volume = 22
+        car.buttons.panel['ok'] = 1
+        assert car.buttons.active is True
+        assert car.buttons.volume == 22
+        assert car.buttons.panel['ok'] == 1
+
+    def test_buttons_press_sets_pulse(self):
+        car = VirtualCar()
+        car.buttons.press('trip')
+        assert car.buttons.panel['trip'] == 1
+        assert car.buttons._pulse_ticks['trip'] == car.buttons._pulse_window
+
+    def test_buttons_step_pulses_clears_after_window(self):
+        car = VirtualCar()
+        car.buttons.press('up')
+        for _ in range(car.buttons._pulse_window):
+            car.buttons.step_pulses()
+        assert car.buttons.panel['up'] == 0
+
+    def test_buttons_step_volume_resets_volflag(self):
+        car = VirtualCar()
+        car.buttons.volflag = 0x00
+        car.buttons._volume_action_ticks = 1
+        car.buttons.step_volume()
+        assert car.buttons.volflag == 0xE0
 
 
 class TestVirtualCarIsolation:
@@ -293,6 +332,28 @@ from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
 
 
 class TestAppArgumentParsing:
+    @pytest.fixture(autouse=True)
+    def patch_app_deps(self):
+        """Mock heavy app dependencies so app.py can be imported in tests."""
+        import importlib
+        # Provide minimal stubs for modules not mocked by conftest.py
+        stubs = {}
+        if 'can' not in sys.modules:
+            stubs['can'] = make_can_mock()
+        if 'yaml' not in sys.modules:
+            yaml_mod = types.ModuleType('yaml')
+            yaml_mod.load = lambda *a, **kw: {}
+            yaml_mod.FullLoader = None
+            stubs['yaml'] = yaml_mod
+        for name, mod in stubs.items():
+            sys.modules[name] = mod
+        # Force re-import so the env var is applied fresh
+        sys.modules.pop('app', None)
+        yield
+        for name in stubs:
+            sys.modules.pop(name, None)
+        sys.modules.pop('app', None)
+
     def test_kivy_args_disabled_for_custom_cli_flags(self):
         import app
         assert app.os.environ.get('KIVY_NO_ARGS') == '1'
@@ -534,6 +595,99 @@ class TestAllMessagesRegistry:
                 assert sub.can_id in ALL_MESSAGES, f'{sub.__name__} not in ALL_MESSAGES'
 
 
+class TestMsg1A5Buttons:
+    def test_radio_encoding_when_buttons_inactive(self):
+        car = VirtualCar()
+        car.radio.volflag = 0xE0
+        car.radio.volume = 15
+        data = Msg1A5().encode(car)
+        assert data == [0xE0 | 15]
+
+    def test_buttons_encoding_when_active(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.volflag = 0x00
+        car.buttons.volume = 20
+        data = Msg1A5().encode(car)
+        assert data == [0x00 | 20]
+
+    def test_buttons_encode_steps_volume_ticks(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.volflag = 0x00
+        car.buttons._volume_action_ticks = 1
+        Msg1A5().encode(car)
+        assert car.buttons._volume_action_ticks == 0
+        assert car.buttons.volflag == 0xE0
+
+    def test_buttons_required_modules_includes_buttons(self):
+        assert 'buttons' in Msg1A5.required_modules
+
+    def test_decode_updates_buttons_volume_when_active(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        Msg1A5().decode(car, [0x00 | 22])
+        assert car.buttons.volume == 22
+        assert car.radio.volume == 15  # unchanged
+
+    def test_decode_updates_radio_volume_when_buttons_inactive(self):
+        car = VirtualCar()
+        Msg1A5().decode(car, [0x00 | 22])
+        assert car.radio.volume == 22
+
+
+class TestMsg3E5Buttons:
+    def test_radio_encoding_when_buttons_inactive(self):
+        car = VirtualCar()
+        car.radio.panel['tel'] = 1
+        data = Msg3E5().encode(car)
+        # radio-gen layout: tel is in b0 bits [5:4]
+        assert (data[0] >> 4) & 1 == 1
+
+    def test_buttons_encoding_when_active(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.panel['tel'] = 1
+        data = Msg3E5().encode(car)
+        # buttons layout: tel is in b0 bits [5:4]
+        assert (data[0] >> 4) & 1 == 1
+
+    def test_buttons_encoding_ok_key(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.panel['ok'] = 1
+        data = Msg3E5().encode(car)
+        assert (data[2] >> 6) & 1 == 1
+
+    def test_buttons_encode_steps_pulse_ticks(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.press('trip')
+        assert car.buttons.panel['trip'] == 1
+        # Encoding steps the pulse timer; after _pulse_window ticks button clears
+        for _ in range(car.buttons._pulse_window):
+            Msg3E5().encode(car)
+        assert car.buttons.panel['trip'] == 0
+
+    def test_buttons_required_modules_includes_buttons(self):
+        assert 'buttons' in Msg3E5.required_modules
+
+    def test_decode_updates_buttons_panel_when_active(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        # Encode 'ok' pressed in buttons layout
+        frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
+        Msg3E5().decode(car, frame)
+        assert car.buttons.panel['ok'] == 1
+
+    def test_decode_updates_radio_panel_when_buttons_inactive(self):
+        car = VirtualCar()
+        # radio-gen layout: ok is b2[7:6]
+        frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
+        Msg3E5().decode(car, frame)
+        assert car.radio.panel['ok'] == 1
+
+
 # ---------------------------------------------------------------------------
 # CanRunner integration tests
 # ---------------------------------------------------------------------------
@@ -633,12 +787,21 @@ class TestCanRunnerVirtualCar:
         runner.set_enabled_modules(['bsi-base'])
         assert runner.message_enabled(Msg1D0()) is False
         assert runner.message_enabled(Msg12D()) is False
+        # Msg1A5 / Msg3E5 require at least one of radio-gen, buttons, radio-cd
+        assert runner.message_enabled(Msg1A5()) is False
+        assert runner.message_enabled(Msg3E5()) is False
 
     def test_module_specific_message_enabled_when_module_present(self):
         runner = self._make_runner()
         runner.set_enabled_modules(['bsi-base', 'clim'])
         assert runner.message_enabled(Msg1D0()) is True
         assert runner.message_enabled(Msg12D()) is True
+
+    def test_buttons_message_enabled_when_buttons_active(self):
+        runner = self._make_runner()
+        runner.set_enabled_modules(['bsi-base', 'buttons'])
+        assert runner.message_enabled(Msg1A5()) is True
+        assert runner.message_enabled(Msg3E5()) is True
 
     def test_base_message_not_gated_by_module_list(self):
         runner = self._make_runner()

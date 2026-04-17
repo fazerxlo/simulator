@@ -213,6 +213,83 @@ class BTEState:
         self.bits = 0
 
 
+class Buttons:
+    """Steering wheel and physical button state.
+
+    The ``active`` flag is set by the ``buttons`` module when it loads.
+    When active, ``Msg1A5`` and ``Msg3E5`` encode from this object instead
+    of ``car.radio``, allowing the lightweight buttons module to run
+    independently of the full ``radio-gen`` head-unit module.
+
+    Pulse-tick tracking keeps button press assertions alive for a few
+    CAN frames (``_pulse_window`` encodes), matching the physical behaviour
+    of momentary steering-wheel buttons.
+    """
+
+    BUTTON_KEYS = (
+        'source', 'trip', 'clima', 'tel', 'dark',
+        'ok', 'esc', 'up', 'down', 'next', 'prev', 'right', 'left',
+    )
+
+    def __init__(self):
+        self.active = False
+        self.volume = 15
+        # 0xE0 = stable; 0x00 = volume-change in progress
+        self.volflag = 0xE0
+        self._volume_action_ticks = 0
+        self.panel = {k: 0 for k in self.BUTTON_KEYS}
+        self._pulse_ticks = {k: 0 for k in self.BUTTON_KEYS}
+        self._pulse_window = 3
+
+    def press(self, key: str) -> None:
+        """Assert a button for one pulse window.
+
+        The button stays asserted for ``_pulse_window`` encode ticks; since
+        ``Msg3E5.period_ms`` is 50 ms the default window of 3 ticks is ~150 ms,
+        but the actual duration scales with the message period.
+        """
+        if key not in self.panel:
+            return
+        self.panel[key] = 1
+        self._pulse_ticks[key] = self._pulse_window
+
+    def step_pulses(self) -> bool:
+        """Advance button pulse timers by one tick. Returns True if any changed."""
+        changed = False
+        for key in self.BUTTON_KEYS:
+            if self._pulse_ticks.get(key, 0) > 0:
+                self._pulse_ticks[key] -= 1
+                if self._pulse_ticks[key] == 0 and self.panel[key] != 0:
+                    self.panel[key] = 0
+                    changed = True
+        return changed
+
+    def step_volume(self) -> None:
+        """Advance the volume volflag timer by one tick.
+
+        Called from ``Msg1A5.encode()`` at each transmit cycle.  Once
+        ``_volume_action_ticks`` reaches zero the volflag is reset to 0xE0
+        (stable / no-change), stopping the "volume in progress" indication
+        sent to the head unit.
+        """
+        if self._volume_action_ticks > 0:
+            self._volume_action_ticks -= 1
+            if self._volume_action_ticks == 0:
+                self.volflag = 0xE0
+
+    def volume_up(self) -> None:
+        """Increase volume by one step and signal a volume change."""
+        self.volume = min(30, self.volume + 1)
+        self.volflag = 0x00
+        self._volume_action_ticks = 3
+
+    def volume_down(self) -> None:
+        """Decrease volume by one step and signal a volume change."""
+        self.volume = max(0, self.volume - 1)
+        self.volflag = 0x00
+        self._volume_action_ticks = 3
+
+
 class MFDPopup:
     """State for the BSI-log MFD popup messages (0x1A1 arbitration).
 
@@ -255,4 +332,5 @@ class VirtualCar:
         self.trip = Trip()
         self.kml = KMLState()
         self.bte = BTEState()
+        self.buttons = Buttons()
         self.mfd_popup = MFDPopup()
