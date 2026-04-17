@@ -10,8 +10,11 @@ from car_state import VirtualCar
 class CanRunner():
     PRE_IGNITION_ALLOWED_IDS = {0x036, 0x110, 0x190, 0x1D0, 0x1E3, 0x217, 0x52D}
 
-    def __init__(self, channel='can0', interface='socketcan', bitrate=125000, monitor=False):
+    def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
+        self.channel = channel
+        self.interface = interface
+        self.bitrate = bitrate
         self.bus = can.Bus(channel=channel, interface=interface, bitrate=bitrate)
         #can.interfaces.serial.serial_can.SerialBus(channel, baudrate=115200, timeout=0.1, rtscts=False, *args, **kwargs)
         #self.bus = can.Bus(channel='/dev/ttyACM0', interface='serial', bitrate=125000, baudrate=9600)

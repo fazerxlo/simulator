@@ -1,6 +1,7 @@
 """
 Tests for car_state.VirtualCar, can_messages, and the CanRunner integration.
 """
+import os
 import sys
 import types
 
@@ -17,7 +18,7 @@ def make_can_mock():
 
     class MockBus:
         def __init__(self, **kwargs):
-            pass
+            self.kwargs = kwargs
         def recv(self, timeout):
             return None
         def send(self, msg):
@@ -40,6 +41,7 @@ def make_can_mock():
 
 from car_state import (BSI, Clim, Dashboard, Doors, MFDPopup, Parktronic,
                        Tyres, VirtualCar, Radio, Trip, KMLState, BTEState)
+from modules.clim import Clim as ClimModule
 
 
 class TestVirtualCarDefaults:
@@ -197,6 +199,88 @@ class TestVirtualCarIsolation:
         assert car_b.tyres.fl == Tyres.OK
 
 
+class DummyWidget:
+    def __init__(self, state='normal', value=0, text=''):
+        self.state = state
+        self.value = value
+        self.text = text
+
+
+class TestClimUiHelpers:
+    def _make_clim_widget(self, ignition_on=True):
+        widget = ClimModule.__new__(ClimModule)
+        widget.runner = types.SimpleNamespace(car=VirtualCar())
+        widget.runner.car.bsi.ignition_on = ignition_on
+        widget.temp_disp = [
+            'LO', '15', '16', '17', '18', '18.5', '19', '19.5', '20', '20.5',
+            '21', '21.5', '22', '22.5', '23', '23.5', '24', '25', '26', '27', 'HI'
+        ]
+        widget.ids = {
+            'slider_fan': DummyWidget(value=0),
+            'cur_fan': DummyWidget(text='Fan: 0'),
+            'auto': DummyWidget(),
+            'dual': DummyWidget(),
+            'recycle': DummyWidget(),
+            'unfrost_front': DummyWidget(),
+            'unfrost_rear': DummyWidget(),
+        }
+        return widget
+
+    def test_on_option_resyncs_front_defrost_when_ignition_off(self):
+        widget = self._make_clim_widget(ignition_on=False)
+        widget.ids['unfrost_front'].state = 'down'
+        widget.on_option('unfrost_front', 'down')
+        assert widget.runner.car.clim.unfrost_front == 0
+        assert widget.ids['unfrost_front'].state == 'normal'
+
+    def test_on_fan_updates_shared_state_and_label(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.on_fan(5)
+        assert widget.runner.car.clim.fan == 5
+        assert widget.ids['slider_fan'].value == 5
+        assert widget.ids['cur_fan'].text == 'Fan: 5'
+
+    def test_update_dir_buttons_recognizes_real_fast_code(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+        })
+        widget.runner.car.clim.dir_left = 0x08
+        widget.runner.car.clim.dir_right = 0x08
+        widget._update_dir_buttons()
+        assert widget.ids['left_fast'].state == 'down'
+        assert widget.ids['right_fast'].state == 'down'
+
+    def test_on_dir_ignores_normal_state_transition(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dir_left = 0x04
+        widget.on_dir(0, 0x08, 'normal')
+        assert widget.runner.car.clim.dir_left == 0x04
+
+    def test_on_dir_accepts_down_state_transition(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.on_dir(1, 0x05, 'down')
+        assert widget.runner.car.clim.dir_right == 0x05
+
+    def test_idle_1d0_monitor_update_does_not_clear_left_button(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text=''),
+        })
+        widget.runner.car.clim.dir_left = 0x04
+        msg = types.SimpleNamespace(arbitration_id=0x1D0, data=[0x08, 0x00, 0x07, 0x00, 0x00, 0x10, 0x10, 0x00])
+        widget.on_can_message(msg)
+        assert widget.runner.car.clim.dir_left == 0x04
+        assert widget.ids['left_up'].state == 'down'
+
+
 # ---------------------------------------------------------------------------
 # can_messages tests
 # ---------------------------------------------------------------------------
@@ -206,6 +290,19 @@ from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
                           Msg110, Msg0F6, Msg161, Msg217, Msg12D)
+
+
+class TestAppArgumentParsing:
+    def test_kivy_args_disabled_for_custom_cli_flags(self):
+        import app
+        assert app.os.environ.get('KIVY_NO_ARGS') == '1'
+
+    def test_parse_args_accepts_channel_option(self, monkeypatch):
+        import app
+        monkeypatch.setattr(sys, 'argv', ['app.py', '--channel', 'vcan0', '--monitor'])
+        args = app.parse_args()
+        assert args.channel == 'vcan0'
+        assert args.monitor is True
 
 
 class TestCanMessageDefaults:
@@ -342,6 +439,25 @@ class TestMsg1D0Encode:
         data = Msg1D0().encode(car)
         assert data == [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
 
+    def test_airflow_direction_uses_repeated_nibble_format(self):
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.dir_left = 0x04
+        data = Msg1D0().encode(car)
+        assert data[3] == 0x44
+
+    def test_decode_normalizes_repeated_nibble_airflow_value(self):
+        car = VirtualCar()
+        Msg1D0().decode(car, [0x08, 0x00, 0x07, 0x88, 0x00, 0x10, 0x10, 0x00])
+        assert car.clim.dir_left == 0x08
+
+    def test_idle_1d0_frame_does_not_clear_left_direction(self):
+        car = VirtualCar()
+        car.clim.dir_left = 0x04
+        Msg1D0().decode(car, [0x08, 0x00, 0x07, 0x00, 0x00, 0x10, 0x10, 0x00])
+        assert car.clim.dir_left == 0x04
+
     def test_bsi_idle_when_ignition_off_even_if_clim_enabled(self):
         car = VirtualCar()
         car.clim.enabled = True
@@ -439,6 +555,17 @@ class TestCanRunnerVirtualCar:
         runner = self._make_runner()
         assert hasattr(runner, 'car')
         assert runner.car is not None
+
+    def test_runner_defaults_to_vcan0(self):
+        runner = self._make_runner()
+        assert runner.channel == 'vcan0'
+
+    def test_runner_accepts_custom_channel(self):
+        import importlib
+        import can_runner as cr
+        importlib.reload(cr)
+        runner = cr.CanRunner(channel='vcan0', monitor=True)
+        assert runner.channel == 'vcan0'
 
     def test_ignition_on_property_reads_from_car(self):
         runner = self._make_runner()

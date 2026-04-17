@@ -507,15 +507,20 @@ class Msg1D0(CanMessage):
         if not car.clim.enabled or not car.bsi.ignition_on:
             return [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
         clim = car.clim
+        dir_left = int(clim.dir_left) & 0x0F
+        dir_byte = (dir_left << 4) | dir_left
         b4 = clim.recycle << 5 | clim.unfrost_front << 4
-        return [0x00, 0x00, clim.fan, clim.dir_left, b4,
+        return [0x00, 0x00, clim.fan, dir_byte, b4,
                 clim.temp_left, clim.temp_right, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 7:
             return
         car.clim.fan = data[2]
-        car.clim.dir_left = data[3]
+        raw_dir = data[3]
+        decoded_left = (raw_dir >> 4) if raw_dir > 0x0F else (raw_dir & 0x0F)
+        if decoded_left:
+            car.clim.dir_left = decoded_left
         car.clim.recycle = (data[4] >> 5) & 1
         car.clim.unfrost_front = (data[4] >> 4) & 1
         car.clim.temp_left = data[5]

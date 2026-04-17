@@ -47,37 +47,37 @@
           group: 'left_dir'
           state: 'down'
           allow_no_selection: False
-          on_state: root.on_dir(0, 0x03)
+          on_state: root.on_dir(0, 0x03, self.state)
         ToggleButton:
           id: left_up
           text: 'Up'
           group: 'left_dir'
           allow_no_selection: False
-          on_state: root.on_dir(0, 0x04)
+          on_state: root.on_dir(0, 0x04, self.state)
         ToggleButton:
           id: left_ud
           text: 'U+D'
           group: 'left_dir'
           allow_no_selection: False
-          on_state: root.on_dir(0, 0x06)
+          on_state: root.on_dir(0, 0x06, self.state)
         ToggleButton:
           id: left_down
           text: 'Dwn'
           group: 'left_dir'
           allow_no_selection: False
-          on_state: root.on_dir(0, 0x02)
+          on_state: root.on_dir(0, 0x02, self.state)
         ToggleButton:
           id: left_fd
           text: 'F+D'
           group: 'left_dir'
           allow_no_selection: False
-          on_state: root.on_dir(0, 0x05)
+          on_state: root.on_dir(0, 0x05, self.state)
         ToggleButton:
           id: left_fast
           text: 'Fst'
           group: 'left_dir'
           allow_no_selection: False
-          on_state: root.on_dir(0, 0x01)
+          on_state: root.on_dir(0, 0x08, self.state)
       BoxLayout:
         orientation: 'vertical'
         Label:
@@ -89,9 +89,7 @@
           max: 8
           step: 1
           value: 0
-          on_value:
-            root.fan = int(args[1])
-            cur_fan.text = 'Fan: {}'.format(root.fan)
+          on_value: root.on_fan(args[1])
       GridLayout:
         cols: 2
         ToggleButton:
@@ -100,37 +98,37 @@
           group: 'right_dir'
           state: 'down'
           allow_no_selection: False
-          on_state: root.on_dir(1, 0x03)
+          on_state: root.on_dir(1, 0x03, self.state)
         ToggleButton:
           id: right_up
           text: 'Up'
           group: 'right_dir'
           allow_no_selection: False
-          on_state: root.on_dir(1, 0x04)
+          on_state: root.on_dir(1, 0x04, self.state)
         ToggleButton:
           id: right_ud
           text: 'U+D'
           group: 'right_dir'
           allow_no_selection: False
-          on_state: root.on_dir(1, 0x06)
+          on_state: root.on_dir(1, 0x06, self.state)
         ToggleButton:
           id: right_down
           text: 'Dwn'
           group: 'right_dir'
           allow_no_selection: False
-          on_state: root.on_dir(1, 0x02)
+          on_state: root.on_dir(1, 0x02, self.state)
         ToggleButton:
           id: right_fd
           text: 'F+D'
           group: 'right_dir'
           allow_no_selection: False
-          on_state: root.on_dir(1, 0x05)
+          on_state: root.on_dir(1, 0x05, self.state)
         ToggleButton:
           id: right_fast
           text: 'Fst'
           group: 'right_dir'
           allow_no_selection: False
-          on_state: root.on_dir(1, 0x01)
+          on_state: root.on_dir(1, 0x08, self.state)
       BoxLayout:
         orientation: 'vertical'
         Button:
