@@ -5,14 +5,17 @@ import threading
 import sched
 import queue
 
+from car_state import VirtualCar
+
 class CanRunner():
     PRE_IGNITION_ALLOWED_IDS = {0x036, 0x110, 0x190, 0x1D0, 0x1E3, 0x217, 0x52D}
 
-    def __init__(self, channel='can0', interface='socketcan', bitrate=125000, monitor=False):
+    def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
+        self.channel = channel
+        self.interface = interface
+        self.bitrate = bitrate
         self.bus = can.Bus(channel=channel, interface=interface, bitrate=bitrate)
-        self.ignition_on = False
-        self.power_mode = 0x02
         #can.interfaces.serial.serial_can.SerialBus(channel, baudrate=115200, timeout=0.1, rtscts=False, *args, **kwargs)
         #self.bus = can.Bus(channel='/dev/ttyACM0', interface='serial', bitrate=125000, baudrate=9600)
         self.sender = threading.Thread(target=self.sender)
@@ -23,7 +26,100 @@ class CanRunner():
         self.mess = []
         self.listeners = []
         self.modules = {}
+        self.enabled_modules = set()
         self.event_queue = queue.Queue()
+
+        # Shared virtual-car state.  All modules read and write car state
+        # through this object rather than storing ad-hoc attributes on the
+        # runner, keeping each subsystem's state in one authoritative place.
+        self.car = VirtualCar()
+
+        # Track which callable "owns" each CAN ID so duplicate registrations
+        # can be detected and reported early.
+        self._can_id_owners: dict = {}
+
+        # CanMessage objects registered via register_message().
+        # Keys are CAN arbitration IDs; values are CanMessage instances.
+        self._can_message_objects: dict = {}
+        self._message_object_timers: dict = {}
+
+    def set_enabled_modules(self, modules):
+        self.enabled_modules = {str(module) for module in modules}
+
+    def is_module_enabled(self, module_name):
+        return module_name in self.enabled_modules
+
+    def message_enabled(self, msg):
+        required_modules = getattr(msg, 'required_modules', frozenset())
+        if not required_modules:
+            return True
+        return any(module_name in self.enabled_modules for module_name in required_modules)
+
+    # ------------------------------------------------------------------
+    # Backward-compatibility properties
+    # Existing modules that accessed runner.ignition_on / runner.power_mode /
+    # runner.reverse directly continue to work; the values are now stored in
+    # runner.car.bsi.* and these properties are thin delegating wrappers.
+    # ------------------------------------------------------------------
+
+    @property
+    def ignition_on(self):
+        return self.car.bsi.ignition_on
+
+    @ignition_on.setter
+    def ignition_on(self, value):
+        self.car.bsi.ignition_on = value
+
+    @property
+    def power_mode(self):
+        return self.car.bsi.power_mode
+
+    @power_mode.setter
+    def power_mode(self, value):
+        self.car.bsi.power_mode = value
+
+    @property
+    def reverse(self):
+        return self.car.bsi.reverse
+
+    @reverse.setter
+    def reverse(self, value):
+        self.car.bsi.reverse = value
+
+    # Cross-module display-arbitration flags (stored in car sub-objects,
+    # exposed here for backward compatibility with existing module code).
+
+    @property
+    def tyres_display_active(self):
+        return self.car.tyres.display_active
+
+    @tyres_display_active.setter
+    def tyres_display_active(self, value):
+        self.car.tyres.display_active = value
+
+    @property
+    def doors_display_active(self):
+        return self.car.doors.display_active
+
+    @doors_display_active.setter
+    def doors_display_active(self, value):
+        self.car.doors.display_active = value
+
+    @property
+    def tyres_alert_0x168_b1(self):
+        return self.car.tyres.alert_0x168_b1
+
+    @tyres_alert_0x168_b1.setter
+    def tyres_alert_0x168_b1(self, value):
+        self.car.tyres.alert_0x168_b1 = value
+
+    @property
+    def combine_active_0x168(self):
+        return self.car.dashboard.active
+
+    @combine_active_0x168.setter
+    def combine_active_0x168(self, value):
+        self.car.dashboard.active = value
 
     def can_send(self, arbitration_id, data):
         if data is None:
@@ -34,6 +130,14 @@ class CanRunner():
         return True
 
     def reg(self, func, id, schedule, tp_id=None, tp_callback=None, *args, **kwargs):
+        if id in self._can_id_owners:
+            existing = self._can_id_owners[id]
+            print(
+                f'WARNING: CAN ID 0x{id:03X} already registered by '
+                f'{getattr(existing, "__qualname__", existing)}, '
+                f'now overridden by {getattr(func, "__qualname__", func)}'
+            )
+        self._can_id_owners[id] = func
         new_module = {
             'id': id,
             'timer': datetime.datetime.now(),
@@ -52,6 +156,23 @@ class CanRunner():
         }
         self.messages.append(new_module)
 
+    def register_message(self, msg):
+        """Register a :class:`~can_messages.CanMessage` object as the periodic
+        sender for its CAN arbitration ID.
+
+        Only one object may own each ID.  A second registration for the same
+        ID logs a warning and the new object takes over (last writer wins).
+        """
+        can_id = msg.can_id
+        if can_id in self._can_message_objects:
+            existing = self._can_message_objects[can_id]
+            print(
+                f'WARNING: CAN ID 0x{can_id:03X} already owned by '
+                f'{type(existing).__name__}, overriding with {type(msg).__name__}'
+            )
+        self._can_message_objects[can_id] = msg
+        self._message_object_timers[can_id] = datetime.datetime.now()
+
     def receiver(self):
         while True:
             if self.receiver_exit.is_set():
@@ -67,6 +188,15 @@ class CanRunner():
             for message in self.mess:
                 if message['tp_id'] == recvd['arbitration_id']:
                     self.event_queue.put((message['tp_callback'], recvd['data']))
+
+            # Call decode() on the matching CanMessage object (if any) so that
+            # car state is updated from the received frame.
+            msg_obj = self._can_message_objects.get(recvd.arbitration_id)
+            if msg_obj is not None:
+                try:
+                    msg_obj.decode(self.car, recvd.data)
+                except Exception as exc:
+                    print(f'CanRunner decode error for 0x{recvd.arbitration_id:03X}: {exc}')
 
 
     def process_events(self, dt=None):
@@ -101,6 +231,27 @@ class CanRunner():
                     if not self.monitor and self.can_send(id, data):
                         self.bus.send(can.Message(arbitration_id=id, data=data, is_extended_id=False))
                     message['timer'] = now
+
+            # CanMessage objects registered via register_message().
+            for can_id, msg_obj in list(self._can_message_objects.items()):
+                if not self.message_enabled(msg_obj):
+                    continue
+                now = datetime.datetime.now()
+                timer = self._message_object_timers.get(can_id, now)
+                try:
+                    active_period_ms = max(1, int(msg_obj.get_period_ms(self.car)))
+                except Exception as exc:
+                    print(f'CanRunner period error for 0x{can_id:03X}: {exc}')
+                    active_period_ms = max(1, int(getattr(msg_obj, 'period_ms', 100)))
+                if (now - timer).total_seconds() >= active_period_ms / 1000:
+                    try:
+                        data = msg_obj.encode(self.car)
+                    except Exception as exc:
+                        print(f'CanRunner encode error for 0x{can_id:03X}: {exc}')
+                        data = None
+                    if not self.monitor and self.can_send(can_id, data):
+                        self.bus.send(can.Message(arbitration_id=can_id, data=data, is_extended_id=False))
+                    self._message_object_timers[can_id] = now
 
             # Wait until next round
             time.sleep(0.02)

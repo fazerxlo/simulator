@@ -6,6 +6,7 @@
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
+      "args": ["--channel", "vcan0"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": true
@@ -15,7 +16,7 @@
       "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
-      "args": ["monitor"],
+      "args": ["--monitor", "--channel", "vcan0"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": true

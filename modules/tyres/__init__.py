@@ -61,23 +61,38 @@ class Tyres(TabbedPanelItem):
         self.kv = Builder.load_file(f'{os.path.dirname(__file__)}/tyres.kv')
         Builder.apply(self)
 
-        self.tyre_state = {
-            'fl': TIRE_OK,
-            'fr': TIRE_OK,
-            'rl': TIRE_OK,
-            'rr': TIRE_OK,
-        }
-
         # 0x1A1 display state machine
         self.msg_flag = 0xFF
         self.msg_id = 0x00
         self.mess = 0x00
-        self.runner.tyres_display_active = False
-        self.runner.tyres_alert_0x168_b1 = 0
+
+        # Initialise tyre state on the shared VirtualCar.
+        tyres = runner.car.tyres
+        tyres.fl = TIRE_OK
+        tyres.fr = TIRE_OK
+        tyres.rl = TIRE_OK
+        tyres.rr = TIRE_OK
+        tyres.display_active = False
+        tyres.alert_0x168_b1 = 0
+
         self._last_120_block2 = None
         self._last_120_block3 = None
 
         self._update_labels()
+
+    @property
+    def _tyres(self):
+        """Convenience accessor for the shared tyres car state."""
+        return self.runner.car.tyres
+
+    @property
+    def tyre_state(self):
+        """Dict-like view of the shared tyre states for backward compatibility."""
+        t = self._tyres
+        return {'fl': t.fl, 'fr': t.fr, 'rl': t.rl, 'rr': t.rr}
+
+    def _set_tyre(self, tyre, state):
+        setattr(self._tyres, tyre, state)
 
     # --- Generic 0x1A1 system message controls (like bsi-log) ---
 
@@ -142,10 +157,10 @@ class Tyres(TabbedPanelItem):
                 self.ids['status_msg'].color = (0.5, 0.5, 0.5, 1)
 
     def _sync_runner_display_state(self):
-        self.runner.tyres_display_active = (self.msg_flag != 0xFF)
+        self._tyres.display_active = (self.msg_flag != 0xFF)
 
     def _send_manual_frame(self, phase):
-        if getattr(self.runner, 'doors_display_active', False):
+        if self.runner.car.doors.display_active:
             return
         payload = self._build_payload(self.msg_id, phase)
         self.runner.send_message(0x1A1, payload)
@@ -163,14 +178,15 @@ class Tyres(TabbedPanelItem):
         # According to arduino-psa-comfort-can-adapter:
         #   bit 7: Front Left, bit 6: Front Right, bit 5: Rear Right, bit 4: Rear Left
         if msg_id in (MSG_PRESSURE_LOW, MSG_PRESSURE_NOT_MONITORED, MSG_MULTIPLE_FLAT):
+            t = self._tyres
             param = 0x00
-            if self.tyre_state['fl'] != TIRE_OK:
+            if t.fl != TIRE_OK:
                 param |= 0x80
-            if self.tyre_state['fr'] != TIRE_OK:
+            if t.fr != TIRE_OK:
                 param |= 0x40
-            if self.tyre_state['rr'] != TIRE_OK:
+            if t.rr != TIRE_OK:
                 param |= 0x20
-            if self.tyre_state['rl'] != TIRE_OK:
+            if t.rl != TIRE_OK:
                 param |= 0x10
             if param != 0:
                 payload[3] = param
@@ -181,11 +197,11 @@ class Tyres(TabbedPanelItem):
 
     def on_state_change(self, tyre, state_text):
         idx = TIRE_STATES.index(state_text)
-        self.tyre_state[tyre] = idx
+        self._set_tyre(tyre, idx)
         self._update_label(tyre)
 
         # self._trigger_warning()
-        
+
         self._send_0x168_alert()
         self._send_0x120_status()
 
@@ -195,11 +211,13 @@ class Tyres(TabbedPanelItem):
 
     def _any_flat(self):
         """Check if any tyre is in FLAT state."""
-        return any(state == TIRE_FLAT for state in self.tyre_state.values())
+        t = self._tyres
+        return any(getattr(t, k) == TIRE_FLAT for k in TYRE_ORDER)
 
     def _any_low_or_nodata(self):
         """Check if any tyre is in LOW or NO_DATA state (pressure warning)."""
-        return any(state in (TIRE_LOW, TIRE_NO_DATA) for state in self.tyre_state.values())
+        t = self._tyres
+        return any(getattr(t, k) in (TIRE_LOW, TIRE_NO_DATA) for k in TYRE_ORDER)
 
     def _send_0x168_alert(self):
         """Send generic tyre dashboard alert (0x168).
@@ -209,9 +227,9 @@ class Tyres(TabbedPanelItem):
         any_flat = 1 if self._any_flat() else 0
         any_pressure = 1 if self._any_low_or_nodata() else 0
         d1 = (any_pressure << 7) | (any_flat << 6)
-        self.runner.tyres_alert_0x168_b1 = d1
+        self._tyres.alert_0x168_b1 = d1
         # Combine is the primary 0x168 sender when enabled.
-        if not getattr(self.runner, 'combine_active_0x168', False):
+        if not self.runner.car.dashboard.active:
             self.runner.send_message(0x168, [0x00, d1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def _build_0x120_block2(self):
@@ -231,7 +249,7 @@ class Tyres(TabbedPanelItem):
         }
 
         for tyre in TYRE_ORDER:
-            state = self.tyre_state[tyre]
+            state = getattr(self._tyres, tyre)
             if state == TIRE_FLAT:
                 byte_index, bit_index = puncture_bits[tyre]
                 payload[byte_index] |= 1 << bit_index
@@ -257,7 +275,7 @@ class Tyres(TabbedPanelItem):
         }
 
         for tyre in TYRE_ORDER:
-            state = self.tyre_state[tyre]
+            state = getattr(self._tyres, tyre)
             if state == TIRE_NO_DATA:
                 byte_index, bit_index = monitor_fault_bits[tyre]
                 payload[byte_index] |= 1 << bit_index
@@ -270,7 +288,8 @@ class Tyres(TabbedPanelItem):
     def _trigger_warning(self):
         worst = TIRE_OK
         flat_count = 0
-        for state in self.tyre_state.values():
+        for tyre in TYRE_ORDER:
+            state = getattr(self._tyres, tyre)
             if state == TIRE_FLAT:
                 flat_count += 1
             if state > worst:
@@ -291,13 +310,13 @@ class Tyres(TabbedPanelItem):
         self.show_msg(msg_id)
 
     def _update_labels(self):
-        for tyre in self.tyre_state:
+        for tyre in TYRE_ORDER:
             self._update_label(tyre)
 
     def _update_label(self, tyre):
         label_id = f'state_{tyre}'
         if label_id in self.ids:
-            state = self.tyre_state[tyre]
+            state = getattr(self._tyres, tyre)
             text = TIRE_STATES[state]
             self.ids[label_id].text = text
             if state == TIRE_OK:
@@ -313,14 +332,14 @@ class Tyres(TabbedPanelItem):
 
     def _apply_state_priority(self, tyre, state):
         # Keep the most severe state when combining block2 and block3 snapshots.
-        if state > self.tyre_state[tyre]:
-            self.tyre_state[tyre] = state
+        if state > getattr(self._tyres, tyre):
+            self._set_tyre(tyre, state)
 
     def _decode_0x120_block2(self, data):
         # Reset only states encoded in block2 (LOW and FLAT), NO_DATA is handled by block3.
         for tyre in TYRE_ORDER:
-            if self.tyre_state[tyre] in (TIRE_LOW, TIRE_FLAT):
-                self.tyre_state[tyre] = TIRE_OK
+            if getattr(self._tyres, tyre) in (TIRE_LOW, TIRE_FLAT):
+                self._set_tyre(tyre, TIRE_OK)
 
         puncture_bits = {
             'fl': (1, 4),

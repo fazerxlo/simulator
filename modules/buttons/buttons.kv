@@ -1,0 +1,100 @@
+<Buttons>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: '8dp'
+    spacing: '8dp'
+
+    BoxLayout:
+      size_hint_y: None
+      height: '36dp'
+      Label:
+        text: 'Pressed keys:'
+        size_hint_x: 0.2
+      Label:
+        id: pressed_keys
+        text: '-'
+      Label:
+        id: cur_vol
+        text: 'volume: 15'
+        size_hint_x: 0.25
+
+    GridLayout:
+      cols: 4
+      spacing: '6dp'
+      row_default_height: '44dp'
+      row_force_default: True
+
+      Button:
+        id: btn_volume_up
+        text: 'Volume +'
+        on_press: root.pulse_volume('up')
+      Button:
+        id: btn_volume_down
+        text: 'Volume -'
+        on_press: root.pulse_volume('down')
+      Button:
+        id: btn_source
+        text: 'Source'
+        on_press: root.press_key('source')
+      Button:
+        id: btn_trip
+        text: 'Trip'
+        on_press: root.press_key('trip')
+
+      Button:
+        id: btn_tel
+        text: 'TEL'
+        on_press: root.press_key('tel')
+      Button:
+        id: btn_clima
+        text: 'CLIMA'
+        on_press: root.press_key('clima')
+      Button:
+        id: btn_dark
+        text: 'DARK'
+        on_press: root.press_key('dark')
+      Label:
+        text: ''
+
+      Button:
+        id: btn_next
+        text: 'Next'
+        on_press: root.press_key('next')
+      Button:
+        id: btn_prev
+        text: 'Prev'
+        on_press: root.press_key('prev')
+      Button:
+        id: btn_up
+        text: 'Up'
+        on_press: root.press_key('up')
+      Button:
+        id: btn_down
+        text: 'Down'
+        on_press: root.press_key('down')
+
+      Button:
+        id: btn_left
+        text: 'Left'
+        on_press: root.press_key('left')
+      Button:
+        id: btn_right
+        text: 'Right'
+        on_press: root.press_key('right')
+      Label:
+        text: ''
+      Label:
+        text: ''
+
+      Button:
+        id: btn_ok
+        text: 'OK'
+        on_press: root.press_key('ok')
+      Button:
+        id: btn_esc
+        text: 'Esc'
+        on_press: root.press_key('esc')
+      Label:
+        text: ''
+      Label:
+        text: ''

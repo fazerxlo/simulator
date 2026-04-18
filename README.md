@@ -6,7 +6,7 @@ A debug and reverse engineering tool for AEE2004 CAN networks.
 
 ## Overview
 
-This is a Python + Kivy application that connects to a SocketCAN interface (default: `can0`) and loads simulator modules from `config.yml`.
+This is a Python + Kivy application that connects to a SocketCAN interface and loads simulator modules from `config.yml`. By default it uses `vcan0`, and for bench work you can pass `--channel can0`.
 
 Each module exposes a tabbed UI and CAN handlers for one part of the car, such as radio, BSI, climate control, or instrument cluster data.
 
@@ -19,8 +19,9 @@ The simulator can run in two modes:
 - Python 3
 - Kivy
 - `python-can`
-- A SocketCAN network interface named `vcan0` by default
-  - If you are using a real CAN interface, use `can0` instead or update `can_runner.py`
+- A SocketCAN network interface such as `can0` or `vcan0`
+  - Bench setups typically use `can0`
+  - Virtual testing can use `vcan0`
 
 Optional but recommended:
 
@@ -32,19 +33,19 @@ Optional but recommended:
 
 ## Run the simulator
 
-Start normal simulator mode:
+Start normal simulator mode on the default bench interface:
 
     python app.py
 
-Start monitor-only mode:
+Start normal simulator mode on the virtual bus:
 
-    python app.py monitor
+    python app.py --channel vcan0
 
-or:
+Start monitor-only mode on the virtual bus:
 
-    python app.py --monitor
+    python app.py --monitor --channel vcan0
 
-Monitor mode will keep the app connected to `can0`, receive and process incoming CAN frames, and prevent the simulator from sending outgoing CAN traffic.
+Monitor mode will receive and process incoming CAN frames on the selected interface and prevent the simulator from sending outgoing CAN traffic.
 
 ## Project structure
 
@@ -56,6 +57,6 @@ Monitor mode will keep the app connected to `can0`, receive and process incoming
 
 ## Notes
 
-- The CAN interface is currently hardcoded to `can0`.
+- The CAN interface can be selected with `--channel`, so you can switch between `can0` and `vcan0` without editing code.
 - Modules register themselves dynamically via `config.yml`.
 - Monitor mode is useful for observing live vehicle traffic and mapping incoming CAN state into simulator UI controls.
