@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.clock import Clock
@@ -7,6 +8,8 @@ from kivy.lang.builder import Builder
 
 _modname = 'Clim'
 _version = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class Clim(TabbedPanelItem):
     _ignition_on = 0x01
@@ -22,7 +25,7 @@ class Clim(TabbedPanelItem):
         Builder.apply(self)
 
         # Register CAN callbacks
-        print('registering radio calls')
+        logger.debug('registering climate module')
         # Note: Msg1D0, Msg1E3, and Msg12D are registered by bsi-base and switch
         # to full climate encoding when car.clim.enabled is True.  No separate TX
         # registration is needed here.
@@ -110,6 +113,9 @@ class Clim(TabbedPanelItem):
                 clim.temp_left = temp
             else:
                 clim.temp_right = temp
+            zone_name = 'left' if zone == 0 else 'right'
+            temp_str = self.temp_disp[temp] if 0 <= temp < len(self.temp_disp) else str(temp)
+            logger.info('Climate %s temperature set to %s°C', zone_name, temp_str)
             self.ids[f'cur_temp{zone}'].text = f'{self.temp_disp[temp]}c'
 
     def on_option(self, option, value):
@@ -117,13 +123,18 @@ class Clim(TabbedPanelItem):
             self._update_options()
             return
         setattr(self._clim, option, 1 if value == 'down' else 0)
+        state_str = 'on' if value == 'down' else 'off'
+        logger.info('Climate %s %s', option.replace('_', ' '), state_str)
         self._update_options()
 
     def on_fan(self, value):
         if not self._is_ignition_on():
             self._update_fan(self._clim.fan)
             return
-        self._update_fan(self._normalize_fan(value))
+        new_fan = self._normalize_fan(value)
+        if new_fan != self._clim.fan:
+            logger.info('Fan speed set to %d', new_fan)
+        self._update_fan(new_fan)
 
     def on_toggle(self, bit, value):
         if not self._is_ignition_on():
