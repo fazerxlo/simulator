@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.app import App
@@ -10,6 +11,8 @@ from can_messages import Msg1A3, Msg223, Msg323
 
 _modname = 'KML'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class KML(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
@@ -23,7 +26,7 @@ class KML(TabbedPanelItem):
         Builder.apply(self)
 
         # Register per-CAN-ID message objects.
-        print('registering BSI calls')
+        logger.debug('registering KML module')
         runner.register_message(Msg1A3())
         runner.register_message(Msg223())
         runner.register_message(Msg323())

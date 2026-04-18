@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.app import App
@@ -8,6 +9,8 @@ from kivy.lang.builder import Builder
 
 _modname = 'Radio_cd'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 class Radio_cd(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
@@ -19,7 +22,7 @@ class Radio_cd(TabbedPanelItem):
         Builder.apply(self, 'Radio')
 
         # Register CAN callbacks
-        print('registering radio calls')
+        logger.debug('registering radio-cd module')
         runner.register(50, self.can_status)
         runner.register(100, self.can_volume)
         runner.register(50, self.can_panel)

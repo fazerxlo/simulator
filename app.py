@@ -3,6 +3,7 @@
 import os
 import sys
 import argparse
+import logging
 
 # Kivy parses command-line arguments on import. Disable that behavior so
 # simulator-specific flags like --channel and --monitor are handled here.
@@ -32,6 +33,7 @@ def parse_args():
     parser.add_argument('--channel', default='vcan0', help='SocketCAN interface name, for example can0 or vcan0')
     parser.add_argument('--interface', default='socketcan', help='python-can backend interface')
     parser.add_argument('--bitrate', type=int, default=125000, help='CAN bitrate for the selected interface')
+    parser.add_argument('--debug', action='store_true', help='Enable debug output including raw CAN frame dumps')
     args, unknown = parser.parse_known_args()
     sys.argv = [sys.argv[0]] + unknown
     return args
@@ -84,12 +86,18 @@ class PeugeotSim(App):
                 tabs.add_widget(module_instance)
 
     def on_stop(self):
-        print('closing app')
+        logging.info('closing app')
         self.can_runner.stop()
         self.thread_exit = True
 
 if __name__ == '__main__':
     args = parse_args()
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s %(levelname)s %(message)s',
+        datefmt='%H:%M:%S',
+    )
     monitor_mode = args.monitor or args.mode == 'monitor'
     PeugeotSim(
         monitor=monitor_mode,

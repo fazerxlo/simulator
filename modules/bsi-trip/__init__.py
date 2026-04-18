@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.app import App
@@ -10,6 +11,8 @@ from can_messages import Msg221, Msg2A1, Msg261
 
 _modname = 'BSI_trip'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class BSI_trip(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
@@ -23,7 +26,7 @@ class BSI_trip(TabbedPanelItem):
         Builder.apply(self)
 
         # Register per-CAN-ID message objects.
-        print('registering BSI calls')
+        logger.debug('registering BSI trip module')
         runner.register_message(Msg221())
         runner.register_message(Msg2A1())
         runner.register_message(Msg261())
