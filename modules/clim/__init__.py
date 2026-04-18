@@ -114,8 +114,7 @@ class Clim(TabbedPanelItem):
             else:
                 clim.temp_right = temp
             zone_name = 'left' if zone == 0 else 'right'
-            temp_str = self.temp_disp[temp] if 0 <= temp < len(self.temp_disp) else str(temp)
-            logger.info('Climate %s temperature set to %s°C', zone_name, temp_str)
+            logger.info('Climate %s temperature set to %s°C', zone_name, self.temp_disp[temp])
             self.ids[f'cur_temp{zone}'].text = f'{self.temp_disp[temp]}c'
 
     def on_option(self, option, value):
