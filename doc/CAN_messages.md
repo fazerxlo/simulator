@@ -32,10 +32,10 @@ These frames are the primary set for a car-parameter monitor.
 | CAN ID | Purpose | Confidence | Notes |
 |--------|---------|------------|-------|
 | 0x036 | ignition state, dashboard illumination | Verified | best source for ACC/IGN and dimming |
-| 0x0F6 | reverse state, ambient/coolant temperature | Conflict | byte mapping differs across sources |
-| 0x128 | cluster warning and lamp state | Verified/Observed | partially decoded in simulator, richer on real bus |
-| 0x161 | oil temperature and fuel raw data | Verified | simple and useful for monitoring |
-| 0x168 | ambient temperature and battery voltage | Verified | good environmental/status frame |
+| 0x0F6 | reverse, coolant/external temperature, odometer, blinkers | Verified (PSA-RE) | bytes 2-4 = 24-bit odometer; byte 5-6 = temperature × 0.5 − 40 |
+| 0x128 | cluster warning and lamp state | Verified (PSA-RE) | full 8-byte signal map confirmed; rich signal set |
+| 0x161 | oil temperature, fuel level, oil level | Verified (PSA-RE) | byte 6 = oil level 0-100 % |
+| 0x168 | dashboard alert/fault indicators | Verified (PSA-RE) | **NOT ambient temperature** — see correction below |
 | 0x220 | door and body openings | Observed | present in dump, not implemented in simulator |
 | 0x1A8 | cruise/speed-limiter state | Observed | present in dump, not implemented in simulator |
 | 0x361 | vehicle configuration/features | Observed | present in dump, not implemented in simulator |
@@ -121,52 +121,47 @@ Notes:
 - [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md) also treats this as the main ignition/dashboard-illumination frame and notes a 100 ms period.
 - The simulator sends byte 5 as `0x80`, while the dump shows `0x00`, so only bytes 3 and 4 should be treated as stable signals for monitoring.
 
-### 0x0F6 - Reverse and Temperature Status
+### 0x0F6 - BSI_SLOW_DATA (Reverse, Temperature, Odometer)
 
-Status: Conflict
+Status: **Verified (PSA-RE)**
 
-Source evidence:
+PSA-RE canonical name: `BSI_SLOW_DATA` / `DONNEES_BSI_LENTES`. Period: 500 ms.
 
-- implemented in [modules/bsi-base/__init__.py](../modules/bsi-base/__init__.py)
-- documented with conflicting layouts in [psa_pf2_comfort.md](psa_pf2_comfort.md)
-- documented in [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md) as a combined turn-indicator, temperature, and odometer frame
-- observed in [dump.csv](../dump.csv)
+| Byte (0-idx) | PSA-RE signal | Encoding |
+|---|---|---|
+| 0 | CONFIG_MODE (bits 7-6), FACTORY_PARK (bit 5), MAIN_STATUS (bits 4-3), GEN_STATUS (bit 2), POWERTRAIN_STATUS (bits 1-0) | Status byte; real bus = `0x88` (customer config + generator ok + motor running) |
+| 1 | COOLANT_TEMPERATURE | raw − 40 °C |
+| 2-4 | **ODOMETER** (uint24) | × 0.1 km; `0xFFFFFF` = invalid |
+| 5 | EXTERNAL_TEMPERATURE | raw × 0.5 − 40 °C; `0xFF` = invalid |
+| 6 | EXTERNAL_FILTERED_TEMPERATURE | raw × 0.5 − 40 °C (filtered); `0xFF` = invalid |
+| 7 | REVERSE_STATUS (bit 7), FRONT_WIPERS_STATUS (bit 6), WHEEL_POSITION (bits 5-4), CLUSTER_INDICATORS_TEST (bit 3), **BLINKERS_STATUS (bits 1-0)** | BLINKERS: 0=none, 1=right, 2=left, 3=both |
 
-Simulator implementation:
-
-```text
-Byte 1 coolant = raw - 40
-Byte 5 ambient temp raw
-Byte 6 ambient temp raw duplicate
-Byte 7 bit 7 reverse
-```
-
-Observed examples:
+Observed examples (from bench capture):
 
 ```text
 88 3C 1F 5E 0B FC FF 28
 88 FF FF FF FF FC FF 28
 88 FF FF FF FF FF FF 20
-88 FF FF FF FF FF FF A0
 ```
 
-Recommended monitor strategy:
+Decode snippet:
 
-- treat reverse as provisional until verified on target car
-- treat ambient and coolant decoding as provisional if using `0x0F6`
-- prefer `0x168` for ambient temperature where available
-
-Best current workspace assumptions:
-
-- ambient temperature is often encoded as `raw * 0.5 - 40`
-- reverse indication is present, but exact byte/bit differs by source
-- left and right indicator state may also be present in the low bits according to [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md)
+```python
+coolant_c = data[1] - 40
+odo_km = ((data[2] << 16) | (data[3] << 8) | data[4]) * 0.1
+ext_temp_c = data[5] * 0.5 - 40 if data[5] != 0xFF else None
+reverse = (data[7] >> 7) & 1
+blinkers = data[7] & 0x03  # 0=none,1=right,2=left,3=both
+```
 
 Notes:
 
-- The simulator starts the frame with `0x08`, but the dump consistently shows `0x88`.
-- The canbox source supports the semantic meaning of this frame, but not a byte-accurate mapping that can be trusted across cars without validation.
-- For a monitoring application, mark `0x0F6` fields as low-confidence unless validated against a known physical action.
+- The simulator sends `0x08` in byte 0 and constant `0x00, 0x1F, 0x00` in bytes 2-4.  Real BSI
+  sends `0x88` and an actual odometer count. This is intentional bench simplification.
+- Bytes 5 and 6 carry the same temperature measurement before and after the BSI's smoothing
+  filter. The simulator sends the same value in both positions.
+- **BLINKERS_STATUS** (byte 7 bits 1-0) was previously undocumented in this workspace.
+- Prefer `0x1A8` bytes 5-7 for a partial-trip odometer; use `0x0F6` for the total odometer.
 
 ### 0x128 - Cluster Warning and Lamp Status
 
@@ -300,33 +295,51 @@ Notes:
 - The workspace notes disagree on offset wording, but the common pattern is that byte 2 is the oil temperature source.
 - The simulator currently decodes oil as `msg.data[2] - 40`.
 
-### 0x168 - Ambient Temperature and Battery Voltage
+### 0x168 - COMBINE_ALERTS_INDICATORS (Dashboard Warning Lamps)
 
-Status: Verified
+Status: **Verified (PSA-RE)**
 
-Source evidence:
+PSA-RE canonical name: `COMBINE_ALERTS_INDICATORS` / `CDE_COMBINE_TEMOINS`. Period: 200 ms.
 
-- described in [peugeot407can.yaml](peugeot407can.yaml) and [psa_pf2_comfort.md](psa_pf2_comfort.md)
-- observed in [dump.csv](../dump.csv)
+> ⚠️ **Correction:** Earlier versions of this document (based on `peugeot407can.yaml` and
+> `psa_pf2_comfort.md`) described 0x168 as carrying **ambient temperature** (byte 0) and
+> **battery voltage** (byte 1). **This was incorrect.** PSA-RE confirms that 0x168 is the
+> dashboard alert/fault indicator frame, not a temperature or voltage frame. The
+> `can_messages.py Msg168` implementation was already correct; only this documentation was wrong.
 
-Observed examples:
+The frame carries one indicator flag per bit across all 8 bytes. Selected signals:
 
-```text
-8C 40 00 B2 24 00 20 00
-8D 40 00 B2 24 00 20 00
-05 00 00 02 24 00 00 00
-```
+| Byte (0-idx) | Bit | Signal | Meaning |
+|---|---|---|---|
+| 0 | 7 | COOLANT_TEMPERATURE_ALERT | coolant temp high |
+| 0 | 6 | OIL_TEMPERATURE_ALERT | oil temp high |
+| 0 | 5 | COOLANT_LEVEL_ALERT | coolant level low |
+| 0 | 4 | OIL_LEVEL_ALERT | oil level low |
+| 0 | 3 | OIL_PRESSURE_ALERT | oil pressure low |
+| 0 | 2 | BRAKE_LEVEL_ALERT | brake fluid low |
+| 0 | 1 | COLD_ENGINE_ALERT | cold engine |
+| 0 | 0 | DSG_FAULT | TPMS fault |
+| 1 | 7 | UNDERINFLATION_ALERT | tyre under-inflation |
+| 1 | 6 | PUNCTURE_ALERT | tyre puncture |
+| 1 | 4 | PARTICLE_FILTER_FAULT | DPF warning |
+| 3 | 5 | ABS_FAULT | ABS fault |
+| 3 | 4 | ASR_FAULT | ASR/ESP fault |
+| 3 | 3 | GEARBOX_FAULT | gearbox fault |
+| 3 | 2 | BRAKES_FAULT | brake pads worn |
+| 3 | 1 | EOBD_FAULT | MIL (check engine) |
+| 4 | 5 | SAFETY_FAULT | airbag/safety fault |
+| 4 | 1 | ALTERNATOR_FAULT | alternator fault |
+| 7 | 6 | ENGINE_FAULT | engine fault |
 
-Recommended monitor decode:
-
-- ambient temperature raw: byte 0
-- ambient temperature celsius: `raw * 0.5 - 40`
-- battery voltage raw: byte 1
-- battery voltage volts: `raw * 0.05 + 5.0`
+See `doc/PSA_RE_comparison.md` section "0x168" for the complete 40-signal table.
 
 Notes:
 
-- [peugeot407can.yaml](peugeot407can.yaml) mentions `0.1` scaling in one section, but [psa_pf2_comfort.md](psa_pf2_comfort.md) uses `0.5 - 40` for temperature and `0.05 + 5.0` for voltage. The latter aligns better with the rest of the workspace notes.
+- Observed example `8C 40 00 B2 24 00 20 00` contains alert bits set (coolant + oil pressure
+  alerts). This is consistent with the alert-indicator interpretation.
+- Ambient temperature is carried in `0x0F6` bytes 5-6 (× 0.5 − 40 °C).
+- Battery voltage is not directly available on the comfort CAN; it comes from a separate frame
+  on the powertrain CAN or from the BSI diagnostic endpoint.
 
 ### 0x220 - Door and Body Openings
 
@@ -493,13 +506,14 @@ For a first vehicle-monitoring application, start with these IDs:
 
 1. `0x036` for ignition and illumination
 2. `0x128` for warning lamps and external lighting
-3. `0x161` for oil/fuel raw values
-4. `0x168` for ambient temperature and battery voltage
-5. `0x220` for door and body state
-6. `0x1A8` and `0x361` for cruise and capability/status metadata
-7. `0x0E1` if parking visualization is needed
-8. `0x1D0` and `0x1E3` if climate monitoring is needed
-9. `0x0F6` only after on-car validation of byte/bit meaning
+3. `0x161` for oil temperature, fuel level, and oil level
+4. `0x168` for dashboard alert and fault indicators
+5. `0x0F6` for coolant temperature, external temperature, odometer, reverse, and blinker state
+6. `0x220` for door and body state
+7. `0x1A8` for cruise/limiter state and partial odometer
+8. `0x361` for vehicle capability/option metadata
+9. `0x0E1` if parking-aid visualization is needed
+10. `0x1D0` and `0x1E3` if climate monitoring is needed
 
 If infotainment integration is also needed, add these separately:
 

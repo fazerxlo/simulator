@@ -186,7 +186,19 @@ class Msg0E1(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg0F6(CanMessage):
-    """Slow dynamic data: coolant temperature, exterior temperature, reverse gear."""
+    """BSI slow data: coolant/external temperature, odometer, reverse, blinkers.
+
+    PSA-RE canonical name: ``BSI_SLOW_DATA`` / ``DONNEES_BSI_LENTES``.
+
+    Byte layout (0-indexed):
+      0  — status byte: ``0x88`` on real bus (customer config + generator ok + motor running)
+      1  — coolant temperature: raw − 40 °C
+      2-4 — odometer (uint24 × 0.1 km); simulator encodes ``0xFFFFFF`` (invalid) here
+      5  — external temperature: raw × 0.5 − 40 °C (``0xFF`` = invalid)
+      6  — external temperature filtered (same encoding as byte 5)
+      7  — bit 7 = REVERSE_STATUS, bit 6 = FRONT_WIPERS_STATUS,
+             bits 1-0 = BLINKERS_STATUS (0=none, 1=right, 2=left, 3=both)
+    """
 
     can_id = 0x0F6
     period_ms = 100
@@ -195,8 +207,10 @@ class Msg0F6(CanMessage):
         bsi = car.bsi
         temp = int((bsi.temperature + 40) * 2)
         coolant = int(bsi.coolant + 40)
-        reverse = (int(bsi.reverse) << 7) | 0x01
-        return [0x08, coolant, 0x00, 0x1F, 0x00, temp, temp, reverse]
+        # byte 7: reverse + blinkers; force bit 0 high for compatibility
+        b7 = (int(bsi.reverse) << 7) | (int(bsi.blinkers) & 0x03)
+        # bytes 2-4: odometer — emit 0xFF FF FF (invalid) for bench simulation
+        return [0x88, coolant, 0xFF, 0xFF, 0xFF, temp, temp, b7]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 8:
@@ -204,6 +218,7 @@ class Msg0F6(CanMessage):
         car.bsi.coolant = int(data[1]) - 40
         car.bsi.temperature = int(data[5]) / 2.0 - 40
         car.bsi.reverse = (data[7] >> 7) & 1
+        car.bsi.blinkers = data[7] & 0x03
 
 
 # ---------------------------------------------------------------------------
@@ -330,19 +345,33 @@ class Msg128(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg161(CanMessage):
-    """Oil temperature and fuel level."""
+    """BSI gauges: oil temperature, fuel level, oil level.
+
+    PSA-RE canonical name: ``BSI_GAUGES`` / ``ETAT_BSI_TEMP_NIVEAU``.
+
+    Byte layout (0-indexed):
+      0  — OIL_LEVEL_RESTART flag (bit 7); simulator sends 0x00
+      1  — unused
+      2  — OIL_TEMPERATURE: raw − 40 °C (``0xFF`` = invalid)
+      3  — FUEL_LEVEL: 0–100 % (``0xFF`` = invalid)
+      4-5 — unused (``0xFF``)
+      6  — OIL_LEVEL: 0–100 % (``0xFF`` = invalid/not available)
+    """
 
     can_id = 0x161
     period_ms = 100
 
     def encode(self, car) -> list:
-        oil = car.bsi.oil + 40
-        return [0x00, 0x00, oil, car.bsi.fuel, 0xFF, 0xFF, 0xFF, 0xFF]
+        oil_temp = int(car.bsi.oil + 40)
+        oil_level = int(car.bsi.oil_level) & 0xFF
+        return [0x00, 0x00, oil_temp, int(car.bsi.fuel), 0xFF, 0xFF, oil_level]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 4:
             car.bsi.oil = int(data[2]) - 40
             car.bsi.fuel = int(data[3])
+        if len(data) >= 7:
+            car.bsi.oil_level = int(data[6])
 
 
 # ---------------------------------------------------------------------------
@@ -526,6 +555,68 @@ class Msg1A5(CanMessage):
                 car.buttons.volume = volume
             else:
                 car.radio.volume = volume
+
+
+# ---------------------------------------------------------------------------
+# 0x1A8 – Speed control / cruise display
+# ---------------------------------------------------------------------------
+
+class Msg1A8(CanMessage):
+    """Speed regulator / limiter and partial odometer (0x1A8).
+
+    PSA-RE canonical name: ``SPEED_CONTROL`` / ``GESTION_VITESSE``.
+
+    Byte layout (0-indexed):
+      0  — bits 7-6: SPEED_CONTROL_TYPE (0=none, 1=regulator, 2=limiter, 3=adaptive)
+             bits 5-3: ACTIVE_FUNCTION_STATUS (0=standby, 1=active, 2=limiter active,
+                       3=overspeed no pedal, 4=overspeed with pedal, 6=not activatable, 7=fault)
+             bit 2: ACTIVATION_ATTEMPT
+             bit 1: CONTROL_UNIT (0=km/h, 1=mph)
+      1-2 — SET_SPEED (uint16 × 0.01 km/h; 0xFFFF = not set)
+      3-4 — unused (0x00)
+      5-7 — ODOMETER_PARTIAL (uint24 × 0.001 km; 0xFFFFFF = invalid)
+    """
+
+    can_id = 0x1A8
+    period_ms = 200
+
+    def encode(self, car) -> list:
+        sc = car.speed_control
+        b0 = (
+            ((sc.control_type & 0x03) << 6) |
+            ((sc.function_status & 0x07) << 3) |
+            ((sc.activation_attempt & 0x01) << 2) |
+            ((int(sc.unit_mph) & 0x01) << 1)
+        )
+        # SET_SPEED
+        if sc.set_speed is None:
+            speed_raw = 0xFFFF
+        else:
+            speed_raw = min(0xFFFE, round(sc.set_speed / 0.01))
+        b1 = (speed_raw >> 8) & 0xFF
+        b2 = speed_raw & 0xFF
+        # ODOMETER_PARTIAL
+        if sc.partial_odo is None:
+            odo_raw = 0xFFFFFF
+        else:
+            odo_raw = min(0xFFFFFE, round(sc.partial_odo / 0.001))
+        b5 = (odo_raw >> 16) & 0xFF
+        b6 = (odo_raw >> 8) & 0xFF
+        b7 = odo_raw & 0xFF
+        return [b0, b1, b2, 0x00, 0x00, b5, b6, b7]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 8:
+            return
+        sc = car.speed_control
+        sc.control_type = (data[0] >> 6) & 0x03
+        sc.function_status = (data[0] >> 3) & 0x07
+        sc.activation_attempt = (data[0] >> 2) & 0x01
+        sc.unit_mph = bool((data[0] >> 1) & 0x01)
+        speed_raw = (data[1] << 8) | data[2]
+        sc.set_speed = None if speed_raw == 0xFFFF else speed_raw * 0.01
+        odo_raw = (data[5] << 16) | (data[6] << 8) | data[7]
+        sc.partial_odo = None if odo_raw == 0xFFFFFF else odo_raw * 0.001
 
 
 # ---------------------------------------------------------------------------
@@ -983,7 +1074,7 @@ ALL_MESSAGES: dict[int, type] = {
     for cls in (
         Msg036, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
         Msg128, Msg161, Msg165, Msg168, Msg190, Msg1A1, Msg1A3,
-        Msg1A5, Msg1D0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
+        Msg1A5, Msg1A8, Msg1D0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
         Msg223, Msg2A1, Msg261, Msg2B6, Msg323, Msg336, Msg3B6,
         Msg3E5, Msg52D,
     )
