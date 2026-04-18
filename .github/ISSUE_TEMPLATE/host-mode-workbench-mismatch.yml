@@ -1,0 +1,141 @@
+name: Host Mode Workbench Mismatch
+description: Report a mismatch where a simulator UI action causes the wrong physical workbench behavior
+title: "[Host] "
+labels:
+  - bug
+  - verification
+  - host-mode
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when the app is running in active host mode on the real bench and a UI action does not produce the expected result on the cluster, MFD, radio, climate panel, or other module.
+
+        Please report one isolated action per issue.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Preconditions
+      description: Confirm the basic setup used for the test
+      options:
+        - label: I tested on can0 at 125000 bit/s
+          required: true
+        - label: The app was running in host or active mode
+          required: true
+        - label: I isolated one UI action for this report
+          required: true
+        - label: I captured CAN evidence or observations if available
+          required: false
+
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      description: One-line description of the mismatch
+      placeholder: Low beam selected in UI but cluster shows sidelights only
+    validations:
+      required: true
+
+  - type: dropdown
+    id: simulator_module
+    attributes:
+      label: Simulator module or tab
+      options:
+        - bsi-base
+        - combine
+        - clim
+        - radio-gen
+        - radio-cd
+        - buttons
+        - bsi-trip
+        - tyres
+        - parktronic
+        - bsi-log
+        - kml
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: ui_action
+    attributes:
+      label: UI action performed
+      description: Describe exactly what you changed in the app
+      placeholder: I turned on low beam in the BSI tab and then enabled left indicator
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_result
+    attributes:
+      label: Expected workbench result
+      placeholder: The instrument cluster should show the low beam icon and the left indicator telltale
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_result
+    attributes:
+      label: Actual workbench result
+      placeholder: Only sidelights icon appeared; left indicator did not flash
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected_hardware
+    attributes:
+      label: Affected physical modules
+      options:
+        - label: Instrument cluster or combine
+        - label: MFD display
+        - label: Radio or head unit
+        - label: Climate panel
+        - label: Steering wheel controls
+        - label: CD changer
+        - label: Other hardware on the bench
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression status
+      options:
+        - Worked before
+        - Never worked
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: can_evidence
+    attributes:
+      label: CAN evidence
+      description: Paste candump lines, note missing IDs, wrong bytes, or timing observations
+      render: shell
+      placeholder: |
+        candump snippet or notes here
+        Example:
+        can0  128   [8]  91 E0 00 00 80 80 B0 01
+    validations:
+      required: false
+
+  - type: textarea
+    id: suspected_frames
+    attributes:
+      label: Suspected CAN IDs or signals
+      description: Optional; add if you already suspect a frame like 0x128, 0x036, 0x1D0, or 0x1A5
+      placeholder: 0x128 may be wrong, likely byte 5 lighting bits
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Photo or video notes
+      description: Optional; mention any recording that shows the mismatch
+      placeholder: Short video recorded showing the cluster behavior during the test
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Anything else that may help reproduce or diagnose the issue
+      placeholder: This happened only after startup, or only when ignition was already on

@@ -1,0 +1,135 @@
+name: Monitor Mode UI Mismatch
+description: Report a mismatch where a real workbench action is not reflected correctly in the simulator UI
+title: "[Monitor] "
+labels:
+  - bug
+  - verification
+  - monitor-mode
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when the app is running in monitor mode on the real bench and the simulator UI does not update correctly after a physical action.
+
+        Please report one isolated workbench action per issue.
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Preconditions
+      description: Confirm the setup used for the report
+      options:
+        - label: I tested on can0 at 125000 bit/s
+          required: true
+        - label: The app was running in monitor mode
+          required: true
+        - label: I isolated one physical bench action for this report
+          required: true
+        - label: I captured CAN evidence or observations if available
+          required: false
+
+  - type: input
+    id: summary
+    attributes:
+      label: Short summary
+      description: One-line description of the mismatch
+      placeholder: Low beam turned on at the bench but the app still shows light mode off
+    validations:
+      required: true
+
+  - type: dropdown
+    id: app_module
+    attributes:
+      label: Affected app module or tab
+      options:
+        - bsi-base
+        - combine
+        - clim
+        - radio-gen
+        - radio-cd
+        - buttons
+        - bsi-trip
+        - tyres
+        - parktronic
+        - bsi-log
+        - kml
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: bench_action
+    attributes:
+      label: Workbench action performed
+      description: Describe exactly what you did on the real hardware
+      placeholder: I switched from sidelights to low beam on the real stalk or bench controls
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_ui
+    attributes:
+      label: Expected app UI result
+      placeholder: The app should update the lighting state to low beam and show the correct indicator state
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_ui
+    attributes:
+      label: Actual app UI result
+      placeholder: The UI remained on sidelights only and did not reflect the real bench action
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: affected_display_area
+    attributes:
+      label: Affected UI area
+      options:
+        - label: Light or ignition status
+        - label: Climate values
+        - label: Radio or source info
+        - label: Buttons or control state
+        - label: Popup or MFD status
+        - label: Reverse or parking state
+        - label: Trip or gauge values
+        - label: Other UI area
+
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression status
+      options:
+        - Worked before
+        - Never worked
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: can_evidence
+    attributes:
+      label: CAN evidence
+      description: Paste candump lines, observed IDs, missing frames, or timing notes
+      render: shell
+      placeholder: |
+        candump snippet or notes here
+        Example:
+        can0  128   [8]  91 E0 00 00 C0 80 B0 01
+    validations:
+      required: false
+
+  - type: textarea
+    id: suspected_decode_path
+    attributes:
+      label: Suspected frame or decode path
+      description: Optional; note the likely frame or signal if known
+      placeholder: Possibly 0x128 decode or UI sync in the BSI module
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional context
+      description: Anything else that helps reproduce or diagnose the issue
+      placeholder: The app only fails to update after startup, or only if the climate tab was already open

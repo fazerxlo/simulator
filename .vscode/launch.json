@@ -2,8 +2,8 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Run Simulator",
-      "type": "python",
+      "name": "Simulator vcan",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
       "args": ["--channel", "vcan0"],
@@ -12,11 +12,31 @@
       "justMyCode": true
     },
     {
-      "name": "Python: Run Simulator (Monitor)",
-      "type": "python",
+      "name": "Monitor vcan",
+      "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
       "args": ["--monitor", "--channel", "vcan0"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Simulator can",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "args": ["--channel", "can0"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Monitor can",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "args": ["--monitor", "--channel", "can0"],
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": true
