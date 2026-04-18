@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 from functools import partial
 
@@ -15,6 +16,8 @@ from can_messages import (
 
 _modname = 'BSI_base'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class BSI_base(TabbedPanelItem):
 
@@ -50,7 +53,7 @@ class BSI_base(TabbedPanelItem):
         # Register per-CAN-ID message objects.  Each class owns exactly one
         # arbitration ID; the runner calls encode() periodically and decode()
         # when a matching frame is received.
-        print('registering BSI calls')
+        logger.debug('registering BSI base messages')
         runner.register_message(Msg036())
         runner.register_message(Msg0B6())
         runner.register_message(Msg0F6())
@@ -141,6 +144,15 @@ class BSI_base(TabbedPanelItem):
         if mode > BSI_base._lights_high:
             mode = BSI_base._lights_high
 
+        _light_names = {
+            BSI_base._lights_off: 'off',
+            BSI_base._lights_side: 'side lights',
+            BSI_base._lights_low: 'low beam',
+            BSI_base._lights_high: 'high beam',
+        }
+        if self._bsi.light_mode != mode:
+            logger.info('Lights set to %s', _light_names.get(mode, str(mode)))
+
         self._bsi.light_mode = mode
 
         # Keep this behavior for local UI actions, but do not force lum/dash when
@@ -225,6 +237,14 @@ class BSI_base(TabbedPanelItem):
     def set_power_mode(self, value):
         previous_mode = int(self._bsi.power_mode)
         power_mode = int(value)
+        _mode_names = {
+            BSI_base._ignition_settled_off: 'sleeping',
+            BSI_base._ignition_on: 'ON',
+            BSI_base._ignition_off: 'OFF',
+            BSI_base._ignition_wakeup: 'wakeup',
+        }
+        if previous_mode != power_mode:
+            logger.info('Ignition %s', _mode_names.get(power_mode, f'mode 0x{power_mode:02X}'))
         self._bsi.power_mode = power_mode
         self._bsi.ignition_on = (power_mode == BSI_base._ignition_on)
         self._updating_power_buttons = True
@@ -258,6 +278,7 @@ class BSI_base(TabbedPanelItem):
         if self._bsi.power_mode != BSI_base._ignition_on:
             return
         if state == 'down':
+            logger.info('Engine started')
             self._bsi.engine_running = 1
             self.on_val('rpm', 800)
             self.on_val('speed', 10)
@@ -265,6 +286,7 @@ class BSI_base(TabbedPanelItem):
             self.on_val('oil', 65)
             self.on_val('coolant', 60)
         else:
+            logger.info('Engine stopped')
             self._bsi.engine_running = 0
             self.on_val('rpm', 0)
             self.on_val('speed', 0)
@@ -282,6 +304,7 @@ class BSI_base(TabbedPanelItem):
             self._bsi.temperature += value
         else:
             self._bsi.temperature = value
+        logger.info('Outside temperature set to %s°C', self._bsi.temperature)
         self.ids['cur_ext_temp'].text = f'temp: {self._bsi.temperature}'
         if 'slider_temp' in self.ids and self.ids['slider_temp'].value != self._bsi.temperature:
             self.ids['slider_temp'].value = self._bsi.temperature
@@ -294,7 +317,15 @@ class BSI_base(TabbedPanelItem):
             'oil': 'Oil temp: {} deg',
             'coolant': 'Coolant temp: {} deg'
         }
+        log_msgs = {
+            'rpm': 'RPM set to {}',
+            'speed': 'Speed set to {} km/h',
+            'fuel': 'Fuel level set to {}%',
+            'oil': 'Oil temperature set to {}°C',
+            'coolant': 'Coolant temperature set to {}°C',
+        }
 
+        logger.info(log_msgs[name].format(value))
         self.ids[f'cur_{name}'].text = texts[name].format(value)
         slider_id = f'slider_{name}'
         if slider_id in self.ids and self.ids[slider_id].value != value:

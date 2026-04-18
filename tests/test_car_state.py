@@ -1095,13 +1095,13 @@ class TestCanRunnerVirtualCar:
         runner.register_message(msg)
         assert runner._can_message_objects[0x036] is msg
 
-    def test_register_message_duplicate_warns(self, capsys):
+    def test_register_message_duplicate_warns(self, caplog):
+        import logging
         runner = self._make_runner()
-        runner.register_message(Msg036())
-        runner.register_message(Msg036())
-        out = capsys.readouterr().out
-        assert 'WARNING' in out
-        assert '0x036' in out
+        with caplog.at_level(logging.WARNING):
+            runner.register_message(Msg036())
+            runner.register_message(Msg036())
+        assert any('0x036' in r.message for r in caplog.records if r.levelno == logging.WARNING)
 
     def test_module_specific_message_disabled_when_module_missing(self):
         runner = self._make_runner()
@@ -1226,19 +1226,20 @@ class TestCanRunnerDuplicateDetection:
         importlib.reload(cr)
         return cr.CanRunner(monitor=True)
 
-    def test_first_registration_no_warning(self, capsys):
+    def test_first_registration_no_warning(self, caplog):
+        import logging
         runner = self._make_runner()
-        runner.reg(lambda: None, 0x1D0, 500)
-        out = capsys.readouterr().out
-        assert 'WARNING' not in out
+        with caplog.at_level(logging.WARNING):
+            runner.reg(lambda: None, 0x1D0, 500)
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
 
-    def test_duplicate_registration_emits_warning(self, capsys):
+    def test_duplicate_registration_emits_warning(self, caplog):
+        import logging
         runner = self._make_runner()
-        runner.reg(lambda: None, 0x1D0, 500)
-        runner.reg(lambda: None, 0x1D0, 100)
-        out = capsys.readouterr().out
-        assert 'WARNING' in out
-        assert '0x1D0' in out
+        with caplog.at_level(logging.WARNING):
+            runner.reg(lambda: None, 0x1D0, 500)
+            runner.reg(lambda: None, 0x1D0, 100)
+        assert any('0x1D0' in r.message for r in caplog.records if r.levelno == logging.WARNING)
 
     def test_duplicate_registration_overrides(self):
         runner = self._make_runner()
@@ -1250,12 +1251,13 @@ class TestCanRunnerDuplicateDetection:
         runner.reg(sender_b, 0x1D0, 500)
         assert runner._can_id_owners[0x1D0] is sender_b
 
-    def test_different_ids_no_warning(self, capsys):
+    def test_different_ids_no_warning(self, caplog):
+        import logging
         runner = self._make_runner()
-        runner.reg(lambda: None, 0x1D0, 500)
-        runner.reg(lambda: None, 0x1E3, 500)
-        out = capsys.readouterr().out
-        assert 'WARNING' not in out
+        with caplog.at_level(logging.WARNING):
+            runner.reg(lambda: None, 0x1D0, 500)
+            runner.reg(lambda: None, 0x1E3, 500)
+        assert not any(r.levelno == logging.WARNING for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------

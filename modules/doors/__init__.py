@@ -1,3 +1,4 @@
+import logging
 import os
 
 from kivy.clock import Clock
@@ -6,6 +7,8 @@ from kivy.lang.builder import Builder
 
 _modname = 'Doors'
 _version = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 MSG_DOORS_OPEN = 0x0B
 MSG_DRIVER_DOOR_OPEN = 0xDE
@@ -51,6 +54,8 @@ class Doors(TabbedPanelItem):
         if self._ui_sync:
             return
         setattr(self._doors, field, 1 if state == 'down' else 0)
+        action = 'opened' if state == 'down' else 'closed'
+        logger.info('%s %s', field.replace('_', ' ').capitalize(), action)
         self._update_summary()
         self._send_0x220_status()
         self._send_0x1A1_popup()
@@ -60,6 +65,7 @@ class Doors(TabbedPanelItem):
         for key in ('front_left', 'front_right', 'rear_left', 'rear_right',
                     'boot', 'bonnet', 'rear_window', 'fuel_flap'):
             setattr(doors, key, 1)
+        logger.info('All doors opened')
         self._sync_ui()
         self._update_summary()
         self._send_0x220_status()
@@ -70,6 +76,7 @@ class Doors(TabbedPanelItem):
         for key in ('front_left', 'front_right', 'rear_left', 'rear_right',
                     'boot', 'bonnet', 'rear_window', 'fuel_flap'):
             setattr(doors, key, 0)
+        logger.info('All doors closed')
         self._sync_ui()
         self._update_summary()
         self._send_0x220_status()
