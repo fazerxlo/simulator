@@ -10,7 +10,7 @@
       size_hint_y: 0.15
       Label:
         id: status_label
-        text: 'Stopped'
+        text: 'Loading'
         bold: True
       Label:
         id: disc_label
@@ -52,7 +52,7 @@
         on_press: root.on_next_disc()
         size_hint_x: 0.1
 
-    # Disc selection toggle buttons
+    # Disc selection toggle buttons (label shows disc number + track count)
     BoxLayout:
       orientation: 'horizontal'
       size_hint_y: 0.2
@@ -61,49 +61,50 @@
         size_hint_x: 0.1
       ToggleButton:
         id: disc_1
-        text: '1'
+        text: 'D1\n10'
         group: 'disc'
         state: 'down'
         allow_no_selection: False
         on_state: root.on_disc(1, self.state)
       ToggleButton:
         id: disc_2
-        text: '2'
+        text: 'D2\n10'
         group: 'disc'
         allow_no_selection: False
         on_state: root.on_disc(2, self.state)
       ToggleButton:
         id: disc_3
-        text: '3'
+        text: 'D3\n10'
         group: 'disc'
         allow_no_selection: False
         on_state: root.on_disc(3, self.state)
       ToggleButton:
         id: disc_4
-        text: '4'
+        text: 'D4\n10'
         group: 'disc'
         allow_no_selection: False
         on_state: root.on_disc(4, self.state)
       ToggleButton:
         id: disc_5
-        text: '5'
+        text: 'D5\n10'
         group: 'disc'
         allow_no_selection: False
         on_state: root.on_disc(5, self.state)
       ToggleButton:
         id: disc_6
-        text: '6'
+        text: 'D6\n10'
         group: 'disc'
         allow_no_selection: False
         on_state: root.on_disc(6, self.state)
 
-    # Total tracks on disc
+    # Per-disc track count slider (targets the currently selected disc)
     BoxLayout:
       orientation: 'horizontal'
       size_hint_y: 0.2
       Label:
-        text: 'Tracks on disc:'
-        size_hint_x: 0.25
+        id: disc_tracks_label
+        text: 'Tracks on disc 1:'
+        size_hint_x: 0.3
       Slider:
         id: total_tracks_slider
         min: 1

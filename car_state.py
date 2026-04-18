@@ -377,14 +377,24 @@ class CDChanger:
         # Track elapsed time.
         self.minutes = 0
         self.seconds = 0
-        # Total tracks on the current disc.
-        self.total_tracks = 10
+        # Per-disc track counts (disc 1-6 → number of tracks).
+        self.disc_tracks = {i: 10 for i in range(1, 7)}
 
         # Playback mode flags.
         self.random = False
         self.repeat = False        # repeat all tracks
         self.repeat_track = False  # repeat current track
         self.scan = False
+
+    @property
+    def total_tracks(self):
+        """Total tracks on the current disc (reads from disc_tracks)."""
+        return self.disc_tracks.get(self.disc, 10)
+
+    @total_tracks.setter
+    def total_tracks(self, value):
+        """Set the total track count for the current disc."""
+        self.disc_tracks[self.disc] = value
 
 
 class VirtualCar:

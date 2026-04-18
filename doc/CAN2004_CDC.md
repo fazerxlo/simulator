@@ -256,11 +256,23 @@ def decode_0x1A0(data: bytes) -> dict:
 | `track` | int | `1` | Current track (1-99) |
 | `minutes` | int | `0` | Elapsed track time: minutes |
 | `seconds` | int | `0` | Elapsed track time: seconds |
-| `total_tracks` | int | `10` | Total tracks on the current disc |
+| `disc_tracks` | dict[int, int] | `{1: 10, …, 6: 10}` | Per-disc track counts (disc 1-6) |
+| `total_tracks` | int (property) | `10` | Total tracks on **current** disc; backed by `disc_tracks[disc]` |
 | `random` | bool | `False` | Shuffle playback |
 | `repeat` | bool | `False` | Repeat all tracks |
 | `repeat_track` | bool | `False` | Repeat current track only |
 | `scan` | bool | `False` | Scan mode |
+
+`total_tracks` is a read/write property: reading returns `disc_tracks[disc]`, writing sets `disc_tracks[disc]`.  This means each disc independently stores its own track count.
+
+### Startup announcement sequence
+
+When the `cdc` module loads, it announces itself to the radio head unit:
+
+1. Sets `status = STATUS_LOADING` immediately (0x1A0 byte 0 = `0x01`)
+2. After 2 seconds, transitions to `status = STATUS_PAUSED` (0x1A0 byte 0 = `0x02`)
+
+The radio head unit sees a real CDC sequence: the CDC powers on (loading), then indicates a disc is ready (paused).  The user can then press Play on the radio or in the simulator UI.
 
 ### `STATUS_*` constants
 
@@ -294,11 +306,15 @@ car.cdc.disc = 2
 car.cdc.track = 5
 car.cdc.minutes = 1
 car.cdc.seconds = 30
-car.cdc.total_tracks = 12
+# Configure track counts per disc
+car.cdc.disc_tracks[1] = 10
+car.cdc.disc_tracks[2] = 15
+car.cdc.disc_tracks[3] = 8
 car.cdc.random = True
 
 frame = Msg1A0().encode(car)
-# → [0x04, 0x02, 0x05, 0x01, 0x1E, 0x0C, 0x02, 0x00]
+# → [0x04, 0x02, 0x05, 0x01, 0x1E, 0x0F, 0x02, 0x00]
+# byte 5 = 0x0F = 15 (tracks on disc 2)
 ```
 
 ### Enabling the CDC module
@@ -328,13 +344,23 @@ The `modules/cdc/` panel provides:
 | Play / Pause / Stop | Playback state control |
 | `|<` / `<|` | Previous disc / previous track |
 | `|>` / `>|` | Next track / next disc |
-| Disc 1-6 toggles | Direct disc selection (triggers SEARCHING) |
-| Tracks on disc slider | Set `total_tracks` (1-30) |
+| Disc D1–D6 toggles | Direct disc selection (triggers SEARCHING); each button shows the disc number and its configured track count (e.g. `D1\n12`) |
+| Tracks on disc N slider | Set track count for the **currently selected** disc (1-30). Moving to a different disc updates the slider to that disc's count |
 | Random / Repeat All / Repeat Track / Scan | Playback mode flags |
 
-The elapsed time is advanced by a 1-second `Clock` interval while status is
-`STATUS_PLAYING`.  Receiving a `0x131` command frame updates state via
-`Msg131.decode()` and immediately resyncs the UI.
+Each disc (D1–D6) stores its own track count independently.  Select a disc and
+drag the slider to configure how many tracks that disc contains.  The disc button
+labels update in real time to reflect each disc's count.
+
+### Startup announcement
+
+On module load the CDC transitions through:
+```
+STATUS_LOADING  (0x1A0 byte 0 = 0x01, ~2 s)  →  STATUS_PAUSED (byte 0 = 0x02)
+```
+The radio head unit sees the loading → paused sequence and recognises a CDC
+magazine as present and ready.  The user can then issue a play command from
+either the radio or the simulator UI.
 
 ---
 

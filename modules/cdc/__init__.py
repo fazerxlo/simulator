@@ -35,8 +35,11 @@ class CDC(TabbedPanelItem):
         runner.register_message(Msg1A0())
         runner.register_message(Msg131())
 
-        # Activate CDC in the shared car state
+        # Activate CDC in the shared car state and begin startup sequence.
+        # Announce presence to the radio: start in LOADING, then PAUSED.
         runner.car.cdc.active = True
+        runner.car.cdc.status = runner.car.cdc.STATUS_LOADING
+        Clock.schedule_once(self._on_ready, 2.0)
 
         # Clock handle for the playback time ticker
         self._timer = None
@@ -48,6 +51,18 @@ class CDC(TabbedPanelItem):
     def _cdc(self):
         """Convenience accessor for the shared CDC car state."""
         return self.runner.car.cdc
+
+    def _on_ready(self, dt):
+        """Transition from LOADING to PAUSED after startup delay.
+
+        This completes the CDC announcement sequence: the radio will see
+        0x1A0 frames go from 0x01 (loading) to 0x02 (paused), indicating
+        that the magazine is present and a disc is ready to play.
+        """
+        cdc = self._cdc
+        if cdc.status == cdc.STATUS_LOADING:
+            cdc.status = cdc.STATUS_PAUSED
+            self._update_ui()
 
     # ------------------------------------------------------------------
     # Playback controls
@@ -132,13 +147,16 @@ class CDC(TabbedPanelItem):
             self._update_ui()
 
     def on_total_tracks(self, value):
-        """Update the total-tracks count from the slider."""
+        """Update the track count for the current disc from the slider."""
         try:
             v = int(value)
             if 1 <= v <= 99:
-                self._cdc.total_tracks = v
+                cdc = self._cdc
+                cdc.disc_tracks[cdc.disc] = v
                 if 'total_tracks_label' in self.ids:
                     self.ids['total_tracks_label'].text = str(v)
+                # Refresh disc button labels to show updated per-disc counts
+                self._sync_disc_buttons()
         except (ValueError, TypeError):
             pass
 
@@ -207,12 +225,25 @@ class CDC(TabbedPanelItem):
                 desired = 'down' if i == cdc.disc else 'normal'
                 if self.ids[btn_id].state != desired:
                     self.ids[btn_id].state = desired
-        # Sync total tracks slider
+        # Sync disc button labels to show per-disc track counts
+        self._sync_disc_buttons()
+        # Sync total tracks slider to current disc's track count
+        cur_tracks = cdc.disc_tracks.get(cdc.disc, 10)
         if 'total_tracks_slider' in self.ids:
-            if self.ids['total_tracks_slider'].value != cdc.total_tracks:
-                self.ids['total_tracks_slider'].value = cdc.total_tracks
+            if self.ids['total_tracks_slider'].value != cur_tracks:
+                self.ids['total_tracks_slider'].value = cur_tracks
         if 'total_tracks_label' in self.ids:
-            self.ids['total_tracks_label'].text = str(cdc.total_tracks)
+            self.ids['total_tracks_label'].text = str(cur_tracks)
+        if 'disc_tracks_label' in self.ids:
+            self.ids['disc_tracks_label'].text = f'Tracks on disc {cdc.disc}:'
+
+    def _sync_disc_buttons(self):
+        """Update disc button labels to show per-disc track counts."""
+        cdc = self._cdc
+        for i in range(1, 7):
+            btn_id = f'disc_{i}'
+            if btn_id in self.ids:
+                self.ids[btn_id].text = f'D{i}\n{cdc.disc_tracks.get(i, 10)}'
 
     # ------------------------------------------------------------------
     # CAN receive callback

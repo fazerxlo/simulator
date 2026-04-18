@@ -1748,6 +1748,40 @@ class TestCDChangerDefaults:
         assert CDChanger.STATUS_LOADING == 3
         assert CDChanger.STATUS_SEARCHING == 4
 
+    def test_cdc_default_disc_tracks(self):
+        car = VirtualCar()
+        assert hasattr(car.cdc, 'disc_tracks')
+        # All 6 discs should default to 10 tracks
+        for i in range(1, 7):
+            assert car.cdc.disc_tracks[i] == 10
+
+    def test_cdc_total_tracks_property_reflects_current_disc(self):
+        car = VirtualCar()
+        car.cdc.disc = 1
+        car.cdc.disc_tracks[1] = 8
+        car.cdc.disc_tracks[3] = 15
+        assert car.cdc.total_tracks == 8
+        car.cdc.disc = 3
+        assert car.cdc.total_tracks == 15
+
+    def test_cdc_total_tracks_setter_targets_current_disc(self):
+        car = VirtualCar()
+        car.cdc.disc = 2
+        car.cdc.total_tracks = 12
+        assert car.cdc.disc_tracks[2] == 12
+        # Other discs should be unaffected
+        assert car.cdc.disc_tracks[1] == 10
+        assert car.cdc.disc_tracks[3] == 10
+
+    def test_cdc_total_tracks_independent_per_disc(self):
+        car = VirtualCar()
+        for i in range(1, 7):
+            car.cdc.disc = i
+            car.cdc.total_tracks = i * 3
+        for i in range(1, 7):
+            car.cdc.disc = i
+            assert car.cdc.total_tracks == i * 3
+
 
 class TestMsg1A0Encode:
     def test_returns_none_when_cdc_inactive(self):
