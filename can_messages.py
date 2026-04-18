@@ -138,9 +138,13 @@ class Msg0B6(CanMessage):
             return
         raw_rpm = (data[0] << 8) | data[1]
         raw_speed = (data[2] << 8) | data[3]
-        car.bsi.rpm = int(raw_rpm / 10)
-        car.bsi.speed = int(raw_speed / 100)
-        car.bsi.engine_running = 1 if raw_rpm > 0 else 0
+
+        # Real bench idle / engine-off traces use 0xFFFF placeholders rather
+        # than literal sensor values. Treat those as invalid zeros so monitor
+        # mode does not show absurd RPM or speed readings.
+        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else int(raw_rpm / 10)
+        car.bsi.speed = 0 if raw_speed == 0xFFFF else int(raw_speed / 100)
+        car.bsi.engine_running = 1 if raw_rpm not in (0x0000, 0xFFFF) else 0
 
 
 # ---------------------------------------------------------------------------
@@ -639,6 +643,32 @@ class Msg1A8(CanMessage):
 
 
 # ---------------------------------------------------------------------------
+# Climate fan helper mapping
+# ---------------------------------------------------------------------------
+
+
+def _encode_clim_fan(fan_level: int) -> int:
+    """Encode UI fan level 0-8 to the bench raw nibble used on 0x1D0 / 0x1E3.
+
+    Real bench captures and PSA-RE show:
+    - raw 0x0F = fan off
+    - raw 0x00-0x07 = fan levels 1-8
+    """
+    level = max(0, min(8, int(fan_level)))
+    return 0x0F if level == 0 else level - 1
+
+
+def _decode_clim_fan(raw_value: int) -> int:
+    """Decode the bench raw nibble to a UI fan level 0-8."""
+    raw = int(raw_value) & 0x0F
+    if raw == 0x0F:
+        return 0
+    if 0 <= raw <= 7:
+        return raw + 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # 0x1D0 – Climate panel (BSI idle / full climate)
 # ---------------------------------------------------------------------------
 
@@ -664,17 +694,23 @@ class Msg1D0(CanMessage):
         dir_left = int(clim.dir_left) & 0x0F
         dir_byte = (dir_left << 4) | dir_left
         b4 = clim.recycle << 5 | clim.unfrost_front << 4
-        return [0x00, 0x00, clim.fan, dir_byte, b4,
+        fan_raw = _encode_clim_fan(clim.fan)
+        return [0x00, 0x00, fan_raw, dir_byte, b4,
                 clim.temp_left, clim.temp_right, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 7:
             return
-        car.clim.fan = data[2]
+        car.clim.fan = _decode_clim_fan(data[2])
         raw_dir = data[3]
-        decoded_left = (raw_dir >> 4) if raw_dir > 0x0F else (raw_dir & 0x0F)
-        if decoded_left:
-            car.clim.dir_left = decoded_left
+        high = (raw_dir >> 4) & 0x0F
+        low = raw_dir & 0x0F
+        # Real bench captures show 0x1D0 sometimes emits an ambiguous single-
+        # nibble direction value (for example 0x04 while left=auto and right=up).
+        # Only trust the classic mirrored-nibble format here, otherwise leave the
+        # per-side airflow state to 0x1E3 which carries both zones explicitly.
+        if high and high == low:
+            car.clim.dir_left = high
         car.clim.recycle = (data[4] >> 5) & 1
         car.clim.unfrost_front = (data[4] >> 4) & 1
         car.clim.temp_left = data[5]
@@ -707,13 +743,13 @@ class Msg1E3(CanMessage):
         b4 = clim.temp_right
         b5 = clim.dir_left << 4
         b6 = clim.dir_right << 4
-        b7 = clim.fan
+        b7 = _encode_clim_fan(clim.fan)
         return [b1, b2, b3, b4, b5, b6, b7, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 7:
             return
-        car.clim.fan = data[6]
+        car.clim.fan = _decode_clim_fan(data[6])
         car.clim.dir_left = data[4] >> 4
         car.clim.dir_right = data[5] >> 4
         car.clim.auto = (data[0] >> 3) & 1

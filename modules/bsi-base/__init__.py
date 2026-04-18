@@ -391,13 +391,12 @@ class BSI_base(TabbedPanelItem):
                 self.ids['slider_lum'].value = lum
             self.set_power_mode(power_mode)
         elif msg.arbitration_id == 0x0B6 and len(msg.data) >= 4:
-            rpm = (msg.data[0] << 8) | msg.data[1]
-            speed = (msg.data[2] << 8) | msg.data[3]
-            self.on_val('rpm', int(rpm / 10))
-            self.on_val('speed', int(speed / 100))
-            engine_running = 1 if rpm > 0 else 0
+            # Msg0B6.decode() has already normalized invalid placeholders such
+            # as 0xFFFF into sane shared state values; sync the UI from that.
+            self.on_val('rpm', self._bsi.rpm)
+            self.on_val('speed', self._bsi.speed)
             if 'engine' in self.ids:
-                self.ids['engine'].state = 'down' if engine_running else 'normal'
+                self.ids['engine'].state = 'down' if self._bsi.engine_running else 'normal'
         elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
             self.on_val('oil', int(msg.data[2]) - 40)
             self.on_val('fuel', int(msg.data[3]))
