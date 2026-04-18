@@ -48,15 +48,26 @@ These frames are the primary set for a car-parameter monitor.
 
 These frames are useful if the application also needs head-unit, display, or audio integration, but they should not be treated as part of the default vehicle-state core.
 
+For a detailed breakdown of the radio frames cross-referenced against the
+[alexandreblin/ios-car-dashboard](https://github.com/alexandreblin/ios-car-dashboard)
+project (Peugeot 207 RD4 head unit), see [CAN2004_radio.md](CAN2004_radio.md).
+
 | CAN ID | Purpose | Confidence | Notes |
 |--------|---------|------------|-------|
 | 0x131 | CD-changer command or mixed auxiliary traffic | Inferred/Observed | not a reliable universal door-state source |
 | 0x0A4 / 0x125 | radio text and track/list transport | Inferred | ISO-TP style display payloads |
-| 0x0DF / 0x167 / 0x3E5 / 0x3F6 | display/menu/button state | Inferred | UI-oriented, not vehicle-state core |
+| 0x0DF / 0x167 / 0x3F6 | display/menu/button state | Inferred | UI-oriented, not vehicle-state core |
 | 0x122 / 0x21F | multimedia and steering-wheel controls | Inferred | input/control frames |
-| 0x162 / 0x165 / 0x1A0 / 0x1A2 / 0x1A5 / 0x1E0 / 0x1E2 / 0x1E5 | radio or changer status | Inferred | audio-source integration only |
+| 0x165 | radio source / input select | Verified | byte 2 high nibble = source code; see [CAN2004_radio.md §2](CAN2004_radio.md) |
+| 0x1A5 | radio / buttons volume | Verified | bits 4:0 = volume (0–30); bit 7:5 = change-in-progress flag; see [CAN2004_radio.md §3](CAN2004_radio.md) |
+| 0x1E5 | radio audio settings (balance, bass, treble, loudness, ambiance) | Verified | 7-byte frame confirmed against ios-car-dashboard AudioSettings; see [CAN2004_radio.md §4](CAN2004_radio.md) |
+| 0x225 | FM tuner status (frequency, band, memory, scan, RDS) | Inferred | freq = `raw × 0.05 + 50` MHz; see [CAN2004_radio.md §5](CAN2004_radio.md) |
+| 0x265 | RDS / station info flags | Inferred | see [CAN2004_radio.md §6](CAN2004_radio.md) |
+| 0x2A5 | radio station name / RDS PS text | Inferred | raw ASCII bytes; see [CAN2004_radio.md §7](CAN2004_radio.md) |
+| 0x3E5 | steering wheel panel buttons | Verified | two layouts (radio-gen vs buttons module); see [CAN2004_radio.md §8](CAN2004_radio.md) |
+| 0x162 / 0x1A0 / 0x1A2 / 0x1E0 / 0x1E2 | radio changer / source status | Inferred | audio-source integration only |
 | 0x1A1 | BSI informational display message | Observed | useful for text warnings, not raw vehicle-state decoding |
-| 0x225 / 0x265 / 0x325 / 0x365 / 0x3A5 / 0x5E0 / 0x5E5 | tuner, disk, RDS, and device metadata | Inferred | infotainment-specific |
+| 0x325 / 0x365 / 0x3A5 / 0x5E0 / 0x5E5 | disk, RDS, and device metadata | Inferred | infotainment-specific |
 
 ## Important Workspace Finding
 

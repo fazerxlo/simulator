@@ -1704,3 +1704,254 @@ class TestMsg1D0AwpCompare:
         car.clim.dir_left = 3
         data = Msg1D0().encode(car)
         assert data[3] == 0x33
+
+
+# ---------------------------------------------------------------------------
+# Radio CAN frame tests
+# Cross-referenced against alexandreblin/ios-car-dashboard (Peugeot 207 RD4)
+# See doc/CAN2004_radio.md for full signal documentation.
+# ---------------------------------------------------------------------------
+
+from can_messages import Msg165, Msg1E5
+
+
+class TestMsg165RadioSource:
+    """0x165 — radio source / input select.
+
+    Byte 2 high nibble encodes the active input source.
+    Verified against ios-car-dashboard serial frame 0x03 mapping.
+    """
+
+    def test_default_input_is_tuner(self):
+        car = VirtualCar()
+        data = Msg165().encode(car)
+        # TUN code = 0x01, placed in high nibble → byte 2 = 0x10
+        assert data[2] == 0x10
+
+    def test_cdc_input_encodes_correctly(self):
+        car = VirtualCar()
+        car.radio.input = 'CDC'
+        data = Msg165().encode(car)
+        # CDC code = 0x03 → byte 2 high nibble = 3 → 0x30
+        assert data[2] == 0x30
+
+    def test_aux1_input_encodes_correctly(self):
+        car = VirtualCar()
+        car.radio.input = 'AUX1'
+        data = Msg165().encode(car)
+        # AUX1 code = 0x04 → byte 2 = 0x40
+        assert data[2] == 0x40
+
+    def test_aux2_input_matches_ios_car_dashboard_aux(self):
+        """ios-car-dashboard maps serial source 5 → .aux; AUX2 = 0x05."""
+        car = VirtualCar()
+        car.radio.input = 'AUX2'
+        data = Msg165().encode(car)
+        # AUX2 code = 0x05 → byte 2 high nibble = 5 → 0x50
+        assert data[2] == 0x50
+
+    def test_fixed_header_bytes(self):
+        """Bytes 0 and 1 are constant status bytes."""
+        car = VirtualCar()
+        data = Msg165().encode(car)
+        assert data[0] == 0xCC
+        assert data[1] == 0x54
+
+    def test_decode_tuner(self):
+        car = VirtualCar()
+        Msg165().decode(car, [0xCC, 0x54, 0x10, 0x02])
+        assert car.radio.input == 'TUN'
+
+    def test_decode_cdc(self):
+        car = VirtualCar()
+        Msg165().decode(car, [0xCC, 0x54, 0x30, 0x02])
+        assert car.radio.input == 'CDC'
+
+    def test_decode_aux2(self):
+        car = VirtualCar()
+        Msg165().decode(car, [0xCC, 0x54, 0x50, 0x02])
+        assert car.radio.input == 'AUX2'
+
+    def test_decode_unknown_code_does_not_crash(self):
+        """An unrecognised nibble should leave car.radio.input unchanged."""
+        car = VirtualCar()
+        original = car.radio.input
+        Msg165().decode(car, [0xCC, 0x54, 0xF0, 0x02])
+        assert car.radio.input == original
+
+    def test_encode_decode_roundtrip_all_sources(self):
+        """Every named source survives an encode/decode roundtrip."""
+        for name in Radio.INPUT_CODES:
+            car_a = VirtualCar()
+            car_a.radio.input = name
+            payload = Msg165().encode(car_a)
+            car_b = VirtualCar()
+            Msg165().decode(car_b, payload)
+            assert car_b.radio.input == name, f'roundtrip failed for {name}'
+
+
+class TestMsg1E5AudioSettings:
+    """0x165 — radio audio settings: balance, bass, treble, loudness, ambiance.
+
+    Byte layout confirmed against ios-car-dashboard AudioSettings.swift and
+    the CarInfo+SerialParserDelegate.swift frame-0x10 parser.
+    """
+
+    def test_default_encode_all_flat(self):
+        """With default car state all values should be at 0x3F (centre)."""
+        car = VirtualCar()
+        data = Msg1E5().encode(car)
+        assert data[0] & 0x7F == 0x3F  # lr-bal at centre
+        assert data[1] & 0x7F == 0x3F  # rf-bal at centre
+        assert data[2] & 0x7F == 0x3F  # bass at flat
+        assert data[4] & 0x7F == 0x3F  # treble at flat
+
+    def test_default_no_menu_active(self):
+        """No menu-active flag (bit 7) should be set in idle state."""
+        car = VirtualCar()
+        data = Msg1E5().encode(car)
+        assert not (data[0] & 0x80)
+        assert not (data[1] & 0x80)
+        assert not (data[2] & 0x80)
+        assert not (data[4] & 0x80)
+
+    def test_lr_balance_menu_active_flag(self):
+        """Opening lr-bal menu sets bit 7 of byte 0."""
+        car = VirtualCar()
+        car.radio.audio['menu'] = 'lr-bal'
+        data = Msg1E5().encode(car)
+        assert data[0] & 0x80
+
+    def test_bass_menu_active_flag(self):
+        """Opening bass menu sets bit 7 of byte 2."""
+        car = VirtualCar()
+        car.radio.audio['menu'] = 'bass'
+        data = Msg1E5().encode(car)
+        assert data[2] & 0x80
+
+    def test_treble_menu_active_flag(self):
+        """Opening treble menu sets bit 7 of byte 4."""
+        car = VirtualCar()
+        car.radio.audio['menu'] = 'treble'
+        data = Msg1E5().encode(car)
+        assert data[4] & 0x80
+
+    def test_loudness_enabled_encodes_bit6_byte5(self):
+        """ios-car-dashboard: loudness = (data[5] & 0x40) == 0x40."""
+        car = VirtualCar()
+        car.radio.audio['loudness'] = 1
+        data = Msg1E5().encode(car)
+        assert data[5] & 0x40
+
+    def test_loudness_disabled_clears_bit6_byte5(self):
+        car = VirtualCar()
+        car.radio.audio['loudness'] = 0
+        data = Msg1E5().encode(car)
+        assert not (data[5] & 0x40)
+
+    def test_ambiance_none_encodes_code_0x03(self):
+        """ios-car-dashboard EqualizerSetting.none → byte 6 bits 5:0 = 0x03."""
+        car = VirtualCar()
+        car.radio.audio['ambiance'] = 'none'
+        data = Msg1E5().encode(car)
+        assert (data[6] & 0x3F) == 0x03
+
+    def test_ambiance_classical_encodes_code_0x07(self):
+        """ios-car-dashboard EqualizerSetting.classical → 0x07."""
+        car = VirtualCar()
+        car.radio.audio['ambiance'] = 'classical'
+        data = Msg1E5().encode(car)
+        assert (data[6] & 0x3F) == 0x07
+
+    def test_ambiance_pop_rock_encodes_code_0x0f(self):
+        """ios-car-dashboard EqualizerSetting.popRock → 0x0F."""
+        car = VirtualCar()
+        car.radio.audio['ambiance'] = 'pop-rock'
+        data = Msg1E5().encode(car)
+        assert (data[6] & 0x3F) == 0x0F
+
+    def test_ambiance_vocal_encodes_code_0x13(self):
+        """ios-car-dashboard EqualizerSetting.vocals → 0x13."""
+        car = VirtualCar()
+        car.radio.audio['ambiance'] = 'vocal'
+        data = Msg1E5().encode(car)
+        assert (data[6] & 0x3F) == 0x13
+
+    def test_ambiance_techno_encodes_code_0x17(self):
+        """ios-car-dashboard EqualizerSetting.techno → 0x17."""
+        car = VirtualCar()
+        car.radio.audio['ambiance'] = 'techno'
+        data = Msg1E5().encode(car)
+        assert (data[6] & 0x3F) == 0x17
+
+    def test_decode_lr_bal_menu_active(self):
+        """bit 7 of byte 0 = lr-bal menu active."""
+        car = VirtualCar()
+        Msg1E5().decode(car, [0xFF, 0x3F, 0x3F, 0x00, 0x3F, 0x00, 0x03])
+        assert car.radio.audio['menu'] == 'lr-bal'
+
+    def test_decode_bass_value(self):
+        """bits 6:0 of byte 2 = bass value when bass menu is active (bit 7 = 1).
+
+        ios-car-dashboard: bass = Int(data[2] & 0x7F) - 63 when activeMode == .bass.
+        """
+        car = VirtualCar()
+        # byte 2 = 0xC2: bit 7 = bass menu active, bits 6:0 = 0x42 (3 steps up from flat)
+        Msg1E5().decode(car, [0x3F, 0x3F, 0xC2, 0x00, 0x3F, 0x00, 0x03])
+        assert car.radio.audio['menu'] == 'bass'
+        assert car.radio.audio['bass'] == 0x42
+
+    def test_decode_loudness_enabled(self):
+        """bit 6 of byte 5 = loudness on."""
+        car = VirtualCar()
+        Msg1E5().decode(car, [0x3F, 0x3F, 0x3F, 0x00, 0x3F, 0x40, 0x03])
+        assert car.radio.audio['loudness'] == 1
+
+    def test_decode_ambiance_classical(self):
+        """byte 6 bit 6 = ambiance menu active; bits 5:0 = 0x07 → classical.
+
+        ios-car-dashboard: EqualizerSetting.classical when data[6] & 0xBF == 0x07.
+        """
+        car = VirtualCar()
+        # byte 6 = 0x47: bit 6 = ambiance menu active, bits 5:0 = 0x07 (classical)
+        Msg1E5().decode(car, [0x3F, 0x3F, 0x3F, 0x00, 0x3F, 0x00, 0x47])
+        assert car.radio.audio['menu'] == 'ambiance'
+        assert car.radio.audio['ambiance'] == 'classical'
+
+    def test_decode_ambiance_menu_active(self):
+        """bit 6 of byte 6 = ambiance menu active."""
+        car = VirtualCar()
+        Msg1E5().decode(car, [0x3F, 0x3F, 0x3F, 0x00, 0x3F, 0x00, 0x4F])
+        assert car.radio.audio['menu'] == 'ambiance'
+
+    def test_encode_decode_roundtrip(self):
+        """Encode then decode preserves the active-menu field and its value.
+
+        The decoder only updates the field for the currently active menu, so
+        we test one menu at a time.  Here bass is the active menu.
+        """
+        car_a = VirtualCar()
+        car_a.radio.audio['menu'] = 'bass'
+        car_a.radio.audio['bass'] = 0x45  # +6 from flat
+        payload = Msg1E5().encode(car_a)
+        car_b = VirtualCar()
+        Msg1E5().decode(car_b, payload)
+        assert car_b.radio.audio['menu'] == 'bass'
+        assert car_b.radio.audio['bass'] == 0x45
+
+    def test_encode_decode_roundtrip_ambiance(self):
+        """Ambiance roundtrip: ambiance menu active → correct preset decoded."""
+        car_a = VirtualCar()
+        car_a.radio.audio['menu'] = 'ambiance'
+        car_a.radio.audio['ambiance'] = 'jazz-blues'
+        payload = Msg1E5().encode(car_a)
+        car_b = VirtualCar()
+        Msg1E5().decode(car_b, payload)
+        assert car_b.radio.audio['menu'] == 'ambiance'
+        assert car_b.radio.audio['ambiance'] == 'jazz-blues'
+
+    def test_byte3_always_zero(self):
+        """Byte 3 is unused and must be 0x00."""
+        car = VirtualCar()
+        data = Msg1E5().encode(car)
+        assert data[3] == 0x00
