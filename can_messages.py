@@ -272,7 +272,7 @@ class Msg12D(CanMessage):
     def encode(self, car) -> list | None:
         if not car.bsi.ignition_on:
             return None
-        return [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        return [0x00, 0x32, 0x32, 0x00, 0x00, 0x00, 0x98, 0x80]
 
 
 # ---------------------------------------------------------------------------
@@ -724,10 +724,12 @@ class Msg1D0(CanMessage):
             return [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
         clim = car.clim
         dir_left = int(clim.dir_left) & 0x0F
-        dir_byte = (dir_left << 4) | dir_left
+        dir_right = int(clim.dir_right) & 0x0F
+        dir_byte = (dir_left << 4) | dir_right
+        b0 = 0x08 | (0x11 if clim.unfrost_front else 0x00)
         b4 = clim.recycle << 5 | clim.unfrost_front << 4
         fan_raw = _encode_clim_fan(clim.fan)
-        return [0x00, 0x00, fan_raw, dir_byte, b4,
+        return [b0, 0x00, fan_raw, dir_byte, b4,
                 clim.temp_left, clim.temp_right, 0x00]
 
     def decode(self, car, data: bytes) -> None:
@@ -769,8 +771,8 @@ class Msg1E3(CanMessage):
             d2 = 0x30 if car.bsi.ignition_on else 0x40
             return [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
         clim = car.clim
-        b1 = clim.auto << 3 | clim.dual
-        b2 = clim.unfrost_front << 7
+        b1 = 0x14 | (clim.auto << 3) | clim.dual
+        b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right
         b5 = clim.dir_left << 4

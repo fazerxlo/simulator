@@ -771,7 +771,88 @@ class TestMsg1E3DecodeBenchAlignment:
         assert car.clim.dir_right == 0x04
 
 
-class TestMsg1A1Encode:
+class TestMsg1E3EncodeBenchAlignment:
+    """Verify 0x1E3 active-climate encoding matches workbench captures."""
+
+    def test_byte0_has_constant_0x14_bits_when_auto_and_no_dual(self):
+        """Workbench initial state: 1C 30 0B 0B 00 00 02 00 → byte0=0x1C=0x14|0x08."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 1
+        car.clim.dual = 0
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x1C  # 0x14 | (1<<3) | 0
+
+    def test_byte0_dual_bit_set_with_constant_and_auto(self):
+        """Workbench dual+auto state: byte0=0x1D=0x14|0x08|0x01."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 1
+        car.clim.dual = 1
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x1D  # 0x14 | (1<<3) | 1
+
+    def test_byte0_constant_bits_present_when_no_auto_no_dual(self):
+        """Workbench manual state: byte0=0x14."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        car.clim.dual = 0
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x14  # 0x14 | 0 | 0
+
+    def test_byte1_has_constant_0x30_bits_when_unfrost_off(self):
+        """Workbench: byte1=0x30 when front unfrost is off."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.unfrost_front = 0
+        data = Msg1E3().encode(car)
+        assert data[1] == 0x30
+
+    def test_byte1_is_0xb0_when_unfrost_active(self):
+        """Workbench: byte1=0xB0=0x30|0x80 when front unfrost is on."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.unfrost_front = 1
+        data = Msg1E3().encode(car)
+        assert data[1] == 0xB0  # 0x30 | (1<<7)
+
+    def test_full_initial_state_matches_workbench(self):
+        """Workbench initial state: left=21°C, right=21°C, auto, fan=3."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 1
+        car.clim.dual = 0
+        car.clim.temp_left = 11   # index 11 = 21°C
+        car.clim.temp_right = 11
+        car.clim.fan = 3
+        data = Msg1E3().encode(car)
+        assert data == [0x1C, 0x30, 0x0B, 0x0B, 0x00, 0x00, 0x02, 0x00]
+
+
+class TestMsg12DEncode:
+    """Verify 0x12D matches workbench captures."""
+
+    def test_suppressed_when_ignition_off(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = False
+        assert Msg12D().encode(car) is None
+
+    def test_workbench_fixed_payload_when_ignition_on(self):
+        """Workbench always sends 00 32 32 00 00 00 98 80 when ignition on."""
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        data = Msg12D().encode(car)
+        assert data == [0x00, 0x32, 0x32, 0x00, 0x00, 0x00, 0x98, 0x80]
+
+
+
     def test_suppressed_when_tyre_display_active(self):
         car = VirtualCar()
         car.tyres.display_active = True
@@ -821,15 +902,40 @@ class TestMsg1D0Encode:
         data = Msg1D0().encode(car)
         assert data == [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
 
-    def test_airflow_direction_uses_repeated_nibble_format(self):
+    def test_airflow_direction_encodes_both_zones_independently(self):
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.dir_left = 0x04
+        car.clim.dir_right = 0x00
         data = Msg1D0().encode(car)
-        assert data[3] == 0x44
+        assert data[3] == 0x40  # (4 << 4) | 0
 
-    def test_decode_normalizes_repeated_nibble_airflow_value(self):
+    def test_airflow_direction_both_zones_independent(self):
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.dir_left = 0x04   # up
+        car.clim.dir_right = 0x02  # down
+        data = Msg1D0().encode(car)
+        assert data[3] == 0x42  # workbench: left=4 up, right=2 bottom
+
+    def test_byte0_base_constant_in_active_mode(self):
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x08  # workbench constant base when unfrost off
+
+    def test_byte0_includes_unfrost_flags_when_active(self):
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.unfrost_front = 1
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x19  # workbench: 0x08 | 0x11 when unfrost active
+
+    def test_decode_extracts_left_zone_from_high_nibble_when_mirrored(self):
         car = VirtualCar()
         Msg1D0().decode(car, [0x08, 0x00, 0x07, 0x88, 0x00, 0x10, 0x10, 0x00])
         assert car.clim.dir_left == 0x08
@@ -1974,11 +2080,12 @@ class TestMsg128AwpCompare:
 
 
 class TestMsg1D0AwpCompare:
-    """0x1D0 — autowp cross-reference for climate panel encoding.
+    """0x1D0 — bench-aligned climate panel encoding.
 
-    autowp documents specific air direction codes (3-bit field DDD) that differ
-    from the simulator's repeated-nibble format.  These tests verify the
-    simulator's current encoding and document the discrepancy.
+    Bench captures show byte 3 carries independent left and right zone
+    directions as (dir_left << 4) | dir_right, matching the 0x1E3 per-zone
+    layout.  The earlier repeated-nibble format (dir_left mirrored) has been
+    corrected.
     """
 
     def test_fan_speed_encoded_as_bench_aligned_nibble_value(self):
@@ -2010,23 +2117,20 @@ class TestMsg1D0AwpCompare:
         data = Msg1D0().encode(car)
         assert (data[4] >> 4) & 1 == 1
 
-    def test_direction_up_encodes_as_repeated_nibble(self):
-        """Simulator uses repeated-nibble format for air direction.
-        For dir_left=4 ('Up'), byte 3 = (4 << 4) | 4 = 0x44.
-        This is the simulator's observed encoding, not autowp's 3-bit DDD.
-        """
+    def test_direction_up_left_encodes_in_high_nibble(self):
+        """For dir_left=4 ('Up'), byte 3 high nibble = 4; low nibble = dir_right."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.dir_left = 4
         data = Msg1D0().encode(car)
-        assert data[3] == 0x44
+        assert data[3] == 0x40  # (4 << 4) | dir_right=0
 
-    def test_direction_front_encodes_as_repeated_nibble(self):
-        """autowp 'Front' corresponds to DDD=011=3; simulator uses dir_left=3 → 0x33."""
+    def test_direction_front_left_encodes_in_high_nibble(self):
+        """For dir_left=3 ('Front'), byte 3 high nibble = 3; low nibble = dir_right."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.dir_left = 3
         data = Msg1D0().encode(car)
-        assert data[3] == 0x33
+        assert data[3] == 0x30  # (3 << 4) | dir_right=0
