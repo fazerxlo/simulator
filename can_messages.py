@@ -205,7 +205,7 @@ class Msg0F6(CanMessage):
     """
 
     can_id = 0x0F6
-    period_ms = 100
+    period_ms = 500
 
     def encode(self, car) -> list:
         bsi = car.bsi
@@ -266,7 +266,7 @@ class Msg12D(CanMessage):
     """Climate controller command (suppressed when ignition is off)."""
 
     can_id = 0x12D
-    period_ms = 100
+    period_ms = 500
     required_modules = frozenset({'clim'})
 
     def encode(self, car) -> list | None:
@@ -288,7 +288,7 @@ class Msg128(CanMessage):
     """
 
     can_id = 0x128
-    period_ms = 100
+    period_ms = 200
 
     _LIGHTS_TO_BYTE = {0: 0x00, 1: 0x80, 2: 0xC0, 3: 0xE0}
 
@@ -368,7 +368,7 @@ class Msg161(CanMessage):
     """
 
     can_id = 0x161
-    period_ms = 100
+    period_ms = 500
 
     def encode(self, car) -> list:
         oil_temp = int(car.bsi.oil + 40)
@@ -421,7 +421,7 @@ class Msg168(CanMessage):
     """
 
     can_id = 0x168
-    period_ms = 100
+    period_ms = 200
 
     def encode(self, car) -> list | None:
         if car.dashboard.active:
@@ -504,7 +504,7 @@ class Msg1A1(CanMessage):
     """
 
     can_id = 0x1A1
-    period_ms = 100
+    period_ms = 200
     IDLE_MESSAGE_ID = 0x8B
     DISPLAY_FLAGS = 0xC6
     DOOR_DISPLAY_FLAGS = 0xC7
@@ -907,7 +907,7 @@ class Msg221(CanMessage):
     """Trip computer: instantaneous fuel consumption, autonomy, distance."""
 
     can_id = 0x221
-    period_ms = 100
+    period_ms = 1000
     required_modules = frozenset({'bsi-trip'})
 
     def encode(self, car) -> list:
@@ -960,7 +960,7 @@ class Msg2A1(CanMessage):
     """Trip computer historical record 1."""
 
     can_id = 0x2A1
-    period_ms = 100
+    period_ms = 1000
     required_modules = frozenset({'bsi-trip'})
 
     def encode(self, car) -> list:
@@ -986,7 +986,7 @@ class Msg261(CanMessage):
     """Trip computer historical record 2."""
 
     can_id = 0x261
-    period_ms = 100
+    period_ms = 1000
     required_modules = frozenset({'bsi-trip'})
 
     def encode(self, car) -> list:

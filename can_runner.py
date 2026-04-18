@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 
 class CanRunner():
     PRE_IGNITION_ALLOWED_IDS = {0x036, 0x110, 0x190, 0x1D0, 0x1E3, 0x217, 0x52D}
+    # Small timing lead so periodic frames can land up to ~5% earlier than the
+    # measured workbench cadence, compensating for thread jitter without making
+    # the simulator visibly faster than the bench.
+    SCHEDULE_ADVANCE_FACTOR = 0.95
+    SENDER_SLEEP_S = 0.005
 
     def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
@@ -275,6 +280,10 @@ class CanRunner():
             except Exception as exc:
                 logger.error('CanRunner callback error: %s', exc)
 
+    def _period_due(self, elapsed_s, period_ms):
+        target_s = max(0.001, (max(1, int(period_ms)) / 1000.0) * self.SCHEDULE_ADVANCE_FACTOR)
+        return elapsed_s >= target_s
+
     def sender(self):
         while True:
             # If we need to exit
@@ -283,7 +292,7 @@ class CanRunner():
 
             for message in self.mess:
                 now = datetime.datetime.now()
-                if (now - message['timer']).total_seconds() >= message['schedule']:
+                if self._period_due((now - message['timer']).total_seconds(), int(message['schedule'] * 1000)):
                     data = message['call']()
                     send_result = self._safe_send(message['id'], data)
                     if send_result is not False:
@@ -291,7 +300,7 @@ class CanRunner():
 
             for message in self.messages:
                 now = datetime.datetime.now()
-                if (now - message['timer']).total_seconds() >= message['schedule']:
+                if self._period_due((now - message['timer']).total_seconds(), int(message['schedule'] * 1000)):
                     id, data = message['call']()
                     send_result = self._safe_send(id, data)
                     if send_result is not False:
@@ -308,7 +317,7 @@ class CanRunner():
                 except Exception as exc:
                     logger.error('CanRunner period error for 0x%03X: %s', can_id, exc)
                     active_period_ms = max(1, int(getattr(msg_obj, 'period_ms', 100)))
-                if (now - timer).total_seconds() >= active_period_ms / 1000:
+                if self._period_due((now - timer).total_seconds(), active_period_ms):
                     try:
                         data = msg_obj.encode(self.car)
                     except Exception as exc:
@@ -319,7 +328,7 @@ class CanRunner():
                         self._message_object_timers[can_id] = now
 
             # Wait until next round
-            time.sleep(0.02)
+            time.sleep(self.SENDER_SLEEP_S)
 
     def listen(self, can_id, callback):
         self.listeners.append({'id': can_id, 'callback': callback})

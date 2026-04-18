@@ -617,6 +617,23 @@ class TestMsg036Encode:
             assert Msg036().encode(car) == payload
 
 
+class TestWorkbenchAlignedMessagePeriods:
+    def test_slow_bsi_frames_match_workbench_periods(self):
+        assert Msg0F6().period_ms == 500
+        assert Msg161().period_ms == 500
+        assert Msg12D().period_ms == 500
+
+    def test_cluster_and_status_frames_match_workbench_periods(self):
+        assert Msg128().period_ms == 200
+        assert Msg168().period_ms == 200
+        assert Msg1A1().period_ms == 200
+
+    def test_trip_frames_match_workbench_periods(self):
+        assert Msg221().period_ms == 1000
+        assert Msg2A1().period_ms == 1000
+        assert Msg261().period_ms == 1000
+
+
 class TestMsg0B6Encode:
     def test_matches_workbench_idle_placeholders_when_power_off(self):
         car = VirtualCar()
@@ -1211,6 +1228,25 @@ class TestCanRunnerTransmitRobustness:
         out = capsys.readouterr().out
         assert 'TX warning' in out
         assert 0x110 in sent_ids
+
+
+class TestCanRunnerSchedulerTuning:
+    @pytest.fixture(autouse=True)
+    def patch_can(self):
+        sys.modules['can'] = make_can_mock()
+        yield
+        sys.modules.pop('can', None)
+
+    def test_scheduler_uses_small_early_send_margin(self):
+        import importlib
+        import can_runner as cr
+        importlib.reload(cr)
+        runner = cr.CanRunner(monitor=True)
+
+        assert runner.SCHEDULE_ADVANCE_FACTOR == pytest.approx(0.95)
+        assert runner.SENDER_SLEEP_S <= 0.005
+        assert runner._period_due(0.095, 100) is True
+        assert runner._period_due(0.090, 100) is False
 
 
 class TestCanRunnerDuplicateDetection:
