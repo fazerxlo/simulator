@@ -138,9 +138,13 @@ class Msg0B6(CanMessage):
             return
         raw_rpm = (data[0] << 8) | data[1]
         raw_speed = (data[2] << 8) | data[3]
-        car.bsi.rpm = int(raw_rpm / 10)
-        car.bsi.speed = int(raw_speed / 100)
-        car.bsi.engine_running = 1 if raw_rpm > 0 else 0
+
+        # Real bench idle / engine-off traces use 0xFFFF placeholders rather
+        # than literal sensor values. Treat those as invalid zeros so monitor
+        # mode does not show absurd RPM or speed readings.
+        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else int(raw_rpm / 10)
+        car.bsi.speed = 0 if raw_speed == 0xFFFF else int(raw_speed / 100)
+        car.bsi.engine_running = 1 if raw_rpm not in (0x0000, 0xFFFF) else 0
 
 
 # ---------------------------------------------------------------------------
@@ -299,8 +303,13 @@ class Msg128(CanMessage):
             b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
                   dash.fog_front << 4 | dash.fog_rear << 3 |
                   dash.clig_r << 2 | dash.clig_l << 1)
-            b5 = dash.on << 7
-            return [b0, b1, b2, b3, b4, b5, 0x00, 0x00]
+            cluster_on = 1 if (dash.on or car.bsi.ignition_on or int(car.bsi.power_mode) == 0x01) else 0
+            # Keep the workbench cluster in the default manual-gearbox view
+            # unless explicit gear-simulation fields are added later.
+            gear_display = int(getattr(dash, 'gear_display', 0x00)) & 0xFF
+            gearbox_mode = int(getattr(dash, 'gearbox_mode', 0x01)) & 0xFF
+            b5 = cluster_on << 7
+            return [b0, b1, b2, b3, b4, b5, gear_display, gearbox_mode]
         d5 = self._LIGHTS_TO_BYTE.get(car.bsi.light_mode, 0x00)
         return [0x91, 0xE0, 0x00, 0x00, d5, 0x80, 0xB0, 0x01]
 
@@ -498,6 +507,30 @@ class Msg1A1(CanMessage):
     period_ms = 100
     IDLE_MESSAGE_ID = 0x8B
     DISPLAY_FLAGS = 0xC6
+    DOOR_DISPLAY_FLAGS = 0xC7
+    DOOR_ANNOUNCE_FLAGS = 0x47
+
+    @staticmethod
+    def _door_status_bytes(doors) -> tuple[int, int]:
+        d3 = 0x00
+        d4 = 0x00
+        if doors.front_right:
+            d3 |= 1 << 7
+        if doors.front_left:
+            d3 |= 1 << 6
+        if doors.rear_right:
+            d3 |= 1 << 5
+        if doors.rear_left:
+            d3 |= 1 << 4
+        if doors.boot:
+            d3 |= 1 << 3
+        if doors.bonnet:
+            d3 |= 1 << 2
+        if doors.rear_window:
+            d4 |= 1 << 7
+        if doors.fuel_flap:
+            d4 |= 1 << 6
+        return d3, d4
 
     def encode(self, car) -> list | None:
         # Tyre warnings still own the bus with their dedicated event-driven payloads.
@@ -510,7 +543,7 @@ class Msg1A1(CanMessage):
                 d.front_left, d.front_right, d.rear_left, d.rear_right,
                 d.boot, d.bonnet, d.rear_window, d.fuel_flap,
             ))
-            flag = 0x80 if any_open else 0x00
+            flag = 0x80 if any_open else 0xFF
             if d.front_left and not any((
                 d.front_right, d.rear_left, d.rear_right,
                 d.boot, d.bonnet, d.rear_window, d.fuel_flap,
@@ -518,7 +551,10 @@ class Msg1A1(CanMessage):
                 msg_id = 0xDE
             else:
                 msg_id = d.popup_msg_id if d.popup_msg_id else 0x0B
-            return [flag, msg_id, self.DISPLAY_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+            if any_open:
+                d3, d4 = self._door_status_bytes(d)
+                return [flag, msg_id, self.DOOR_DISPLAY_FLAGS, d3, d4, 0x00, 0x00, 0x00]
+            return [0xFF, 0x00, self.DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
 
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00
@@ -639,6 +675,32 @@ class Msg1A8(CanMessage):
 
 
 # ---------------------------------------------------------------------------
+# Climate fan helper mapping
+# ---------------------------------------------------------------------------
+
+
+def _encode_clim_fan(fan_level: int) -> int:
+    """Encode UI fan level 0-8 to the bench raw nibble used on 0x1D0 / 0x1E3.
+
+    Real bench captures and PSA-RE show:
+    - raw 0x0F = fan off
+    - raw 0x00-0x07 = fan levels 1-8
+    """
+    level = max(0, min(8, int(fan_level)))
+    return 0x0F if level == 0 else level - 1
+
+
+def _decode_clim_fan(raw_value: int) -> int:
+    """Decode the bench raw nibble to a UI fan level 0-8."""
+    raw = int(raw_value) & 0x0F
+    if raw == 0x0F:
+        return 0
+    if 0 <= raw <= 7:
+        return raw + 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # 0x1D0 – Climate panel (BSI idle / full climate)
 # ---------------------------------------------------------------------------
 
@@ -664,17 +726,23 @@ class Msg1D0(CanMessage):
         dir_left = int(clim.dir_left) & 0x0F
         dir_byte = (dir_left << 4) | dir_left
         b4 = clim.recycle << 5 | clim.unfrost_front << 4
-        return [0x00, 0x00, clim.fan, dir_byte, b4,
+        fan_raw = _encode_clim_fan(clim.fan)
+        return [0x00, 0x00, fan_raw, dir_byte, b4,
                 clim.temp_left, clim.temp_right, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 7:
             return
-        car.clim.fan = data[2]
+        car.clim.fan = _decode_clim_fan(data[2])
         raw_dir = data[3]
-        decoded_left = (raw_dir >> 4) if raw_dir > 0x0F else (raw_dir & 0x0F)
-        if decoded_left:
-            car.clim.dir_left = decoded_left
+        high = (raw_dir >> 4) & 0x0F
+        low = raw_dir & 0x0F
+        # Real bench captures show 0x1D0 sometimes emits an ambiguous single-
+        # nibble direction value (for example 0x04 while left=auto and right=up).
+        # Only trust the classic mirrored-nibble format here, otherwise leave the
+        # per-side airflow state to 0x1E3 which carries both zones explicitly.
+        if high and high == low:
+            car.clim.dir_left = high
         car.clim.recycle = (data[4] >> 5) & 1
         car.clim.unfrost_front = (data[4] >> 4) & 1
         car.clim.temp_left = data[5]
@@ -707,13 +775,13 @@ class Msg1E3(CanMessage):
         b4 = clim.temp_right
         b5 = clim.dir_left << 4
         b6 = clim.dir_right << 4
-        b7 = clim.fan
+        b7 = _encode_clim_fan(clim.fan)
         return [b1, b2, b3, b4, b5, b6, b7, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 7:
             return
-        car.clim.fan = data[6]
+        car.clim.fan = _decode_clim_fan(data[6])
         car.clim.dir_left = data[4] >> 4
         car.clim.dir_right = data[5] >> 4
         car.clim.auto = (data[0] >> 3) & 1

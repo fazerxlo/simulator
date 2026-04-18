@@ -1,6 +1,8 @@
 """
 Tests for car_state.VirtualCar, can_messages, and the CanRunner integration.
 """
+import datetime
+import importlib
 import os
 import sys
 import types
@@ -43,6 +45,9 @@ from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
                        Parktronic, Tyres, VirtualCar, Radio, Trip,
                        KMLState, BTEState, SpeedControl)
 from modules.clim import Clim as ClimModule
+from modules.combine import Combine as CombineModule
+DoorsModule = importlib.import_module('modules.doors').Doors
+BSIBaseModule = importlib.import_module('modules.bsi-base').BSI_base
 
 
 class TestVirtualCarDefaults:
@@ -266,8 +271,8 @@ class TestClimUiHelpers:
         widget.runner = types.SimpleNamespace(car=VirtualCar())
         widget.runner.car.bsi.ignition_on = ignition_on
         widget.temp_disp = [
-            'LO', '15', '16', '17', '18', '18.5', '19', '19.5', '20', '20.5',
-            '21', '21.5', '22', '22.5', '23', '23.5', '24', '25', '26', '27', 'HI'
+            'MIN', '14', '15', '16', '17', '18', '18.5', '19', '19.5', '20', '20.5',
+            '21', '21.5', '22', '22.5', '23', '23.5', '24', '25', '26', '27', '28', 'HI'
         ]
         widget.ids = {
             'slider_fan': DummyWidget(value=0),
@@ -333,6 +338,137 @@ class TestClimUiHelpers:
         widget.on_can_message(msg)
         assert widget.runner.car.clim.dir_left == 0x04
         assert widget.ids['left_up'].state == 'down'
+
+    def test_monitor_temp_code_01_starts_at_14c(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'cur_temp0': DummyWidget(text=''),
+            'cur_temp1': DummyWidget(text=''),
+        })
+        msg = types.SimpleNamespace(arbitration_id=0x1D0, data=[0x08, 0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00])
+        widget.on_can_message(msg)
+        assert widget.ids['cur_temp0'].text == '14c'
+        assert widget.ids['cur_temp1'].text == '14c'
+
+    def test_monitor_temp_code_0b_matches_real_bench_display(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'cur_temp0': DummyWidget(text=''),
+            'cur_temp1': DummyWidget(text=''),
+        })
+        msg = types.SimpleNamespace(arbitration_id=0x1D0, data=[0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00])
+        widget.on_can_message(msg)
+        assert widget.ids['cur_temp0'].text == '21c'
+        assert widget.ids['cur_temp1'].text == '21c'
+
+    def test_1e3_left_auto_frame_keeps_left_auto_and_sets_right_up(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text=''),
+        })
+        msg = types.SimpleNamespace(arbitration_id=0x1E3, data=[0x11, 0x30, 0x0E, 0x0A, 0x00, 0x40, 0x02, 0x00])
+        widget.on_can_message(msg)
+        assert widget.runner.car.clim.dir_left == 0x00
+        assert widget.runner.car.clim.dir_right == 0x04
+        assert widget.ids['left_up'].state == 'normal'
+        assert widget.ids['right_up'].state == 'down'
+
+    def test_1d0_single_nibble_direction_does_not_force_left_up(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text=''),
+        })
+        msg = types.SimpleNamespace(arbitration_id=0x1D0, data=[0x28, 0x00, 0x02, 0x04, 0x00, 0x0E, 0x0A, 0x00])
+        widget.on_can_message(msg)
+        assert widget.runner.car.clim.dir_left == 0x00
+        assert widget.ids['left_up'].state == 'normal'
+
+
+class TestDoorsUiHelpers:
+    def _make_doors_widget(self):
+        sent = []
+
+        def send_message(arbitration_id, data):
+            sent.append((arbitration_id, list(data)))
+
+        runner = types.SimpleNamespace(car=VirtualCar(), send_message=send_message)
+        widget = DoorsModule(runner)
+        return widget, sent
+
+    def test_send_0x1a1_popup_announces_before_show(self):
+        widget, sent = self._make_doors_widget()
+        widget._doors.front_left = 1
+
+        widget._send_0x1A1_popup()
+
+        assert sent[-1] == (0x1A1, [0x7F, 0xDE, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+    def test_send_popup_show_contains_door_bitmap(self):
+        widget, sent = self._make_doors_widget()
+        widget._doors.front_left = 1
+        widget._doors.boot = 1
+
+        widget._send_popup_show(0)
+
+        assert sent[-1] == (0x1A1, [0x80, 0x0B, 0xC7, 0x48, 0x00, 0x00, 0x00, 0x00])
+
+    def test_send_popup_clear_uses_explicit_clear_frame(self):
+        widget, sent = self._make_doors_widget()
+        widget._doors.display_active = True
+        widget._doors.popup_msg_id = 0xDE
+
+        widget._send_popup_clear(0)
+
+        assert sent[-1] == (0x1A1, [0xFF, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert widget._doors.display_active is False
+
+
+class TestCombineUiHelpers:
+    def _make_combine_widget(self):
+        return CombineModule(types.SimpleNamespace(car=VirtualCar()))
+
+    def test_combine_exposes_options_proxy_for_kv_bindings(self):
+        widget = self._make_combine_widget()
+        assert hasattr(widget, 'options')
+        widget.options['low_beam'] = 1
+        assert widget.runner.car.dashboard.low_beam == 1
+
+    def test_combine_maps_legacy_coolant_and_oil_keys(self):
+        widget = self._make_combine_widget()
+        widget.on_option('coolant', 'down')
+        widget.on_option('oil', 'down')
+        assert widget.runner.car.dashboard.coolant_warn == 1
+        assert widget.runner.car.dashboard.oil_warn == 1
+
+    def test_sync_ui_updates_legacy_warning_toggle_ids(self):
+        widget = self._make_combine_widget()
+        widget.ids = {
+            'coolant': DummyWidget(state='normal'),
+            'oil': DummyWidget(state='normal'),
+            'low_beam': DummyWidget(state='normal'),
+        }
+        widget.runner.car.dashboard.coolant_warn = 1
+        widget.runner.car.dashboard.oil_warn = 1
+        widget.runner.car.dashboard.low_beam = 1
+        widget._sync_ui_from_options()
+        assert widget.ids['coolant'].state == 'down'
+        assert widget.ids['oil'].state == 'down'
+        assert widget.ids['low_beam'].state == 'down'
+
+    def test_combine_startup_keeps_cluster_on_when_ignition_is_already_on(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.bsi.power_mode = 0x01
+        widget = CombineModule(types.SimpleNamespace(car=car))
+        assert widget.runner.car.dashboard.on == 1
 
 
 # ---------------------------------------------------------------------------
@@ -494,6 +630,37 @@ class TestMsg0B6Encode:
         data = Msg0B6().encode(car)
         assert data == [0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD0]
 
+    def test_decode_treats_ffff_placeholders_as_zero(self):
+        car = VirtualCar()
+        Msg0B6().decode(car, [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xD0])
+        assert car.bsi.rpm == 0
+        assert car.bsi.speed == 0
+        assert car.bsi.engine_running == 0
+
+
+class TestBsiBaseMonitorFastData:
+    def test_monitor_placeholder_fast_frame_does_not_show_crazy_values(self):
+        widget = BSIBaseModule.__new__(BSIBaseModule)
+        widget.runner = types.SimpleNamespace(car=VirtualCar(), monitor=True)
+        widget.ids = {
+            'cur_rpm': DummyWidget(text='RPM: 0'),
+            'slider_rpm': DummyWidget(value=0),
+            'cur_speed': DummyWidget(text='Speed: 0 km/h'),
+            'slider_speed': DummyWidget(value=0),
+            'engine': DummyWidget(state='down'),
+        }
+        msg = types.SimpleNamespace(
+            arbitration_id=0x0B6,
+            data=[0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xD0],
+        )
+        Msg0B6().decode(widget.runner.car, msg.data)
+        widget.on_can_message(msg)
+        assert widget.runner.car.bsi.rpm == 0
+        assert widget.runner.car.bsi.speed == 0
+        assert widget.ids['cur_rpm'].text == 'RPM: 0'
+        assert widget.ids['cur_speed'].text == 'Speed: 0 km/h'
+        assert widget.ids['engine'].state == 'normal'
+
 
 class TestMsg0E1Encode:
     def test_inactive_when_no_sensors(self):
@@ -528,6 +695,15 @@ class TestMsg128Encode:
         car.dashboard.seatbelt = 1
         data = Msg128().encode(car)
         assert (data[0] >> 6) & 1 == 1  # seatbelt bit
+
+    def test_combine_encoding_keeps_cluster_on_and_manual_gearbox_defaults(self):
+        car = VirtualCar()
+        car.dashboard.active = True
+        car.bsi.ignition_on = True
+        car.bsi.power_mode = 0x01
+        data = Msg128().encode(car)
+        assert (data[5] >> 7) & 1 == 1
+        assert data[7] & 0x03 == 0x01
 
     def test_decode_updates_light_mode(self):
         car = VirtualCar()
@@ -570,6 +746,14 @@ class TestMsg168Encode:
         assert (data[4] >> 1) & 1 == 1  # battery bit
 
 
+class TestMsg1E3DecodeBenchAlignment:
+    def test_left_auto_dump_decodes_auto_left_and_up_right(self):
+        car = VirtualCar()
+        Msg1E3().decode(car, [0x11, 0x30, 0x0E, 0x0A, 0x00, 0x40, 0x02, 0x00])
+        assert car.clim.dir_left == 0x00
+        assert car.clim.dir_right == 0x04
+
+
 class TestMsg1A1Encode:
     def test_suppressed_when_tyre_display_active(self):
         car = VirtualCar()
@@ -580,7 +764,16 @@ class TestMsg1A1Encode:
         car = VirtualCar()
         car.doors.display_active = True
         car.doors.front_left = 1
-        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
+        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC7, 0x40, 0x00, 0x00, 0x00, 0x00]
+
+    def test_encodes_door_status_bits_for_workbench_mfd_popup(self):
+        car = VirtualCar()
+        car.doors.display_active = True
+        car.doors.front_left = 1
+        car.doors.rear_right = 1
+        car.doors.boot = 1
+        car.doors.fuel_flap = 1
+        assert Msg1A1().encode(car) == [0x80, 0x0B, 0xC7, 0x68, 0x40, 0x00, 0x00, 0x00]
 
     def test_idle_encoding_matches_dump_style(self):
         car = VirtualCar()
@@ -647,7 +840,20 @@ class TestMsg1D0Encode:
         car.bsi.ignition_on = True
         car.clim.fan = 3
         data = Msg1D0().encode(car)
-        assert data[2] == 3  # fan byte
+        assert data[2] == 2  # bench raw 0x02 = fan level 3
+
+    def test_clim_off_encodes_as_0x0f(self):
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.fan = 0
+        data = Msg1D0().encode(car)
+        assert data[2] == 0x0F
+
+    def test_decode_fan_raw_zero_means_level_one(self):
+        car = VirtualCar()
+        Msg1D0().decode(car, [0x28, 0x00, 0x00, 0x44, 0x00, 0x0D, 0x0A, 0x00])
+        assert car.clim.fan == 1
 
 
 class TestMsg190Rolling:
@@ -922,6 +1128,89 @@ class TestCanRunnerVirtualCar:
         runner = self._make_runner()
         runner.set_enabled_modules(['clim'])
         assert runner.message_enabled(Msg036()) is True
+
+
+class TestCanRunnerTransmitRobustness:
+    @pytest.fixture(autouse=True)
+    def patch_can(self):
+        can_mock = make_can_mock()
+
+        class MockCanError(Exception):
+            pass
+
+        can_mock.CanError = MockCanError
+        sys.modules['can'] = can_mock
+        yield
+        sys.modules.pop('can', None)
+
+    def _make_runner(self, monitor=False):
+        import importlib
+        import can_runner as cr
+        importlib.reload(cr)
+        return cr.CanRunner(monitor=monitor)
+
+    def test_send_message_swallows_transmit_buffer_errors(self, capsys):
+        runner = self._make_runner(monitor=False)
+
+        def fail_send(_msg):
+            raise sys.modules['can'].CanError('Failed to transmit: [Errno 105] No buffer space available')
+
+        runner.bus.send = fail_send
+        runner.car.bsi.ignition_on = True
+
+        runner.send_message(0x036, [0x00] * 8)
+
+        out = capsys.readouterr().out
+        assert 'TX warning' in out
+        assert '0x036' in out
+
+    def test_can_message_object_send_error_does_not_abort_sender_loop(self, capsys):
+        runner = self._make_runner(monitor=False)
+        runner.car.bsi.ignition_on = True
+
+        class OneShotMessage:
+            can_id = 0x036
+            period_ms = 1
+            required_modules = frozenset()
+
+            def get_period_ms(self, car):
+                return 1
+
+            def encode(self, car):
+                return [0x00] * 8
+
+        def fail_send(_msg, *args, **kwargs):
+            runner.sender_exit.set()
+            raise sys.modules['can'].CanError('Failed to transmit: [Errno 105] No buffer space available')
+
+        runner.bus.send = fail_send
+        runner.register_message(OneShotMessage())
+        runner._message_object_timers[0x036] = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+        type(runner).sender(runner)
+
+        out = capsys.readouterr().out
+        assert 'TX warning' in out
+        assert '0x036' in out
+
+    def test_one_tx_error_does_not_block_other_keepalive_ids(self, capsys):
+        runner = self._make_runner(monitor=False)
+        runner.car.bsi.ignition_on = True
+        sent_ids = []
+
+        def selective_send(msg, *args, **kwargs):
+            sent_ids.append(msg.arbitration_id)
+            if msg.arbitration_id == 0x036 and sent_ids.count(0x036) == 1:
+                raise sys.modules['can'].CanError('Failed to transmit: [Errno 105] No buffer space available')
+
+        runner.bus.send = selective_send
+
+        runner.send_message(0x036, [0x00] * 8)
+        runner.send_message(0x110, [0x00] * 8)
+
+        out = capsys.readouterr().out
+        assert 'TX warning' in out
+        assert 0x110 in sent_ids
 
 
 class TestCanRunnerDuplicateDetection:
@@ -1656,17 +1945,16 @@ class TestMsg1D0AwpCompare:
     simulator's current encoding and document the discrepancy.
     """
 
-    def test_fan_speed_encoded_as_full_byte_value(self):
-        """Simulator encodes fan speed as the full value in byte 2.
-        autowp places fan in bits 3-1 of byte 2 (i.e. fan << 1).
-        Simulator uses direct value: fan=3 → byte2=0x03 (not 0x06).
+    def test_fan_speed_encoded_as_bench_aligned_nibble_value(self):
+        """Bench and PSA-RE agree: byte 2 low nibble uses 0-7 for fan 1-8 and 0x0F for off.
+        So internal fan=3 should encode as raw 0x02.
         """
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.fan = 3
         data = Msg1D0().encode(car)
-        assert data[2] == 3  # direct encoding, not fan << 1
+        assert data[2] == 0x02
 
     def test_recycle_at_byte4_bit5(self):
         """autowp: 'A = Air recycling enabled' — verify position."""
