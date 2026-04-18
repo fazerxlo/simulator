@@ -1,5 +1,6 @@
 import datetime
 import os
+from functools import partial
 
 from kivy.app import App
 from kivy.clock import Clock
@@ -9,6 +10,7 @@ from kivy.lang.builder import Builder
 from can_messages import (
     Msg036, Msg0B6, Msg0F6, Msg110, Msg12D, Msg128, Msg161, Msg168,
     Msg190, Msg1A1, Msg1D0, Msg1E3, Msg217, Msg2B6, Msg336, Msg3B6, Msg52D,
+    STARTUP_WAKEUP_BURST,
 )
 
 _modname = 'BSI_base'
@@ -75,7 +77,7 @@ class BSI_base(TabbedPanelItem):
         bsi.dash_lights = 0
         bsi.dark_mode = 0
         bsi.light_mode = BSI_base._lights_off
-        bsi.lum = 10
+        bsi.lum = 15
         bsi.power_mode = BSI_base._ignition_off
         bsi.engine_running = 0
         bsi.rpm = 0
@@ -86,11 +88,13 @@ class BSI_base(TabbedPanelItem):
         bsi.temperature = 20
         bsi.ignition_on = False
         bsi.reverse = 0
+        bsi.startup_banner_pending = True
 
         self._updating_power_buttons = False
         self._updating_light_buttons = False
         self._set_off_event = None
         self._ignition_finalize_event = None
+        self._wakeup_burst_events = []
         self.set_power_mode(bsi.power_mode)
         self._apply_monitor_ui_lock()
 
@@ -180,6 +184,19 @@ class BSI_base(TabbedPanelItem):
         if self._ignition_finalize_event is not None:
             self._ignition_finalize_event.cancel()
             self._ignition_finalize_event = None
+        for event in self._wakeup_burst_events:
+            event.cancel()
+        self._wakeup_burst_events = []
+
+    def _send_wakeup_frame(self, arbitration_id, data, _dt=0):
+        self.runner.send_message(arbitration_id, list(data))
+
+    def _schedule_wakeup_burst(self):
+        if getattr(self.runner, 'monitor', False):
+            return
+        for delay_s, arbitration_id, data in STARTUP_WAKEUP_BURST:
+            event = Clock.schedule_once(partial(self._send_wakeup_frame, arbitration_id, data), delay_s)
+            self._wakeup_burst_events.append(event)
 
     def transition_power_mode(self, value):
         target_mode = int(value)
@@ -206,6 +223,7 @@ class BSI_base(TabbedPanelItem):
         self.set_power_mode(target_mode)
 
     def set_power_mode(self, value):
+        previous_mode = int(self._bsi.power_mode)
         power_mode = int(value)
         self._bsi.power_mode = power_mode
         self._bsi.ignition_on = (power_mode == BSI_base._ignition_on)
@@ -229,6 +247,12 @@ class BSI_base(TabbedPanelItem):
         if 'wakeup' in self.ids:
             self.ids['wakeup'].state = 'down' if power_mode == BSI_base._ignition_wakeup else 'normal'
         self._updating_power_buttons = False
+
+        if (
+            power_mode == BSI_base._ignition_on
+            and previous_mode != BSI_base._ignition_on
+        ):
+            self._schedule_wakeup_burst()
 
     def toggle_engine(self, state):
         if self._bsi.power_mode != BSI_base._ignition_on:

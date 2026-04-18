@@ -20,6 +20,19 @@ Design principles
 from __future__ import annotations
 
 
+STARTUP_WAKEUP_BURST: list[tuple[float, int, list[int]]] = [
+    (0.000, 0x5D2, [0xB0, 0x00, 0x00, 0x00, 0x01, 0x0A, 0x06, 0x16]),
+    (0.010, 0x5ED, [0x2D, 0x09, 0x06, 0x04, 0x64, 0x05, 0x20, 0x0D]),
+    (0.020, 0x5E5, [0x25, 0x09, 0x03, 0x05, 0x18, 0x08, 0x20, 0x11]),
+    (0.030, 0x5CC, [0x0C, 0x19, 0x01, 0x06, 0x0A, 0x09, 0x20, 0x12]),
+    (0.060, 0x5DF, [0x1F, 0x18, 0x09, 0x03, 0x08, 0x00, 0x20, 0x0D]),
+    (0.090, 0x5F1, [0x31, 0x14, 0x08, 0x03, 0x05, 0x00, 0x20, 0x09]),
+    (0.120, 0x5DD, [0x1D, 0x02, 0x06, 0x05, 0x02, 0x84, 0x20, 0x12]),
+    (0.150, 0x48C, [0x50, 0xFC, 0x18, 0xFF, 0x04, 0x06, 0x07, 0x08]),
+    (0.180, 0x5E0, [0x20, 0x1E, 0x03, 0x04, 0x05, 0x0E, 0x20, 0x0D]),
+]
+
+
 class CanMessage:
     """Base class for a periodic CAN message.
 
@@ -40,6 +53,10 @@ class CanMessage:
 
     #: Config-module names that must be enabled for this message to transmit.
     required_modules: frozenset[str] = frozenset()
+
+    def get_period_ms(self, car) -> int:
+        """Return the active transmit period for the current car state."""
+        return self.period_ms
 
     def encode(self, car) -> list | None:
         """Build frame byte payload from car state.
@@ -63,14 +80,27 @@ class Msg036(CanMessage):
     """BSI command frame: power mode, lighting, economy, dashboard luminosity."""
 
     can_id = 0x036
-    period_ms = 50
+    period_ms = 100
+
+    def __init__(self) -> None:
+        self._boot_banner_sent = False
+
+    def get_period_ms(self, car) -> int:
+        if int(car.bsi.power_mode) == 0x02 and not car.bsi.ignition_on:
+            return 175
+        return 100
 
     def encode(self, car) -> list:
         bsi = car.bsi
         b2 = bsi.economy << 7
         b3 = bsi.dash_lights << 5 | bsi.dark_mode << 4 | (bsi.lum & 0x0F)
         b4 = bsi.power_mode
-        return [0x0E, 0x00, b2, b3, b4, 0x80, 0x00, 0xA0]
+        pending_banner = bool(getattr(bsi, 'startup_banner_pending', False))
+        trailer = 0x50 if pending_banner and not self._boot_banner_sent else 0xA0
+        if pending_banner:
+            bsi.startup_banner_pending = False
+            self._boot_banner_sent = True
+        return [0x0E, 0x00, b2, b3, b4, 0x00, 0x00, trailer]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 5:
@@ -96,8 +126,12 @@ class Msg0B6(CanMessage):
     def encode(self, car) -> list:
         rpm = int(car.bsi.rpm * 10)
         speed = int(car.bsi.speed * 100)
+        if not car.bsi.ignition_on:
+            return [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xD0]
+        if rpm == 0 and speed == 0:
+            return [0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD0]
         return [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF,
-                0x00, 0x00, 0x00, 0x00]
+                0x00, 0x00, 0x00, 0xD0]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 4:
@@ -507,8 +541,11 @@ class Msg1D0(CanMessage):
     """
 
     can_id = 0x1D0
-    period_ms = 100
+    period_ms = 500
     required_modules = frozenset({'clim'})
+
+    def get_period_ms(self, car) -> int:
+        return 500
 
     def encode(self, car) -> list:
         if not car.clim.enabled or not car.bsi.ignition_on:

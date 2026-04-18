@@ -19,7 +19,8 @@ class BSI:
         self.economy = 0
         self.dash_lights = 0
         self.dark_mode = 0
-        self.lum = 10
+        self.lum = 15
+        self.startup_banner_pending = False
         self.engine_running = 0
         # 0 = off, 1 = side, 2 = low beam, 3 = high beam
         self.light_mode = 0

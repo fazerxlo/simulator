@@ -238,7 +238,12 @@ class CanRunner():
                     continue
                 now = datetime.datetime.now()
                 timer = self._message_object_timers.get(can_id, now)
-                if (now - timer).total_seconds() >= msg_obj.period_ms / 1000:
+                try:
+                    active_period_ms = max(1, int(msg_obj.get_period_ms(self.car)))
+                except Exception as exc:
+                    print(f'CanRunner period error for 0x{can_id:03X}: {exc}')
+                    active_period_ms = max(1, int(getattr(msg_obj, 'period_ms', 100)))
+                if (now - timer).total_seconds() >= active_period_ms / 1000:
                     try:
                         data = msg_obj.encode(self.car)
                     except Exception as exc:

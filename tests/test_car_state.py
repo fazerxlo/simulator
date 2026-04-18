@@ -328,7 +328,8 @@ from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
-                          Msg110, Msg0F6, Msg161, Msg217, Msg12D)
+                          Msg110, Msg0F6, Msg161, Msg217, Msg12D,
+                          STARTUP_WAKEUP_BURST)
 
 
 class TestAppArgumentParsing:
@@ -366,6 +367,19 @@ class TestAppArgumentParsing:
         assert args.monitor is True
 
 
+class TestStartupWakeupBurst:
+    def test_contains_expected_workbench_ids(self):
+        ids = [can_id for _delay_s, can_id, _data in STARTUP_WAKEUP_BURST]
+        for expected in (0x5D2, 0x5ED, 0x5E5, 0x5CC, 0x5DF, 0x5E0, 0x5F1, 0x48C):
+            assert expected in ids
+
+    def test_all_burst_frames_are_can_dlc_8(self):
+        for delay_s, can_id, data in STARTUP_WAKEUP_BURST:
+            assert delay_s >= 0
+            assert can_id > 0
+            assert len(data) == 8
+
+
 class TestCanMessageDefaults:
     def test_all_messages_have_can_id(self):
         for can_id, cls in ALL_MESSAGES.items():
@@ -389,6 +403,40 @@ class TestMsg036Encode:
         data = Msg036().encode(car)
         assert data[4] == car.bsi.power_mode
 
+    def test_matches_workbench_power_off_signature(self):
+        car = VirtualCar()
+        car.bsi.power_mode = 0x02
+        data = Msg036().encode(car)
+        assert data == [0x0E, 0x00, 0x00, 0x0F, 0x02, 0x00, 0x00, 0xA0]
+
+    def test_matches_workbench_ignition_on_signature(self):
+        car = VirtualCar()
+        car.bsi.power_mode = 0x01
+        car.bsi.ignition_on = True
+        data = Msg036().encode(car)
+        assert data == [0x0E, 0x00, 0x00, 0x0F, 0x01, 0x00, 0x00, 0xA0]
+
+    def test_first_boot_frame_uses_initial_workbench_trailer(self):
+        car = VirtualCar()
+        car.bsi.power_mode = 0x02
+        car.bsi.startup_banner_pending = True
+        msg = Msg036()
+        first = msg.encode(car)
+        second = msg.encode(car)
+        assert first[7] == 0x50
+        assert second[7] == 0xA0
+
+    def test_preignition_period_matches_workbench(self):
+        car = VirtualCar()
+        car.bsi.power_mode = 0x02
+        assert Msg036().get_period_ms(car) == 175
+
+    def test_ignition_on_period_matches_workbench(self):
+        car = VirtualCar()
+        car.bsi.power_mode = 0x01
+        car.bsi.ignition_on = True
+        assert Msg036().get_period_ms(car) == 100
+
     def test_economy_bit(self):
         car = VirtualCar()
         car.bsi.economy = 1
@@ -400,6 +448,20 @@ class TestMsg036Encode:
         Msg036().decode(car, [0x0E, 0x00, 0x00, 0x00, 0x01, 0x80, 0x00, 0xA0])
         assert car.bsi.ignition_on is True
         assert car.bsi.power_mode == 0x01
+
+
+class TestMsg0B6Encode:
+    def test_matches_workbench_idle_placeholders_when_power_off(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = False
+        data = Msg0B6().encode(car)
+        assert data == [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xD0]
+
+    def test_matches_workbench_idle_placeholders_when_ignition_on(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        data = Msg0B6().encode(car)
+        assert data == [0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD0]
 
 
 class TestMsg0E1Encode:
@@ -512,6 +574,10 @@ class TestMsg1D0Encode:
         car = VirtualCar()
         Msg1D0().decode(car, [0x08, 0x00, 0x07, 0x88, 0x00, 0x10, 0x10, 0x00])
         assert car.clim.dir_left == 0x08
+
+    def test_preignition_period_matches_workbench(self):
+        car = VirtualCar()
+        assert Msg1D0().get_period_ms(car) == 500
 
     def test_idle_1d0_frame_does_not_clear_left_direction(self):
         car = VirtualCar()
