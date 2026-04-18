@@ -72,7 +72,7 @@ class Combine(TabbedPanelItem):
         dash.esp_blink = 0
         dash.tyre = 0
         dash.backlight = 0
-        dash.on = 0
+        dash.on = 1 if (runner.car.bsi.ignition_on or int(runner.car.bsi.power_mode) == self._ignition_on) else 0
         dash.low_beam = 0
         dash.high_beam = 0
         dash.fog_front = 0

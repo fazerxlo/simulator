@@ -1,6 +1,7 @@
 """
 Tests for car_state.VirtualCar, can_messages, and the CanRunner integration.
 """
+import datetime
 import importlib
 import os
 import sys
@@ -45,6 +46,7 @@ from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
                        KMLState, BTEState, SpeedControl)
 from modules.clim import Clim as ClimModule
 from modules.combine import Combine as CombineModule
+DoorsModule = importlib.import_module('modules.doors').Doors
 BSIBaseModule = importlib.import_module('modules.bsi-base').BSI_base
 
 
@@ -390,6 +392,45 @@ class TestClimUiHelpers:
         assert widget.ids['left_up'].state == 'normal'
 
 
+class TestDoorsUiHelpers:
+    def _make_doors_widget(self):
+        sent = []
+
+        def send_message(arbitration_id, data):
+            sent.append((arbitration_id, list(data)))
+
+        runner = types.SimpleNamespace(car=VirtualCar(), send_message=send_message)
+        widget = DoorsModule(runner)
+        return widget, sent
+
+    def test_send_0x1a1_popup_announces_before_show(self):
+        widget, sent = self._make_doors_widget()
+        widget._doors.front_left = 1
+
+        widget._send_0x1A1_popup()
+
+        assert sent[-1] == (0x1A1, [0x7F, 0xDE, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+    def test_send_popup_show_contains_door_bitmap(self):
+        widget, sent = self._make_doors_widget()
+        widget._doors.front_left = 1
+        widget._doors.boot = 1
+
+        widget._send_popup_show(0)
+
+        assert sent[-1] == (0x1A1, [0x80, 0x0B, 0xC7, 0x48, 0x00, 0x00, 0x00, 0x00])
+
+    def test_send_popup_clear_uses_explicit_clear_frame(self):
+        widget, sent = self._make_doors_widget()
+        widget._doors.display_active = True
+        widget._doors.popup_msg_id = 0xDE
+
+        widget._send_popup_clear(0)
+
+        assert sent[-1] == (0x1A1, [0xFF, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert widget._doors.display_active is False
+
+
 class TestCombineUiHelpers:
     def _make_combine_widget(self):
         return CombineModule(types.SimpleNamespace(car=VirtualCar()))
@@ -421,6 +462,13 @@ class TestCombineUiHelpers:
         assert widget.ids['coolant'].state == 'down'
         assert widget.ids['oil'].state == 'down'
         assert widget.ids['low_beam'].state == 'down'
+
+    def test_combine_startup_keeps_cluster_on_when_ignition_is_already_on(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.bsi.power_mode = 0x01
+        widget = CombineModule(types.SimpleNamespace(car=car))
+        assert widget.runner.car.dashboard.on == 1
 
 
 # ---------------------------------------------------------------------------
@@ -648,6 +696,15 @@ class TestMsg128Encode:
         data = Msg128().encode(car)
         assert (data[0] >> 6) & 1 == 1  # seatbelt bit
 
+    def test_combine_encoding_keeps_cluster_on_and_manual_gearbox_defaults(self):
+        car = VirtualCar()
+        car.dashboard.active = True
+        car.bsi.ignition_on = True
+        car.bsi.power_mode = 0x01
+        data = Msg128().encode(car)
+        assert (data[5] >> 7) & 1 == 1
+        assert data[7] & 0x03 == 0x01
+
     def test_decode_updates_light_mode(self):
         car = VirtualCar()
         # byte[4] = 0xC0 means low beam
@@ -707,7 +764,16 @@ class TestMsg1A1Encode:
         car = VirtualCar()
         car.doors.display_active = True
         car.doors.front_left = 1
-        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
+        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC7, 0x40, 0x00, 0x00, 0x00, 0x00]
+
+    def test_encodes_door_status_bits_for_workbench_mfd_popup(self):
+        car = VirtualCar()
+        car.doors.display_active = True
+        car.doors.front_left = 1
+        car.doors.rear_right = 1
+        car.doors.boot = 1
+        car.doors.fuel_flap = 1
+        assert Msg1A1().encode(car) == [0x80, 0x0B, 0xC7, 0x68, 0x40, 0x00, 0x00, 0x00]
 
     def test_idle_encoding_matches_dump_style(self):
         car = VirtualCar()
@@ -1062,6 +1128,89 @@ class TestCanRunnerVirtualCar:
         runner = self._make_runner()
         runner.set_enabled_modules(['clim'])
         assert runner.message_enabled(Msg036()) is True
+
+
+class TestCanRunnerTransmitRobustness:
+    @pytest.fixture(autouse=True)
+    def patch_can(self):
+        can_mock = make_can_mock()
+
+        class MockCanError(Exception):
+            pass
+
+        can_mock.CanError = MockCanError
+        sys.modules['can'] = can_mock
+        yield
+        sys.modules.pop('can', None)
+
+    def _make_runner(self, monitor=False):
+        import importlib
+        import can_runner as cr
+        importlib.reload(cr)
+        return cr.CanRunner(monitor=monitor)
+
+    def test_send_message_swallows_transmit_buffer_errors(self, capsys):
+        runner = self._make_runner(monitor=False)
+
+        def fail_send(_msg):
+            raise sys.modules['can'].CanError('Failed to transmit: [Errno 105] No buffer space available')
+
+        runner.bus.send = fail_send
+        runner.car.bsi.ignition_on = True
+
+        runner.send_message(0x036, [0x00] * 8)
+
+        out = capsys.readouterr().out
+        assert 'TX warning' in out
+        assert '0x036' in out
+
+    def test_can_message_object_send_error_does_not_abort_sender_loop(self, capsys):
+        runner = self._make_runner(monitor=False)
+        runner.car.bsi.ignition_on = True
+
+        class OneShotMessage:
+            can_id = 0x036
+            period_ms = 1
+            required_modules = frozenset()
+
+            def get_period_ms(self, car):
+                return 1
+
+            def encode(self, car):
+                return [0x00] * 8
+
+        def fail_send(_msg, *args, **kwargs):
+            runner.sender_exit.set()
+            raise sys.modules['can'].CanError('Failed to transmit: [Errno 105] No buffer space available')
+
+        runner.bus.send = fail_send
+        runner.register_message(OneShotMessage())
+        runner._message_object_timers[0x036] = datetime.datetime.now() - datetime.timedelta(seconds=1)
+
+        type(runner).sender(runner)
+
+        out = capsys.readouterr().out
+        assert 'TX warning' in out
+        assert '0x036' in out
+
+    def test_one_tx_error_does_not_block_other_keepalive_ids(self, capsys):
+        runner = self._make_runner(monitor=False)
+        runner.car.bsi.ignition_on = True
+        sent_ids = []
+
+        def selective_send(msg, *args, **kwargs):
+            sent_ids.append(msg.arbitration_id)
+            if msg.arbitration_id == 0x036 and sent_ids.count(0x036) == 1:
+                raise sys.modules['can'].CanError('Failed to transmit: [Errno 105] No buffer space available')
+
+        runner.bus.send = selective_send
+
+        runner.send_message(0x036, [0x00] * 8)
+        runner.send_message(0x110, [0x00] * 8)
+
+        out = capsys.readouterr().out
+        assert 'TX warning' in out
+        assert 0x110 in sent_ids
 
 
 class TestCanRunnerDuplicateDetection:

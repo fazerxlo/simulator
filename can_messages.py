@@ -303,8 +303,13 @@ class Msg128(CanMessage):
             b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
                   dash.fog_front << 4 | dash.fog_rear << 3 |
                   dash.clig_r << 2 | dash.clig_l << 1)
-            b5 = dash.on << 7
-            return [b0, b1, b2, b3, b4, b5, 0x00, 0x00]
+            cluster_on = 1 if (dash.on or car.bsi.ignition_on or int(car.bsi.power_mode) == 0x01) else 0
+            # Keep the workbench cluster in the default manual-gearbox view
+            # unless explicit gear-simulation fields are added later.
+            gear_display = int(getattr(dash, 'gear_display', 0x00)) & 0xFF
+            gearbox_mode = int(getattr(dash, 'gearbox_mode', 0x01)) & 0xFF
+            b5 = cluster_on << 7
+            return [b0, b1, b2, b3, b4, b5, gear_display, gearbox_mode]
         d5 = self._LIGHTS_TO_BYTE.get(car.bsi.light_mode, 0x00)
         return [0x91, 0xE0, 0x00, 0x00, d5, 0x80, 0xB0, 0x01]
 
@@ -502,6 +507,30 @@ class Msg1A1(CanMessage):
     period_ms = 100
     IDLE_MESSAGE_ID = 0x8B
     DISPLAY_FLAGS = 0xC6
+    DOOR_DISPLAY_FLAGS = 0xC7
+    DOOR_ANNOUNCE_FLAGS = 0x47
+
+    @staticmethod
+    def _door_status_bytes(doors) -> tuple[int, int]:
+        d3 = 0x00
+        d4 = 0x00
+        if doors.front_right:
+            d3 |= 1 << 7
+        if doors.front_left:
+            d3 |= 1 << 6
+        if doors.rear_right:
+            d3 |= 1 << 5
+        if doors.rear_left:
+            d3 |= 1 << 4
+        if doors.boot:
+            d3 |= 1 << 3
+        if doors.bonnet:
+            d3 |= 1 << 2
+        if doors.rear_window:
+            d4 |= 1 << 7
+        if doors.fuel_flap:
+            d4 |= 1 << 6
+        return d3, d4
 
     def encode(self, car) -> list | None:
         # Tyre warnings still own the bus with their dedicated event-driven payloads.
@@ -514,7 +543,7 @@ class Msg1A1(CanMessage):
                 d.front_left, d.front_right, d.rear_left, d.rear_right,
                 d.boot, d.bonnet, d.rear_window, d.fuel_flap,
             ))
-            flag = 0x80 if any_open else 0x00
+            flag = 0x80 if any_open else 0xFF
             if d.front_left and not any((
                 d.front_right, d.rear_left, d.rear_right,
                 d.boot, d.bonnet, d.rear_window, d.fuel_flap,
@@ -522,7 +551,10 @@ class Msg1A1(CanMessage):
                 msg_id = 0xDE
             else:
                 msg_id = d.popup_msg_id if d.popup_msg_id else 0x0B
-            return [flag, msg_id, self.DISPLAY_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+            if any_open:
+                d3, d4 = self._door_status_bytes(d)
+                return [flag, msg_id, self.DOOR_DISPLAY_FLAGS, d3, d4, 0x00, 0x00, 0x00]
+            return [0xFF, 0x00, self.DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
 
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00

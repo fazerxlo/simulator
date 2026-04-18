@@ -43,6 +43,12 @@ class CanRunner():
         self._can_message_objects: dict = {}
         self._message_object_timers: dict = {}
 
+        # Transient SocketCAN/slcan backpressure can happen on a busy bench or
+        # when the adapter/bus is not ready to accept another frame yet.
+        # Track the error state per arbitration ID so one temporary failure on
+        # one frame does not suppress the entire keepalive set.
+        self._tx_error_state: dict = {}
+
     def set_enabled_modules(self, modules):
         self.enabled_modules = {str(module) for module in modules}
 
@@ -148,6 +154,51 @@ class CanRunner():
         }
         self.mess.append(new_module)
 
+    def _safe_send(self, arbitration_id, data):
+        if self.monitor or not self.can_send(arbitration_id, data):
+            return None
+
+        state = self._tx_error_state.setdefault(
+            arbitration_id,
+            {'count': 0, 'last_error': None, 'backoff_until': 0.0},
+        )
+
+        now = time.monotonic()
+        if now < state['backoff_until']:
+            return False
+
+        message = can.Message(
+            arbitration_id=arbitration_id,
+            data=data,
+            is_extended_id=False,
+        )
+
+        try:
+            try:
+                self.bus.send(message, timeout=0.05)
+            except TypeError:
+                self.bus.send(message)
+            state['count'] = 0
+            state['last_error'] = None
+            state['backoff_until'] = 0.0
+            return True
+        except can.CanError as exc:
+            state['count'] += 1
+            err_text = str(exc)
+            backoff_s = min(0.05, 0.005 * state['count'])
+            if 'buffer' in err_text.lower() or 'space available' in err_text.lower():
+                state['backoff_until'] = time.monotonic() + backoff_s
+            else:
+                state['backoff_until'] = 0.0
+            should_log = err_text != state['last_error'] or state['count'] in (1, 10, 50, 100)
+            if should_log:
+                print(
+                    f'CanRunner TX warning for 0x{arbitration_id:03X}: '
+                    f'{exc} (retrying after {int(backoff_s * 1000)} ms)'
+                )
+            state['last_error'] = err_text
+            return False
+
     def register(self, schedule, call):
         new_module = {
             'timer': datetime.datetime.now(),
@@ -220,17 +271,17 @@ class CanRunner():
                 now = datetime.datetime.now()
                 if (now - message['timer']).total_seconds() >= message['schedule']:
                     data = message['call']()
-                    if not self.monitor and self.can_send(message['id'], data):
-                        self.bus.send(can.Message(arbitration_id=message['id'], data=data, is_extended_id=False))
-                    message['timer'] = now
+                    send_result = self._safe_send(message['id'], data)
+                    if send_result is not False:
+                        message['timer'] = now
 
             for message in self.messages:
                 now = datetime.datetime.now()
                 if (now - message['timer']).total_seconds() >= message['schedule']:
                     id, data = message['call']()
-                    if not self.monitor and self.can_send(id, data):
-                        self.bus.send(can.Message(arbitration_id=id, data=data, is_extended_id=False))
-                    message['timer'] = now
+                    send_result = self._safe_send(id, data)
+                    if send_result is not False:
+                        message['timer'] = now
 
             # CanMessage objects registered via register_message().
             for can_id, msg_obj in list(self._can_message_objects.items()):
@@ -249,9 +300,9 @@ class CanRunner():
                     except Exception as exc:
                         print(f'CanRunner encode error for 0x{can_id:03X}: {exc}')
                         data = None
-                    if not self.monitor and self.can_send(can_id, data):
-                        self.bus.send(can.Message(arbitration_id=can_id, data=data, is_extended_id=False))
-                    self._message_object_timers[can_id] = now
+                    send_result = self._safe_send(can_id, data)
+                    if send_result is not False:
+                        self._message_object_timers[can_id] = now
 
             # Wait until next round
             time.sleep(0.02)
@@ -260,9 +311,7 @@ class CanRunner():
         self.listeners.append({'id': can_id, 'callback': callback})
 
     def send_message(self, arbitration_id, data):
-        if self.monitor or not self.can_send(arbitration_id, data):
-            return
-        self.bus.send(can.Message(arbitration_id=arbitration_id, data=data, is_extended_id=False))
+        self._safe_send(arbitration_id, data)
 
     def run(self):
         if not self.monitor:

@@ -9,11 +9,13 @@ _version = '0.0.1'
 
 MSG_DOORS_OPEN = 0x0B
 MSG_DRIVER_DOOR_OPEN = 0xDE
+DOOR_DISPLAY_FLAGS = 0xC7
+DOOR_ANNOUNCE_FLAGS = 0x47
 
 
 class Doors(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
-        super(TabbedPanelItem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.text = 'Doors'
         self.runner = runner
 
@@ -77,11 +79,12 @@ class Doors(TabbedPanelItem):
         self._ui_sync = True
         try:
             doors = self._doors
+            ids = getattr(self, 'ids', {})
             for key in ('front_left', 'front_right', 'rear_left', 'rear_right',
                         'boot', 'bonnet', 'rear_window', 'fuel_flap'):
                 widget_id = f'door_{key}'
-                if widget_id in self.ids:
-                    self.ids[widget_id].state = 'down' if getattr(doors, key) else 'normal'
+                if widget_id in ids:
+                    ids[widget_id].state = 'down' if getattr(doors, key) else 'normal'
         finally:
             self._ui_sync = False
 
@@ -92,7 +95,8 @@ class Doors(TabbedPanelItem):
             'boot', 'bonnet', 'rear_window', 'fuel_flap'))
 
     def _update_summary(self):
-        if 'door_summary' not in self.ids:
+        ids = getattr(self, 'ids', {})
+        if 'door_summary' not in ids:
             return
 
         opened = []
@@ -112,11 +116,11 @@ class Doors(TabbedPanelItem):
                 opened.append(label)
 
         if opened:
-            self.ids['door_summary'].text = 'Open: ' + ', '.join(opened)
-            self.ids['door_summary'].color = (1, 0.8, 0, 1)
+            ids['door_summary'].text = 'Open: ' + ', '.join(opened)
+            ids['door_summary'].color = (1, 0.8, 0, 1)
         else:
-            self.ids['door_summary'].text = 'Open: none'
-            self.ids['door_summary'].color = (0, 1, 0, 1)
+            ids['door_summary'].text = 'Open: none'
+            ids['door_summary'].color = (0, 1, 0, 1)
 
     def _build_0x220(self):
         doors = self._doors
@@ -185,23 +189,26 @@ class Doors(TabbedPanelItem):
         if self._any_open():
             self._doors.display_active = True
             self._doors.popup_msg_id = self._popup_message_id()
-            # Real dumps show a 0x00/0x80 toggle with the same message id.
-            self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
+            # The workbench cluster expects a short announce / reset stage
+            # before the door-bitmap frame is shown.
+            self.runner.send_message(0x1A1, [0x7F, self._doors.popup_msg_id, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
             self._pending_show_ev = Clock.schedule_once(self._send_popup_show, 0.05)
             return
 
         self._doors.display_active = True
-        self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.runner.send_message(0x1A1, [0x7F, 0x00, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._pending_clear_ev = Clock.schedule_once(self._send_popup_clear, 0.2)
 
     def _send_popup_show(self, _dt):
         self._pending_show_ev = None
         if not self._any_open():
             return
-        self.runner.send_message(0x1A1, [0x80, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
+        d3, d4 = self._build_0x1A1_door_bytes()
+        self.runner.send_message(0x1A1, [0x80, self._doors.popup_msg_id, DOOR_DISPLAY_FLAGS, d3, d4, 0x00, 0x00, 0x00])
 
     def _send_popup_clear(self, _dt):
         self._pending_clear_ev = None
+        self.runner.send_message(0x1A1, [0xFF, 0x00, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._doors.display_active = False
 
     def on_can_message(self, msg):
