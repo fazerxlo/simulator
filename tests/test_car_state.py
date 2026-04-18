@@ -449,6 +449,22 @@ class TestMsg036Encode:
         assert car.bsi.ignition_on is True
         assert car.bsi.power_mode == 0x01
 
+    def test_lighting_states_match_workbench_dash_signature(self):
+        expected = {
+            0: [0x0E, 0x00, 0x00, 0x0F, 0x02, 0x00, 0x00, 0xA0],
+            1: [0x0E, 0x00, 0x00, 0x2A, 0x02, 0x00, 0x00, 0xA0],
+            2: [0x0E, 0x00, 0x00, 0x2A, 0x02, 0x00, 0x00, 0xA0],
+            3: [0x0E, 0x00, 0x00, 0x2A, 0x02, 0x00, 0x00, 0xA0],
+        }
+        for mode, payload in expected.items():
+            car = VirtualCar()
+            car.bsi.light_mode = mode
+            car.bsi.dash_lights = 0 if mode == 0 else 1
+            car.bsi.dark_mode = 0
+            car.bsi.lum = 15 if mode == 0 else 10
+            car.bsi.power_mode = 0x02
+            assert Msg036().encode(car) == payload
+
 
 class TestMsg0B6Encode:
     def test_matches_workbench_idle_placeholders_when_power_off(self):
@@ -503,6 +519,19 @@ class TestMsg128Encode:
         # byte[4] = 0xC0 means low beam
         Msg128().decode(car, [0x91, 0xE0, 0x00, 0x00, 0xC0, 0x80, 0xB0, 0x01])
         assert car.bsi.light_mode == 2  # _lights_low
+
+    def test_matches_workbench_light_mode_payloads(self):
+        car = VirtualCar()
+        msg = Msg128()
+        expected = {0: 0x00, 1: 0x80, 2: 0xC0, 3: 0xE0}
+        for mode, d5 in expected.items():
+            car.bsi.light_mode = mode
+            assert msg.encode(car) == [0x91, 0xE0, 0x00, 0x00, d5, 0x80, 0xB0, 0x01]
+
+    def test_decode_treats_0xa0_as_high_beam_transition(self):
+        car = VirtualCar()
+        Msg128().decode(car, [0x91, 0xE0, 0x00, 0x00, 0xA0, 0x80, 0xB0, 0x01])
+        assert car.bsi.light_mode == 3
 
 
 class TestMsg168Encode:
