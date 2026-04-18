@@ -12,7 +12,7 @@ Alexandre Blin's `ios-car-dashboard` project reads CAN data from a Peugeot 207 v
 board (see [arduino-peugeot-can](https://github.com/alexandreblin/arduino-peugeot-can)).  The
 Arduino reads the comfort CAN and re-encodes signals into a compact Bluetooth serial protocol
 for the iOS app.  This makes it an independent ground-truth source for signal positions on the
-Peugeot 207/207 (same RD4 radio head unit as the 407).
+Peugeot 207/407 (same RD4 radio head unit as the 407).
 
 Mapping from serial frame ID to source CAN frame:
 

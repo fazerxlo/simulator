@@ -1791,7 +1791,7 @@ class TestMsg165RadioSource:
 
 
 class TestMsg1E5AudioSettings:
-    """0x165 — radio audio settings: balance, bass, treble, loudness, ambiance.
+    """0x1E5 — radio audio settings: balance, bass, treble, loudness, ambiance.
 
     Byte layout confirmed against ios-car-dashboard AudioSettings.swift and
     the CarInfo+SerialParserDelegate.swift frame-0x10 parser.
