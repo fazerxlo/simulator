@@ -8,6 +8,7 @@ Primary sources used:
 - workspace notes in [doc/peugeot407can.yaml](peugeot407can.yaml), [doc/psa_pf2.md](psa_pf2.md), and [doc/psa_pf2_comfort.md](psa_pf2_comfort.md)
 - cross-project notes in [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md)
 - observed traffic in [dump.csv](../dump.csv)
+- community data from [autowp/autowp.github.io](https://github.com/autowp/autowp.github.io) (see [CAN2004_autowp_comparison.md](CAN2004_autowp_comparison.md))
 
 This is a monitoring-oriented reference. Where sources disagree, the document marks the confidence level and describes the conflict instead of pretending the signal is fully confirmed.
 
@@ -156,8 +157,9 @@ blinkers = data[7] & 0x03  # 0=none,1=right,2=left,3=both
 
 Notes:
 
-- The simulator sends `0x08` in byte 0 and constant `0x00, 0x1F, 0x00` in bytes 2-4.  Real BSI
-  sends `0x88` and an actual odometer count. This is intentional bench simplification.
+- The simulator sends `0x88` in byte 0 (matching the real-bus customer-config + generator-ok
+  pattern) and `0xFF 0xFF 0xFF` (invalid sentinel) in bytes 2-4 for the odometer.  Real BSI
+  sends an actual odometer count in those three bytes.  This is intentional bench simplification.
 - Bytes 5 and 6 carry the same temperature measurement before and after the BSI's smoothing
   filter. The simulator sends the same value in both positions.
 - **BLINKERS_STATUS** (byte 7 bits 1-0) was previously undocumented in this workspace.
@@ -537,7 +539,10 @@ If infotainment integration is also needed, add these separately:
 
 - The simulator does not currently implement `0x220`, `0x1A8`, or `0x361`.
 - The simulator only partially models `0x128` and does not decode real gear/mode bytes.
-- `0x0F6` has unresolved byte/bit conflicts across workspace sources.
+- `0x0F6` byte 5 conflict between autowp (constant `0x8E`) and PSA-RE (external temperature)
+  is resolved in favour of PSA-RE — see [CAN2004_autowp_comparison.md](CAN2004_autowp_comparison.md).
+- `0x0B6` bytes 4-5 (trip odometer in cm) and byte 6 (fuel consumption counter) documented
+  by autowp are not implemented; simulator sends `0x00` in those positions.
 - `0x131` appears to serve multiple purposes and should be treated as infotainment-side traffic unless the target vehicle proves otherwise.
 
 ## Quick Raw Examples
