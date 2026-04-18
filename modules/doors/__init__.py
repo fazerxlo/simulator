@@ -185,23 +185,25 @@ class Doors(TabbedPanelItem):
         if self._any_open():
             self._doors.display_active = True
             self._doors.popup_msg_id = self._popup_message_id()
-            # Real dumps show a 0x00/0x80 toggle with the same message id.
-            self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
+            # Some clusters keep the first opened-door context until popup is refreshed.
+            self.runner.send_message(0x1A1, [0x7F, self._doors.popup_msg_id, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
             self._pending_show_ev = Clock.schedule_once(self._send_popup_show, 0.05)
             return
 
         self._doors.display_active = True
-        self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.runner.send_message(0x1A1, [0x7F, self._doors.popup_msg_id, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._pending_clear_ev = Clock.schedule_once(self._send_popup_clear, 0.2)
 
     def _send_popup_show(self, _dt):
         self._pending_show_ev = None
         if not self._any_open():
             return
-        self.runner.send_message(0x1A1, [0x80, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
+        d3, d4 = self._build_0x1A1_door_bytes()
+        self.runner.send_message(0x1A1, [0x80, self._doors.popup_msg_id, 0xC7, d3, d4, 0x00, 0x00, 0x00])
 
     def _send_popup_clear(self, _dt):
         self._pending_clear_ev = None
+        self.runner.send_message(0x1A1, [0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._doors.display_active = False
 
     def on_can_message(self, msg):
