@@ -108,6 +108,9 @@ class Clim(TabbedPanelItem):
         if not self._is_ignition_on():
             return
         clim = self._clim
+        if zone == 1 and not clim.dual:
+            clim.dual = 1
+            self._update_options()
         temp = clim.temp_left if zone == 0 else clim.temp_right
         max_temp_idx = len(self.temp_disp) - 1
         if not (temp == 0 and dir == -1) and not (temp == max_temp_idx and dir == +1):
@@ -183,18 +186,21 @@ class Clim(TabbedPanelItem):
     def _update_dir_buttons(self):
         clim = self._clim
         dir_to_suffix = {
+            0x00: 'auto',
+            0x02: 'down',
             0x03: 'fr',
             0x04: 'up',
-            0x06: 'ud',
-            0x02: 'down',
             0x05: 'fd',
+            0x06: 'ud',
+            0x07: 'all',
             0x08: 'fast',
         }
         for seat, prefix in [(0, 'left'), (1, 'right')]:
             dir_val = self._normalize_dir(clim.dir_left if seat == 0 else clim.dir_right)
             target_suffix = dir_to_suffix.get(dir_val)
             target_id = f'{prefix}_{target_suffix}' if target_suffix else None
-            for state_id in [f'{prefix}_fr', f'{prefix}_up', f'{prefix}_ud', f'{prefix}_down', f'{prefix}_fd', f'{prefix}_fast']:
+            for state_id in [f'{prefix}_auto', f'{prefix}_fr', f'{prefix}_up', f'{prefix}_ud',
+                             f'{prefix}_down', f'{prefix}_fd', f'{prefix}_all', f'{prefix}_fast']:
                 if state_id not in self.ids:
                     continue
                 desired_state = 'down' if state_id == target_id else 'normal'

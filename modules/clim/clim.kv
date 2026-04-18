@@ -41,11 +41,19 @@
           on_press: root.on_temp(0, -1)
       GridLayout:
         cols: 2
+        # Auto (dir=0x00) is the real climate panel's power-on default — workbench
+        # 0x1E3 frames open with dir_left=0, dir_right=0.
+        ToggleButton:
+          id: left_auto
+          text: 'Auto'
+          group: 'left_dir'
+          state: 'down'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x00, self.state)
         ToggleButton:
           id: left_fr
           text: 'Frt'
           group: 'left_dir'
-          state: 'down'
           allow_no_selection: False
           on_state: root.on_dir(0, 0x03, self.state)
         ToggleButton:
@@ -73,6 +81,12 @@
           allow_no_selection: False
           on_state: root.on_dir(0, 0x05, self.state)
         ToggleButton:
+          id: left_all
+          text: 'All'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x07, self.state)
+        ToggleButton:
           id: left_fast
           text: 'Fst'
           group: 'left_dir'
@@ -92,11 +106,19 @@
           on_value: root.on_fan(args[1])
       GridLayout:
         cols: 2
+        # Auto (dir=0x00) is the real climate panel's power-on default — workbench
+        # 0x1E3 frames open with dir_left=0, dir_right=0.
+        ToggleButton:
+          id: right_auto
+          text: 'Auto'
+          group: 'right_dir'
+          state: 'down'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x00, self.state)
         ToggleButton:
           id: right_fr
           text: 'Frt'
           group: 'right_dir'
-          state: 'down'
           allow_no_selection: False
           on_state: root.on_dir(1, 0x03, self.state)
         ToggleButton:
@@ -123,6 +145,12 @@
           group: 'right_dir'
           allow_no_selection: False
           on_state: root.on_dir(1, 0x05, self.state)
+        ToggleButton:
+          id: right_all
+          text: 'All'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x07, self.state)
         ToggleButton:
           id: right_fast
           text: 'Fst'

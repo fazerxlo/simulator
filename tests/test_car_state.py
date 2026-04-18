@@ -302,16 +302,46 @@ class TestClimUiHelpers:
     def test_update_dir_buttons_recognizes_real_fast_code(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
-            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
-            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
-            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
-            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'left_auto': DummyWidget(), 'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_all': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_auto': DummyWidget(), 'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_all': DummyWidget(), 'right_fast': DummyWidget(),
         })
         widget.runner.car.clim.dir_left = 0x08
         widget.runner.car.clim.dir_right = 0x08
         widget._update_dir_buttons()
         assert widget.ids['left_fast'].state == 'down'
         assert widget.ids['right_fast'].state == 'down'
+
+    def test_update_dir_buttons_auto_direction_selects_auto_button(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'left_auto': DummyWidget(), 'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_all': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_auto': DummyWidget(), 'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_all': DummyWidget(), 'right_fast': DummyWidget(),
+        })
+        widget.runner.car.clim.dir_left = 0x00
+        widget.runner.car.clim.dir_right = 0x00
+        widget._update_dir_buttons()
+        assert widget.ids['left_auto'].state == 'down'
+        assert widget.ids['right_auto'].state == 'down'
+        assert widget.ids['left_fr'].state == 'normal'
+        assert widget.ids['right_fr'].state == 'normal'
+
+    def test_update_dir_buttons_all_vents_direction(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update({
+            'left_auto': DummyWidget(), 'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_all': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_auto': DummyWidget(), 'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_all': DummyWidget(), 'right_fast': DummyWidget(),
+        })
+        widget.runner.car.clim.dir_left = 0x07
+        widget.runner.car.clim.dir_right = 0x07
+        widget._update_dir_buttons()
+        assert widget.ids['left_all'].state == 'down'
+        assert widget.ids['right_all'].state == 'down'
 
     def test_on_dir_ignores_normal_state_transition(self):
         widget = self._make_clim_widget(ignition_on=True)
@@ -327,10 +357,10 @@ class TestClimUiHelpers:
     def test_idle_1d0_monitor_update_does_not_clear_left_button(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
-            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
-            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
-            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
-            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'left_auto': DummyWidget(), 'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_all': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_auto': DummyWidget(), 'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_all': DummyWidget(), 'right_fast': DummyWidget(),
             'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text=''),
         })
         widget.runner.car.clim.dir_left = 0x04
@@ -364,32 +394,62 @@ class TestClimUiHelpers:
     def test_1e3_left_auto_frame_keeps_left_auto_and_sets_right_up(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
-            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
-            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
-            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
-            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'left_auto': DummyWidget(), 'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_all': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_auto': DummyWidget(), 'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_all': DummyWidget(), 'right_fast': DummyWidget(),
             'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text=''),
         })
         msg = types.SimpleNamespace(arbitration_id=0x1E3, data=[0x11, 0x30, 0x0E, 0x0A, 0x00, 0x40, 0x02, 0x00])
         widget.on_can_message(msg)
         assert widget.runner.car.clim.dir_left == 0x00
         assert widget.runner.car.clim.dir_right == 0x04
+        assert widget.ids['left_auto'].state == 'down'
         assert widget.ids['left_up'].state == 'normal'
         assert widget.ids['right_up'].state == 'down'
 
     def test_1d0_single_nibble_direction_does_not_force_left_up(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
-            'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
-            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_fast': DummyWidget(),
-            'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
-            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_fast': DummyWidget(),
+            'left_auto': DummyWidget(), 'left_fr': DummyWidget(), 'left_up': DummyWidget(), 'left_ud': DummyWidget(),
+            'left_down': DummyWidget(), 'left_fd': DummyWidget(), 'left_all': DummyWidget(), 'left_fast': DummyWidget(),
+            'right_auto': DummyWidget(), 'right_fr': DummyWidget(), 'right_up': DummyWidget(), 'right_ud': DummyWidget(),
+            'right_down': DummyWidget(), 'right_fd': DummyWidget(), 'right_all': DummyWidget(), 'right_fast': DummyWidget(),
             'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text=''),
         })
         msg = types.SimpleNamespace(arbitration_id=0x1D0, data=[0x28, 0x00, 0x02, 0x04, 0x00, 0x0E, 0x0A, 0x00])
         widget.on_can_message(msg)
         assert widget.runner.car.clim.dir_left == 0x00
+        assert widget.ids['left_auto'].state == 'down'
         assert widget.ids['left_up'].state == 'normal'
+
+    def test_on_temp_right_zone_enables_dual_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.temp_left = 11
+        widget.runner.car.clim.temp_right = 11
+        widget.ids.update({'cur_temp1': DummyWidget(text='')})
+        widget.on_temp(1, -1)
+        assert widget.runner.car.clim.dual == 1
+        assert widget.runner.car.clim.temp_right == 10  # decreased by 1
+
+    def test_on_temp_right_zone_does_not_re_enable_dual_when_already_set(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 1
+        widget.runner.car.clim.temp_right = 11
+        widget.ids.update({'cur_temp1': DummyWidget(text='')})
+        widget.on_temp(1, +1)
+        assert widget.runner.car.clim.dual == 1
+        assert widget.runner.car.clim.temp_right == 12
+
+    def test_on_temp_left_zone_does_not_enable_dual_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.temp_left = 11
+        widget.ids.update({'cur_temp0': DummyWidget(text='')})
+        widget.on_temp(0, +1)
+        assert widget.runner.car.clim.dual == 0
+        assert widget.runner.car.clim.temp_left == 12
 
 
 class TestDoorsUiHelpers:
