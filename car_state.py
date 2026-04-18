@@ -72,6 +72,8 @@ class Doors:
         self.fuel_flap = 0
         # True while a door-open popup is being displayed on the MFD
         self.display_active = False
+        # Last popup message ID used on 0x1A1 so the clear frame can match it.
+        self.popup_msg_id = 0x0B
 
 
 class Parktronic:

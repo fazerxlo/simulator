@@ -8,6 +8,7 @@ _modname = 'Doors'
 _version = '0.0.1'
 
 MSG_DOORS_OPEN = 0x0B
+MSG_DRIVER_DOOR_OPEN = 0xDE
 
 
 class Doors(TabbedPanelItem):
@@ -34,6 +35,7 @@ class Doors(TabbedPanelItem):
         doors.rear_window = 0
         doors.fuel_flap = 0
         doors.display_active = False
+        doors.popup_msg_id = MSG_DOORS_OPEN
 
         self._sync_ui()
         self._update_summary()
@@ -162,6 +164,15 @@ class Doors(TabbedPanelItem):
     def _send_0x220_status(self):
         self.runner.send_message(0x220, self._build_0x220())
 
+    def _popup_message_id(self):
+        doors = self._doors
+        if doors.front_left and not any((
+            doors.front_right, doors.rear_left, doors.rear_right,
+            doors.boot, doors.bonnet, doors.rear_window, doors.fuel_flap,
+        )):
+            return MSG_DRIVER_DOOR_OPEN
+        return MSG_DOORS_OPEN
+
     def _send_0x1A1_popup(self):
         if self._pending_show_ev is not None:
             self._pending_show_ev.cancel()
@@ -173,25 +184,24 @@ class Doors(TabbedPanelItem):
 
         if self._any_open():
             self._doors.display_active = True
-            # Some clusters keep the first opened-door context until popup is refreshed.
-            self.runner.send_message(0x1A1, [0x7F, MSG_DOORS_OPEN, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+            self._doors.popup_msg_id = self._popup_message_id()
+            # Real dumps show a 0x00/0x80 toggle with the same message id.
+            self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
             self._pending_show_ev = Clock.schedule_once(self._send_popup_show, 0.05)
             return
 
         self._doors.display_active = True
-        self.runner.send_message(0x1A1, [0x7F, MSG_DOORS_OPEN, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._pending_clear_ev = Clock.schedule_once(self._send_popup_clear, 0.2)
 
     def _send_popup_show(self, _dt):
         self._pending_show_ev = None
         if not self._any_open():
             return
-        d3, d4 = self._build_0x1A1_door_bytes()
-        self.runner.send_message(0x1A1, [0x80, MSG_DOORS_OPEN, 0xC7, d3, d4, 0x00, 0x00, 0x00])
+        self.runner.send_message(0x1A1, [0x80, self._doors.popup_msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def _send_popup_clear(self, _dt):
         self._pending_clear_ev = None
-        self.runner.send_message(0x1A1, [0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._doors.display_active = False
 
     def on_can_message(self, msg):

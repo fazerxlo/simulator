@@ -46,17 +46,17 @@ class BSI_log(TabbedPanelItem):
     def show_msg(self, id=None):
         print(f'called with id={id} and flag={self.runner.car.mfd_popup.flag}')
         mfd = self.runner.car.mfd_popup
-        if id and mfd.flag == 0xFF:
+        if id is not None and mfd.flag in (0xFF, 0x00):
             mfd.msg_id = int(id)
             mfd.flag = 0x80
             Clock.schedule_once(self.show_msg, 2)
-        elif id == mfd.msg_id and mfd.flag != 0xFF:
+        elif id == mfd.msg_id and mfd.flag == 0x80:
             print('double call')
         elif mfd.flag == 0x80:
             print('reset flag')
-            mfd.flag = 0x7F
+            mfd.flag = 0x00
             Clock.schedule_once(self.show_msg, 0.2)
-        elif mfd.flag == 0x7F:
+        elif mfd.flag == 0x00:
             print('reset msg')
             mfd.flag = 0xFF
             mfd.msg_id = 0x00

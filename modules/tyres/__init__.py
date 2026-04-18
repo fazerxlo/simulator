@@ -170,9 +170,9 @@ class Tyres(TabbedPanelItem):
         if template is not None:
             payload = list(template[phase])
         elif phase == 'active':
-            payload = [0x80, msg_id, 0xC6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+            payload = [0x80, msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
         else:
-            payload = [0x00, msg_id, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+            payload = [0x00, msg_id, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
 
         # Dynamically set byte 3 for tyre-specific messages using a bitmask.
         # According to arduino-psa-comfort-can-adapter:

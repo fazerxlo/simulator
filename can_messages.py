@@ -481,30 +481,49 @@ class Msg190(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg1A1(CanMessage):
-    """MFD popup message with three-level arbitration.
+    """MFD popup message with dump-aligned PSA 0x1A1 formatting.
 
     Priority order (highest first):
     1. Tyre pressure warning  — ``car.tyres.display_active`` is True
     2. Door open warning      — ``car.doors.display_active`` is True
-    3. BSI log popup          — ``car.mfd_popup.flag`` is not 0xFF
+    3. BSI log popup / idle baseline frame
 
-    When a higher-priority source is active this message returns ``None``
-    (suppressed) so that the owner module can send event-driven frames via
-    ``runner.send_message()`` without colliding with the periodic sender.
+    The real bench captures keep 0x1A1 alive periodically even when no popup
+    is actively shown. To match that behavior, this encoder now emits an idle
+    baseline frame using message id ``0x8B`` and the observed display/priority
+    byte ``0xC6`` whenever no higher-priority popup is active.
     """
 
     can_id = 0x1A1
     period_ms = 100
+    IDLE_MESSAGE_ID = 0x8B
+    DISPLAY_FLAGS = 0xC6
 
     def encode(self, car) -> list | None:
-        # Tyres and doors use event-driven send_message() — yield to them.
-        if car.tyres.display_active or car.doors.display_active:
+        # Tyre warnings still own the bus with their dedicated event-driven payloads.
+        if car.tyres.display_active:
             return None
+
+        if car.doors.display_active:
+            d = car.doors
+            any_open = any((
+                d.front_left, d.front_right, d.rear_left, d.rear_right,
+                d.boot, d.bonnet, d.rear_window, d.fuel_flap,
+            ))
+            flag = 0x80 if any_open else 0x00
+            if d.front_left and not any((
+                d.front_right, d.rear_left, d.rear_right,
+                d.boot, d.bonnet, d.rear_window, d.fuel_flap,
+            )):
+                msg_id = 0xDE
+            else:
+                msg_id = d.popup_msg_id if d.popup_msg_id else 0x0B
+            return [flag, msg_id, self.DISPLAY_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+
         p = car.mfd_popup
-        if p.flag == 0xFF:
-            return None
-        b2 = 0xF0 if p.flag != 0xFF else 0x00
-        return [p.flag, p.msg_id, b2, 0x00, 0x00, 0x00, 0x00, 0x00]
+        flag = 0x80 if p.flag == 0x80 else 0x00
+        msg_id = p.msg_id if p.msg_id not in (None, 0x00) else self.IDLE_MESSAGE_ID
+        return [flag, msg_id, self.DISPLAY_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 2:

@@ -576,26 +576,31 @@ class TestMsg1A1Encode:
         car.tyres.display_active = True
         assert Msg1A1().encode(car) is None
 
-    def test_suppressed_when_door_display_active(self):
+    def test_encodes_driver_door_popup_when_door_display_active(self):
         car = VirtualCar()
         car.doors.display_active = True
-        assert Msg1A1().encode(car) is None
+        car.doors.front_left = 1
+        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-    def test_suppressed_when_no_popup(self):
+    def test_idle_encoding_matches_dump_style(self):
         car = VirtualCar()
-        assert Msg1A1().encode(car) is None
+        assert Msg1A1().encode(car) == [0x00, 0x8B, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
 
-    def test_encodes_popup(self):
+    def test_encodes_active_popup_like_real_dump(self):
         car = VirtualCar()
         car.mfd_popup.flag = 0x80
-        car.mfd_popup.msg_id = 0x42
-        data = Msg1A1().encode(car)
-        assert data[0] == 0x80
-        assert data[1] == 0x42
+        car.mfd_popup.msg_id = 0xDE
+        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+    def test_encodes_clear_stage_like_real_dump(self):
+        car = VirtualCar()
+        car.mfd_popup.flag = 0x00
+        car.mfd_popup.msg_id = 0xDE
+        assert Msg1A1().encode(car) == [0x00, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def test_decode_updates_car(self):
         car = VirtualCar()
-        Msg1A1().decode(car, [0x80, 0x42, 0xF0, 0, 0, 0, 0, 0])
+        Msg1A1().decode(car, [0x80, 0x42, 0xC6, 0, 0, 0, 0, 0])
         assert car.mfd_popup.flag == 0x80
         assert car.mfd_popup.msg_id == 0x42
 
