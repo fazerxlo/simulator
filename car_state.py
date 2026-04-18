@@ -28,9 +28,14 @@ class BSI:
         self.speed = 0
         self.fuel = 0
         self.oil = 0
+        # Oil level in percent (0-100). 0xFF = invalid/not available.
+        self.oil_level = 0xFF
         self.coolant = 0
         self.temperature = 20
         self.reverse = 0
+        # Blinker state from 0x0F6 byte 7 bits 1-0 (PSA-RE BLINKERS_STATUS).
+        # 0 = none, 1 = right, 2 = left, 3 = both (hazards).
+        self.blinkers = 0
 
 
 class Clim:
@@ -304,6 +309,43 @@ class MFDPopup:
         self.msg_id = 0x00
 
 
+class SpeedControl:
+    """Speed regulator / limiter state (drives 0x1A8).
+
+    Mirrors the PSA-RE ``SPEED_CONTROL`` / ``GESTION_VITESSE`` frame.
+    """
+
+    # SPEED_CONTROL_TYPE values (bits 7-6 of byte 0)
+    NONE = 0
+    REGULATOR = 1
+    LIMITER = 2
+    ADAPTIVE = 3
+
+    # ACTIVE_FUNCTION_STATUS values (bits 5-3 of byte 0)
+    STANDBY = 0
+    ACTIVE = 1
+    LIMITER_ACTIVE = 2
+    OVERSPEED_NO_PEDAL = 3
+    OVERSPEED_PEDAL = 4
+    NOT_ACTIVATABLE = 6
+    FAULT = 7
+
+    def __init__(self):
+        # Control type: NONE / REGULATOR / LIMITER / ADAPTIVE
+        self.control_type = SpeedControl.NONE
+        # Function status: STANDBY / ACTIVE / LIMITER_ACTIVE / FAULT / etc.
+        self.function_status = SpeedControl.STANDBY
+        # Whether a new activation was attempted this cycle
+        self.activation_attempt = 0
+        # Speed set-point in km/h. 0xFFFF (encoded) means not set.
+        # Valid range 0–254 km/h; use None to encode invalid (0xFFFF).
+        self.set_speed: float | None = None
+        # Speed unit: False = km/h, True = mph
+        self.unit_mph = False
+        # Partial trip odometer in km. None encodes as 0xFFFFFF (invalid).
+        self.partial_odo: float | None = None
+
+
 class VirtualCar:
     """Shared virtual car state for the Peugeot 407 simulator.
 
@@ -335,3 +377,4 @@ class VirtualCar:
         self.bte = BTEState()
         self.buttons = Buttons()
         self.mfd_popup = MFDPopup()
+        self.speed_control = SpeedControl()

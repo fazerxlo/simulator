@@ -41,7 +41,7 @@ def make_can_mock():
 
 from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
                        Parktronic, Tyres, VirtualCar, Radio, Trip,
-                       KMLState, BTEState)
+                       KMLState, BTEState, SpeedControl)
 from modules.clim import Clim as ClimModule
 
 
@@ -125,6 +125,21 @@ class TestVirtualCarDefaults:
         car = VirtualCar()
         assert car.mfd_popup.flag == 0xFF
         assert car.mfd_popup.msg_id == 0x00
+
+    def test_bsi_new_fields_defaults(self):
+        """New PSA-RE fields: blinkers and oil_level should have correct defaults."""
+        car = VirtualCar()
+        assert car.bsi.blinkers == 0       # no blinker
+        assert car.bsi.oil_level == 0xFF   # invalid / not available
+
+    def test_speed_control_defaults(self):
+        """SpeedControl should start in NONE/STANDBY with no set_speed."""
+        car = VirtualCar()
+        assert car.speed_control.control_type == SpeedControl.NONE
+        assert car.speed_control.function_status == SpeedControl.STANDBY
+        assert car.speed_control.set_speed is None
+        assert car.speed_control.partial_odo is None
+        assert car.speed_control.unit_mph is False
 
 
 class TestVirtualCarMutation:
@@ -328,7 +343,7 @@ from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
-                          Msg110, Msg0F6, Msg161, Msg217, Msg12D,
+                          Msg110, Msg0F6, Msg161, Msg1A8, Msg217, Msg12D,
                           STARTUP_WAKEUP_BURST)
 
 
@@ -969,30 +984,42 @@ class TestMsg0F6PSARe:
         Msg0F6().decode(car2, data)
         assert abs(car2.bsi.temperature - 22.0) < 0.5
 
-    def test_blinker_bits_in_byte7(self):
-        """PSA-RE: BLINKERS_STATUS at byte 8 (idx 7) bits 1-0.
-        0=none, 1=right, 2=left, 3=both.
-        The simulator decode does not yet extract this field into car state,
-        but we verify the bit positions are consistent with a real-bus frame.
-        """
-        # Frame with right blinker active (bit 1-0 = 0b01) + reverse=0
-        frame = [0x88, 0x3C, 0x00, 0x00, 0x00, 0xFC, 0xFC, 0x01]
-        blinkers = frame[7] & 0x03
-        assert blinkers == 1  # right blinker
+    def test_blinker_decode_and_encode(self):
+        """PSA-RE: BLINKERS_STATUS decoded from byte 7 bits 1-0 into car.bsi.blinkers."""
+        for blinker_val, label in [(0, 'none'), (1, 'right'), (2, 'left'), (3, 'both')]:
+            car = VirtualCar()
+            frame = [0x88, 0x3C, 0x00, 0x00, 0x00, 0xFC, 0xFC, blinker_val]
+            Msg0F6().decode(car, frame)
+            assert car.bsi.blinkers == blinker_val, f'expected {blinker_val} for {label}'
 
-        frame_left = [0x88, 0x3C, 0x00, 0x00, 0x00, 0xFC, 0xFC, 0x02]
-        blinkers_left = frame_left[7] & 0x03
-        assert blinkers_left == 2  # left blinker
+    def test_encode_blinkers_in_byte7_bits1_0(self):
+        """Encoding bsi.blinkers should set bits 1-0 of byte 7."""
+        for blinker_val in [0, 1, 2, 3]:
+            car = VirtualCar()
+            car.bsi.blinkers = blinker_val
+            data = Msg0F6().encode(car)
+            assert (data[7] & 0x03) == blinker_val
 
-        frame_both = [0x88, 0x3C, 0x00, 0x00, 0x00, 0xFC, 0xFC, 0x03]
-        blinkers_both = frame_both[7] & 0x03
-        assert blinkers_both == 3  # both (hazards)
+    def test_encode_uses_0x88_status_byte(self):
+        """Byte 0 must be 0x88 (real-bus value: customer config + generator ok)."""
+        car = VirtualCar()
+        data = Msg0F6().encode(car)
+        assert data[0] == 0x88
+
+    def test_encode_odometer_bytes_are_invalid(self):
+        """Bench simulation encodes 0xFFFFFF (invalid) for the odometer bytes 2-4."""
+        car = VirtualCar()
+        data = Msg0F6().encode(car)
+        assert data[2] == 0xFF
+        assert data[3] == 0xFF
+        assert data[4] == 0xFF
 
     def test_odometer_bytes_position(self):
         """PSA-RE: ODOMETER is 24-bit at bytes 3-5 (idx 2-4), ×0.1 km.
-        The simulator sends constants here; verify the byte positions and formula.
+        The simulator encodes 0xFFFFFF (invalid) for bench simulation.
+        Verify that when a real-bus frame is decoded the formula holds.
         """
-        # Encode a known odometer value of 12345.6 km
+        # Build a frame with a known odometer value of 12345.6 km
         odo_raw = round(12345.6 / 0.1)  # = 123456
         b2 = (odo_raw >> 16) & 0xFF
         b3 = (odo_raw >> 8) & 0xFF
@@ -1227,53 +1254,170 @@ class TestMsg168PSARe:
         assert car2.dashboard.battery == 1
 
 
-class TestMsg1A8PSARe:
-    """0x1A8 — SPEED_CONTROL: PSA-RE confirmed signal positions."""
+class TestMsg1A8:
+    """0x1A8 — SPEED_CONTROL: encode/decode using the new Msg1A8 class."""
 
-    def test_set_speed_decode_formula(self):
-        """PSA-RE: SET_SPEED is uint16 at bytes 2-3 (idx 1-2), × 0.01 km/h."""
-        # Encode 110.50 km/h → raw = 11050 = 0x2B2A
-        speed_raw = 11050
-        b1 = (speed_raw >> 8) & 0xFF  # 0x2B
-        b2 = speed_raw & 0xFF          # 0x2A
-        frame = [0x40, b1, b2, 0x00, 0x00, 0x00, 0x00, 0x00]
-        decoded_speed = ((frame[1] << 8) | frame[2]) * 0.01
-        assert abs(decoded_speed - 110.50) < 0.01
+    def test_encode_set_speed_kmh(self):
+        """SET_SPEED encoded as uint16 × 0.01 at bytes 1-2."""
+        car = VirtualCar()
+        car.speed_control.set_speed = 110.50
+        data = Msg1A8().encode(car)
+        speed_raw = (data[1] << 8) | data[2]
+        assert abs(speed_raw * 0.01 - 110.50) < 0.01
 
-    def test_set_speed_invalid_value(self):
-        """PSA-RE: SET_SPEED invalid = 0xFFFF → no set speed."""
-        frame = [0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
-        speed_raw = (frame[1] << 8) | frame[2]
-        assert speed_raw == 0xFFFF
+    def test_encode_set_speed_none_is_0xffff(self):
+        """set_speed=None encodes as 0xFFFF (not set)."""
+        car = VirtualCar()
+        car.speed_control.set_speed = None
+        data = Msg1A8().encode(car)
+        assert data[1] == 0xFF
+        assert data[2] == 0xFF
 
-    def test_speed_control_type_bits(self):
-        """PSA-RE: SPEED_CONTROL_TYPE at byte 1 (idx 0) bits 7-6.
-        0=none, 1=regulator, 2=limiter, 3=adaptive CC.
-        """
-        # Limiter active: bits 7-6 = 0b10 → byte0 = 0x80
-        frame_limiter = [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-        ctrl_type = (frame_limiter[0] >> 6) & 0x03
-        assert ctrl_type == 2  # limiter
+    def test_decode_set_speed(self):
+        """Decode SET_SPEED from bytes 1-2 into car.speed_control.set_speed."""
+        car = VirtualCar()
+        # 110.50 km/h → raw = 11050 = 0x2B2A
+        Msg1A8().decode(car, [0x40, 0x2B, 0x2A, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert abs(car.speed_control.set_speed - 110.50) < 0.01
 
-        # Regulator active: bits 7-6 = 0b01 → byte0 = 0x40
-        frame_reg = [0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-        ctrl_type_reg = (frame_reg[0] >> 6) & 0x03
-        assert ctrl_type_reg == 1  # regulator
+    def test_decode_set_speed_invalid(self):
+        """0xFFFF decodes to None (no set speed)."""
+        car = VirtualCar()
+        Msg1A8().decode(car, [0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert car.speed_control.set_speed is None
 
-    def test_odometer_partial_decode(self):
-        """PSA-RE: ODOMETER_PARTIAL is uint24 at bytes 6-8 (idx 5-7), × 0.001 km."""
-        # Encode 1234.567 km → raw = 1234567
+    def test_encode_decode_set_speed_roundtrip(self):
+        """Encode then decode should preserve set_speed within 0.01 km/h."""
+        car = VirtualCar()
+        car.speed_control.set_speed = 130.0
+        data = Msg1A8().encode(car)
+        car2 = VirtualCar()
+        Msg1A8().decode(car2, data)
+        assert abs(car2.speed_control.set_speed - 130.0) < 0.01
+
+    def test_encode_partial_odometer(self):
+        """ODOMETER_PARTIAL encoded as uint24 × 0.001 at bytes 5-7."""
+        car = VirtualCar()
+        car.speed_control.partial_odo = 1234.567
+        data = Msg1A8().encode(car)
+        odo_raw = (data[5] << 16) | (data[6] << 8) | data[7]
+        assert abs(odo_raw * 0.001 - 1234.567) < 0.001
+
+    def test_encode_partial_odometer_none_is_0xffffff(self):
+        """partial_odo=None encodes as 0xFFFFFF (invalid)."""
+        car = VirtualCar()
+        car.speed_control.partial_odo = None
+        data = Msg1A8().encode(car)
+        assert data[5] == 0xFF
+        assert data[6] == 0xFF
+        assert data[7] == 0xFF
+
+    def test_decode_partial_odometer(self):
+        """Decode ODOMETER_PARTIAL from bytes 5-7."""
+        car = VirtualCar()
+        # 1234.567 km → raw = 1234567
         odo_raw = 1234567
         b5 = (odo_raw >> 16) & 0xFF
         b6 = (odo_raw >> 8) & 0xFF
         b7 = odo_raw & 0xFF
-        frame = [0x40, 0x00, 0x00, 0x00, 0x00, b5, b6, b7]
-        decoded_odo = ((frame[5] << 16) | (frame[6] << 8) | frame[7]) * 0.001
-        assert abs(decoded_odo - 1234.567) < 0.001
+        Msg1A8().decode(car, [0x40, 0x00, 0x00, 0x00, 0x00, b5, b6, b7])
+        assert abs(car.speed_control.partial_odo - 1234.567) < 0.001
 
-    def test_unit_flag_kmh_vs_mph(self):
-        """PSA-RE: CONTROL_UNIT at byte 1 (idx 0) bit 1 — 0=km/h, 1=mph."""
-        frame_kmh = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-        frame_mph = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
-        assert (frame_kmh[0] >> 1) & 1 == 0  # km/h
-        assert (frame_mph[0] >> 1) & 1 == 1  # mph
+    def test_decode_partial_odometer_invalid(self):
+        """0xFFFFFF decodes to None (invalid)."""
+        car = VirtualCar()
+        Msg1A8().decode(car, [0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF])
+        assert car.speed_control.partial_odo is None
+
+    def test_encode_control_type_regulator(self):
+        """SPEED_CONTROL_TYPE = REGULATOR (1) → bits 7-6 of byte 0 = 0b01."""
+        car = VirtualCar()
+        car.speed_control.control_type = SpeedControl.REGULATOR
+        data = Msg1A8().encode(car)
+        assert (data[0] >> 6) & 0x03 == 1
+
+    def test_encode_control_type_limiter(self):
+        """SPEED_CONTROL_TYPE = LIMITER (2) → bits 7-6 of byte 0 = 0b10."""
+        car = VirtualCar()
+        car.speed_control.control_type = SpeedControl.LIMITER
+        data = Msg1A8().encode(car)
+        assert (data[0] >> 6) & 0x03 == 2
+
+    def test_decode_control_type(self):
+        """Decode SPEED_CONTROL_TYPE from byte 0 bits 7-6."""
+        car = VirtualCar()
+        Msg1A8().decode(car, [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert car.speed_control.control_type == 2  # limiter
+
+    def test_encode_unit_mph(self):
+        """unit_mph=True sets byte 0 bit 1."""
+        car = VirtualCar()
+        car.speed_control.unit_mph = True
+        data = Msg1A8().encode(car)
+        assert (data[0] >> 1) & 1 == 1
+
+    def test_decode_unit_mph(self):
+        """Decode unit_mph from byte 0 bit 1."""
+        car = VirtualCar()
+        Msg1A8().decode(car, [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert car.speed_control.unit_mph is True
+
+    def test_1a8_registered_in_all_messages(self):
+        """Msg1A8 must appear in ALL_MESSAGES."""
+        assert 0x1A8 in ALL_MESSAGES
+
+
+class TestMsg161OilLevel:
+    """0x161 — BSI_GAUGES: oil level signal at byte 6 (PSA-RE confirmed)."""
+
+    def test_encode_oil_level_at_byte6(self):
+        """OIL_LEVEL encoded at byte 6 (0-indexed)."""
+        car = VirtualCar()
+        car.bsi.oil_level = 75
+        data = Msg161().encode(car)
+        assert data[6] == 75
+
+    def test_encode_oil_level_invalid_is_0xff(self):
+        """Default oil_level = 0xFF (invalid/not available) encodes as 0xFF."""
+        car = VirtualCar()
+        assert car.bsi.oil_level == 0xFF
+        data = Msg161().encode(car)
+        assert data[6] == 0xFF
+
+    def test_decode_oil_level_from_byte6(self):
+        """Decode OIL_LEVEL from byte 6 into car.bsi.oil_level."""
+        car = VirtualCar()
+        Msg161().decode(car, [0x00, 0x00, 0x50, 0x32, 0xFF, 0xFF, 0x4B])
+        assert car.bsi.oil_level == 0x4B  # 75
+
+    def test_decode_oil_level_invalid(self):
+        """0xFF in byte 6 decodes as 0xFF (invalid)."""
+        car = VirtualCar()
+        Msg161().decode(car, [0x00, 0x00, 0x50, 0x32, 0xFF, 0xFF, 0xFF])
+        assert car.bsi.oil_level == 0xFF
+
+    def test_decode_short_frame_does_not_update_oil_level(self):
+        """Frame shorter than 7 bytes should not update oil_level."""
+        car = VirtualCar()
+        car.bsi.oil_level = 50
+        Msg161().decode(car, [0x00, 0x00, 0x50, 0x32, 0xFF, 0xFF])
+        assert car.bsi.oil_level == 50  # unchanged
+
+    def test_encode_decode_roundtrip_all_fields(self):
+        """Encode then decode should preserve oil_temp, fuel, and oil_level."""
+        car = VirtualCar()
+        car.bsi.oil = 95        # oil temp 95 °C
+        car.bsi.fuel = 60       # 60 %
+        car.bsi.oil_level = 80  # 80 %
+        data = Msg161().encode(car)
+        car2 = VirtualCar()
+        Msg161().decode(car2, data)
+        assert car2.bsi.oil == 95
+        assert car2.bsi.fuel == 60
+        assert car2.bsi.oil_level == 80
+
+    def test_frame_length_is_7_bytes(self):
+        """PSA-RE defines 0x161 as 7 bytes; simulator encodes exactly 7."""
+        car = VirtualCar()
+        data = Msg161().encode(car)
+        assert len(data) == 7
