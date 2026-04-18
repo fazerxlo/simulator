@@ -8,6 +8,7 @@ from can_messages import Msg1A0, Msg131
 
 _modname = 'CDC'
 _modversion = '0.0.1'
+_STARTUP_DELAY_SECONDS = 2.0
 
 
 class CDC(TabbedPanelItem):
@@ -39,7 +40,7 @@ class CDC(TabbedPanelItem):
         # Announce presence to the radio: start in LOADING, then PAUSED.
         runner.car.cdc.active = True
         runner.car.cdc.status = runner.car.cdc.STATUS_LOADING
-        Clock.schedule_once(self._on_ready, 2.0)
+        Clock.schedule_once(self._on_ready, _STARTUP_DELAY_SECONDS)
 
         # Clock handle for the playback time ticker
         self._timer = None
@@ -152,7 +153,7 @@ class CDC(TabbedPanelItem):
             v = int(value)
             if 1 <= v <= 99:
                 cdc = self._cdc
-                cdc.disc_tracks[cdc.disc] = v
+                cdc.total_tracks = v
                 if 'total_tracks_label' in self.ids:
                     self.ids['total_tracks_label'].text = str(v)
                 # Refresh disc button labels to show updated per-disc counts
