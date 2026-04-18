@@ -104,20 +104,18 @@ simulation the constant is acceptable.
 **Corrections vs existing workspace documentation:**
 
 1. **Bytes 3-5 (idx 2-4) are the odometer**, encoded as uint24 × 0.1 km.  The simulator sends
-   `0x00, 0x1F, 0x00` as constants in those positions.  This is correct for bench simulation
-   (no real odometer to emulate) but should not be confused with meaningful temperature or body
-   data.
+   `0xFF 0xFF 0xFF` (invalid sentinel) in those positions for bench simulation.
 
 2. **External temperature resolution is 0.5** (formula: `raw * 0.5 − 40`). The simulator correctly
    uses this formula in the `decode` path (`data[5] / 2.0 - 40`).
 
-3. **Byte 8 (idx 7) carries blinker state** in bits 1-0. The simulator only tracks the reverse bit
-   (bit 7) from this byte.
+3. **Byte 8 (idx 7) carries blinker state** in bits 1-0. The simulator now encodes/decodes this
+   in `car.bsi.blinkers` (0=none, 1=right, 2=left, 3=both/hazards).
 
-4. **Real-bus first byte (idx 0) starts with 0x88**, not 0x08. PSA-RE shows byte 1 as a multi-field
-   status byte (`CONFIG_MODE=2, GEN_STATUS=1` → `0x88` = customer config + generator working).
-   The simulator sends `0x08` which corresponds to `CONFIG_MODE=0, POWERTRAIN_STATUS=0` — a
-   valid but less realistic pattern.
+4. **Real-bus first byte (idx 0) is 0x88** (customer config + generator working). The simulator
+   now transmits `0x88` to match the real-bus pattern.
+
+> **See also:** `CAN2004_0x0F6.md` for full signal tables, encoding formulas, and test vectors.
 
 ---
 
@@ -248,6 +246,9 @@ simulation is added.
 
 **New signal:** `OIL_LEVEL` in byte 7 (idx 6) was not previously documented. The simulator sends
 `0xFF` in that position (unused/invalid), which is the correct invalid value per PSA-RE.
+The simulator now encodes/decodes this in `car.bsi.oil_level`.
+
+> **See also:** `CAN2004_0x161.md` for full signal tables, encoding formulas, and test vectors.
 
 ---
 
@@ -323,7 +324,8 @@ mapping of `dash.coolant_warn` → byte 0 bit 7, `dash.abs` → byte 3 bit 5, an
 | **2-3** | **1-2** | **15-0** | **SET_SPEED** | VIT_CONS_LVV_RVV | **uint16 × 0.01 km/h, invalid 0xFFFF** |
 | **6-8** | **5-7** | **23-0** | **ODOMETER_PARTIAL** | ODO_PARTIEL | **uint24 × 0.001 km, invalid 0xFFFFFF** |
 
-The simulator does not currently implement 0x1A8. When decoding from a real car:
+The simulator now implements `Msg1A8` (see `can_messages.py`). State is held in
+`car.speed_control` (`SpeedControl` in `car_state.py`).
 
 ```python
 speed_raw = (data[1] << 8) | data[2]
@@ -332,6 +334,9 @@ set_speed_kmh = speed_raw * 0.01  # 0xFFFF = not set
 odo_raw = (data[5] << 16) | (data[6] << 8) | data[7]
 partial_odo_km = odo_raw * 0.001  # 0xFFFFFF = invalid
 ```
+
+> **See also:** `CAN2004_0x1A8.md` for full signal tables, status enumerations, encoding
+> formulas, and test vectors.
 
 ---
 
