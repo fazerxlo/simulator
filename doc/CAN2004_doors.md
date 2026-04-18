@@ -20,10 +20,10 @@ This is the authoritative real-time door/body status frame. Prefer this frame ov
 | 0    | 4    | Rear right door open |
 | 0    | 3    | Trunk / boot lid open |
 | 0    | 2    | Hood / bonnet open |
-| 0    | 1    | Rear window open |
+| 0    | 1    | Rear window open (**SW/estate models only** — source: PSA-RE) |
 | 0    | 0    | Fuel filler flap open |
-| 1    | 7    | Vehicle type (`0` = saloon/hatch, `1` = van/estate — vehicle-specific) |
-| 1    | 6    | Spare wheel status |
+| 1    | 7    | Vehicle type (`0` = 5-door saloon/hatch, `1` = 3-door — source: PSA-RE `CAR_TYPE`) |
+| 1    | 6    | Spare wheel arm status (`SPARE_WHEEL_ARM_STATUS`) |
 | 1    | 5–0  | Reserved / unused |
 
 > **Bit order note:** Bits are read right-to-left in the hardware struct (LSB = bit 0), so `bit 7` of byte 0 is the most-significant bit of the first byte.
