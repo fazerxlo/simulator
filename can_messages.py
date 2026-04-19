@@ -726,7 +726,12 @@ class Msg1D0(CanMessage):
         dir_left = int(clim.dir_left) & 0x0F
         dir_right = int(clim.dir_right) & 0x0F
         dir_byte = (dir_left << 4) | dir_right
-        b0 = 0x08 | (0x11 if clim.unfrost_front else 0x00)
+        if clim.unfrost_front:
+            b0 = 0x19  # 0x08 | 0x11
+        elif clim.auto:
+            b0 = 0x08  # AUTO mode — no manual-distribution bit
+        else:
+            b0 = 0x28  # 0x08 | 0x20 — manual fan/direction mode
         b4 = clim.recycle << 5 | clim.unfrost_front << 4
         fan_raw = _encode_clim_fan(clim.fan)
         return [b0, 0x00, fan_raw, dir_byte, b4,
@@ -771,7 +776,11 @@ class Msg1E3(CanMessage):
             d2 = 0x30 if car.bsi.ignition_on else 0x40
             return [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
         clim = car.clim
-        b1 = 0x04 | (clim.ac << 4) | (clim.auto << 3) | clim.dual
+        # In AUTO mode bits 2+3 (0x0C) are set together; in manual mode they
+        # are both clear and only the dual bit at position 0 applies.
+        # Verified against workbench: auto=1,ac=1,dual=0 → 0x1C; auto=0,ac=1,dual=1 → 0x11
+        mode_bits = 0x0C if clim.auto else 0x00
+        b1 = (clim.ac << 4) | mode_bits | clim.dual
         b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right

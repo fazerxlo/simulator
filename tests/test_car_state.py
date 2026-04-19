@@ -1068,35 +1068,46 @@ class TestMsg1E3DecodeBenchAlignment:
 class TestMsg1E3EncodeBenchAlignment:
     """Verify 0x1E3 active-climate encoding matches workbench captures."""
 
-    def test_byte0_has_constant_0x14_bits_when_auto_and_no_dual(self):
-        """Workbench initial state: 1C 30 0B 0B 00 00 02 00 → byte0=0x1C=0x14|0x08."""
+    def test_byte0_auto_ac_no_dual_gives_0x1c(self):
+        """Workbench initial state: 1C 30 0B 0B 00 00 02 00 → byte0=0x1C."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 1
         car.clim.dual = 0
         data = Msg1E3().encode(car)
-        assert data[0] == 0x1C  # 0x14 | (1<<3) | 0
+        assert data[0] == 0x1C  # (1<<4) | 0x0C | 0
 
-    def test_byte0_dual_bit_set_with_constant_and_auto(self):
-        """Workbench dual+auto state: byte0=0x1D=0x14|0x08|0x01."""
+    def test_byte0_dual_bit_set_with_auto_gives_0x1d(self):
+        """Workbench dual+auto state: byte0=0x1D."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 1
         car.clim.dual = 1
         data = Msg1E3().encode(car)
-        assert data[0] == 0x1D  # 0x14 | (1<<3) | 1
+        assert data[0] == 0x1D  # (1<<4) | 0x0C | 1
 
-    def test_byte0_constant_bits_present_when_no_auto_no_dual(self):
-        """Workbench manual state: byte0=0x14."""
+    def test_byte0_manual_ac_no_dual_gives_0x10(self):
+        """Manual mode (auto=0), A/C on, no dual: byte0=0x10 (no mode-bits constant)."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 0
         car.clim.dual = 0
         data = Msg1E3().encode(car)
-        assert data[0] == 0x14  # 0x14 | 0 | 0
+        assert data[0] == 0x10  # (1<<4) | 0 | 0
+
+    def test_byte0_manual_ac_dual_gives_0x11(self):
+        """Workbench fan-speed test: manual, A/C on, dual=1 → byte0=0x11."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        car.clim.ac = 1
+        car.clim.dual = 1
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x11  # (1<<4) | 0 | 1
 
     def test_byte1_has_constant_0x30_bits_when_unfrost_off(self):
         """Workbench: byte1=0x30 when front unfrost is off."""
@@ -1140,8 +1151,8 @@ class TestMsg1E3EncodeBenchAlignment:
         data = Msg1E3().encode(car)
         assert data[0] == 0x0C  # 0x04 | 0 | 0x08 | 0
 
-    def test_byte0_ac_off_manual_gives_0x04(self):
-        """A/C off, manual mode: 0x04|(0<<4)|(0<<3)|0=0x04."""
+    def test_byte0_ac_off_manual_gives_0x00(self):
+        """A/C off, manual mode: (0<<4)|0|0 = 0x00 — no mode-bits in manual."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
@@ -1149,7 +1160,7 @@ class TestMsg1E3EncodeBenchAlignment:
         car.clim.auto = 0
         car.clim.dual = 0
         data = Msg1E3().encode(car)
-        assert data[0] == 0x04
+        assert data[0] == 0x00
 
 
 class TestMsg12DEncode:
@@ -1236,12 +1247,22 @@ class TestMsg1D0Encode:
         data = Msg1D0().encode(car)
         assert data[3] == 0x42  # workbench: left=4 up, right=2 bottom
 
-    def test_byte0_base_constant_in_active_mode(self):
+    def test_byte0_base_constant_in_auto_mode(self):
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
+        car.clim.auto = 1
         data = Msg1D0().encode(car)
-        assert data[0] == 0x08  # workbench constant base when unfrost off
+        assert data[0] == 0x08  # workbench: AUTO mode, no manual-distribution bit
+
+    def test_byte0_manual_mode_has_0x20_bit(self):
+        """Workbench fan-speed test: manual mode adds 0x20 → byte0=0x28."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x28  # 0x08 | 0x20
 
     def test_byte0_includes_unfrost_flags_when_active(self):
         car = VirtualCar()
