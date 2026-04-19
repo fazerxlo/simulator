@@ -1182,6 +1182,43 @@ class TestMsg1E3EncodeBenchAlignment:
         data = Msg1E3().encode(car)
         assert data[0] == 0x00
 
+    def test_standby_byte0_encodes_ac_and_dual_with_0x20(self):
+        """Workbench fan=0 standby: byte0=(ac<<4)|0x20|dual; fan=0x0F; temps preserved."""
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.enabled = False
+        car.clim.ac = 1
+        car.clim.dual = 1
+        car.clim.temp_left = 11
+        car.clim.temp_right = 11
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x31   # (1<<4)|0x20|1 — matches workbench standby frame
+        assert data[6] == 0x0F  # fan=off
+        assert data[2] == 11    # temp_left preserved
+        assert data[3] == 11    # temp_right preserved
+
+    def test_standby_byte0_ac_on_no_dual(self):
+        """Standby with ac=1, dual=0: byte0=(1<<4)|0x20|0=0x30."""
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.enabled = False
+        car.clim.ac = 1
+        car.clim.dual = 0
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x30   # (1<<4)|0x20|0
+
+    def test_standby_preserves_temps_in_1e3(self):
+        """When suspended (fan=0), 0x1E3 preserves the temperature bytes."""
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.enabled = False
+        car.clim.ac = 1
+        car.clim.temp_left = 14
+        car.clim.temp_right = 9
+        data = Msg1E3().encode(car)
+        assert data[2] == 14
+        assert data[3] == 9
+
 
 class TestMsg12DEncode:
     """Verify 0x12D matches workbench captures."""
@@ -1334,6 +1371,30 @@ class TestMsg1D0Encode:
         car = VirtualCar()
         Msg1D0().decode(car, [0x28, 0x00, 0x00, 0x44, 0x00, 0x0D, 0x0A, 0x00])
         assert car.clim.fan == 1
+
+    def test_standby_byte0_is_0xa8_when_clim_disabled_ignition_on(self):
+        """Workbench: fan=0 standby frame has byte0=0xA8 (0x80|0x20|0x08)."""
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.enabled = False
+        car.clim.temp_left = 11
+        car.clim.temp_right = 11
+        data = Msg1D0().encode(car)
+        assert data[0] == 0xA8
+        assert data[2] == 0x0F  # fan=off
+        assert data[5] == 11    # temp_left preserved
+        assert data[6] == 11    # temp_right preserved
+
+    def test_standby_preserves_temps_in_1d0(self):
+        """When suspended (fan=0), 0x1D0 preserves the temperature bytes."""
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.enabled = False
+        car.clim.temp_left = 14
+        car.clim.temp_right = 9
+        data = Msg1D0().encode(car)
+        assert data[5] == 14
+        assert data[6] == 9
 
 
 class TestMsg190Rolling:

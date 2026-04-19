@@ -720,9 +720,13 @@ class Msg1D0(CanMessage):
         return 500
 
     def encode(self, car) -> list:
-        if not car.clim.enabled or not car.bsi.ignition_on:
+        if not car.bsi.ignition_on:
             return [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
         clim = car.clim
+        if not clim.enabled:
+            # Standby (fan=0, ignition on): climate suspended but ignition is on.
+            # Workbench byte0=0xA8 (0x80|0x20|0x08); fan=0x0F; temps preserved.
+            return [0xA8, 0x00, 0x0F, 0x00, 0x00, clim.temp_left, clim.temp_right, 0x00]
         dir_left = int(clim.dir_left) & 0x0F
         dir_right = int(clim.dir_right) & 0x0F
         dir_byte = (dir_left << 4) | dir_right
@@ -772,10 +776,15 @@ class Msg1E3(CanMessage):
     required_modules = frozenset({'clim'})
 
     def encode(self, car) -> list:
-        if not car.clim.enabled or not car.bsi.ignition_on:
-            d2 = 0x30 if car.bsi.ignition_on else 0x40
-            return [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
+        if not car.bsi.ignition_on:
+            return [0x1C, 0x40, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
         clim = car.clim
+        if not clim.enabled:
+            # Standby (fan=0, ignition on): climate suspended but ignition is on.
+            # Workbench byte0=(ac<<4)|0x20|dual; fan=0x0F; temps preserved.
+            b1 = (clim.ac << 4) | 0x20 | clim.dual
+            b2 = 0x30 | (clim.unfrost_front << 7)
+            return [b1, b2, clim.temp_left, clim.temp_right, 0x00, 0x00, 0x0F, 0x00]
         # In AUTO mode bits 2+3 (0x0C) are set together; in manual mode they
         # are both clear and only the dual bit at position 0 applies.
         # Bit 3 = AUTO active, bit 2 = paired with AUTO (both set/clear together).

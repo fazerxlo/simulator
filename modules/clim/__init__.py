@@ -203,12 +203,18 @@ class Clim(TabbedPanelItem):
         if new_fan != self._clim.fan:
             logger.info('Fan speed set to %d', new_fan)
         if new_fan == 0:
-            self._set_off_state()
+            # Fan=0 suspends climate but preserves all settings (ac, dual,
+            # direction, temps) so they can be restored when fan is raised again.
             self._clim.enabled = False
+            self._update_fan(0)
             self._update_options()
             return
         clim = self._clim
+        if not clim.enabled:
+            # Re-enable from standby when user raises fan from 0.
+            clim.enabled = True
         if clim.auto:
+            # Changing fan speed manually always exits AUTO mode.
             clim.auto = 0
             self._update_options()
         self._update_fan(new_fan)
