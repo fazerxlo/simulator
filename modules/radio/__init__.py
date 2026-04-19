@@ -253,7 +253,7 @@ class Radio(TabbedPanelItem):
             0x20: 'toggle_band_fm2', 0x40: 'toggle_band_fmast',
             0x50: 'toggle_band_am',
         }
-        self._set_toggle_group(band_map, band_map.get(self._radio.band, 'toggle_band_none'))
+        self._set_toggle_group(band_map, band_map.get(self._radio.band) or band_map[0x00])
 
     def _update_mem_toggle(self):
         """Set the memory preset toggle to match car.radio.mem."""
@@ -263,7 +263,7 @@ class Radio(TabbedPanelItem):
             0x40: 'toggle_mem_4', 0x50: 'toggle_mem_5',
             0x60: 'toggle_mem_6', 0x70: 'toggle_mem_dash',
         }
-        self._set_toggle_group(mem_map, mem_map.get(self._radio.mem, 'toggle_mem_no'))
+        self._set_toggle_group(mem_map, mem_map.get(self._radio.mem) or mem_map[0x00])
 
     def _update_flag_toggles(self):
         """Sync RDS/PTY/TA/scan/tun/list toggle states from car.radio."""
