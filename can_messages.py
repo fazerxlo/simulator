@@ -147,7 +147,7 @@ class Msg0B6(CanMessage):
         # Real bench idle / engine-off traces use 0xFFFF placeholders rather
         # than literal sensor values. Treat those as invalid zeros so monitor
         # mode does not show absurd RPM or speed readings.
-        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else int(raw_rpm / 8)
+        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else (raw_rpm >> 3)
         car.bsi.speed = 0 if raw_speed == 0xFFFF else int(raw_speed / 100)
         car.bsi.engine_running = 1 if raw_rpm not in (0x0000, 0xFFFF) else 0
 
