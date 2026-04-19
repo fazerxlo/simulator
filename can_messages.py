@@ -808,7 +808,14 @@ class Msg1E3(CanMessage):
         else:
             mode_bits = 0x00
         recirc_bit = 0x80 if clim.recycle else 0x00
-        b1 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
+        # Bit1 (0x02) is the one-shot MFD notification trigger: the real BSI
+        # sets it for exactly one frame when switching to Recirc (→ popup
+        # "Cabin air recycling activated") or Fresh (→ "Forced intake of
+        # outside air").  Workbench: 0x87 = 0x85|0x02 on recirc entry,
+        # 0x07 = 0x05|0x02 on fresh entry.
+        notify_bit = 0x02 if clim.intake_notify else 0x00
+        clim.intake_notify = False  # one-shot: consume after first use
+        b1 = recirc_bit | (clim.ac << 4) | mode_bits | notify_bit | clim.dual
         b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right

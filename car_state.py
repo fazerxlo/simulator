@@ -61,6 +61,14 @@ class Clim:
         # activated by the user.  Clears on AUTO or full OFF reset.  Controls
         # bit5 of 0x1D0 byte4 and bit2 of 0x1E3 byte0 per workbench analysis.
         self.intake_explicit = False
+        # One-shot notification flag.  Set to True by on_airflow_mode when the
+        # user selects Recirc or Fresh; consumed (and cleared) by Msg1E3.encode
+        # on the very next frame to set bit1 (0x02) of 0x1E3 byte0.
+        # Workbench-verified: the real BSI sends exactly one frame with bit1=1
+        # immediately after the mode change (0x87 for recirc, 0x07 for fresh),
+        # which is what triggers the MFD popup "Cabin air recycling activated"
+        # or "Forced intake of outside air".
+        self.intake_notify = False
         # Set to True by the clim module so that Msg1D0/Msg1E3 switch from the
         # BSI idle encoding to the full climate encoding.
         self.enabled = False

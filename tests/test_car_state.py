@@ -676,6 +676,8 @@ class TestClimUiHelpers:
         assert widget.runner.car.clim.ac == 0
         assert widget.ids['intake_recycle'].state == 'down'
         assert widget.ids['mode_recirc'].state == 'down'
+        # Workbench: one-shot notification bit triggers MFD popup.
+        assert widget.runner.car.clim.intake_notify is True
 
     def test_on_airflow_mode_fresh(self):
         widget = self._make_clim_widget(ignition_on=True)
@@ -689,6 +691,8 @@ class TestClimUiHelpers:
         assert widget.runner.car.clim.ac == 0
         assert widget.ids['mode_fresh'].state == 'down'
         assert widget.ids['mode_recirc'].state == 'normal'
+        # Workbench: one-shot notification bit triggers MFD popup.
+        assert widget.runner.car.clim.intake_notify is True
 
     def test_on_airflow_mode_unfrost_front_preserves_ac(self):
         """Workbench-verified: unfrost_front does NOT turn A/C off (0x1E3 byte0 ac bit stays)."""
@@ -1403,6 +1407,65 @@ class TestMsg1E3EncodeBenchAlignment:
         data = Msg1E3().encode(car)
         assert data[2] == 14
         assert data[3] == 9
+
+    def test_recirc_notify_sets_bit1_on_first_frame(self):
+        """Workbench: 0x1E3 byte0=0x87 (0x85|0x02) on first frame after recirc entry."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = True   # set by on_airflow_mode('recirc')
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x87  # 0x85 | 0x02 — matches workbench recirc entry frame
+
+    def test_recirc_notify_cleared_after_first_frame(self):
+        """intake_notify is one-shot: Msg1E3.encode consumes it and clears the flag."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = True
+        Msg1E3().encode(car)
+        assert car.clim.intake_notify is False
+        # Second frame: no notify bit → back to 0x85
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x85
+
+    def test_fresh_notify_sets_bit1_on_first_frame(self):
+        """Workbench: 0x1E3 byte0=0x07 (0x05|0x02) on first frame after fresh entry."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = True   # set by on_airflow_mode('fresh')
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x07  # 0x05 | 0x02 — matches workbench fresh entry frame
+
+    def test_no_notify_bit_without_flag(self):
+        """Without intake_notify, stable recirc byte0 stays at 0x85 (no bit1)."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = False
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x85  # stable recirc, no popup bit
 
 
 class TestMsg12DEncode:

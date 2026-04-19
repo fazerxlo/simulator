@@ -169,6 +169,13 @@ class Clim(TabbedPanelItem):
         # AUTO mode turns it back on.  unfrost_front leaves A/C unchanged.
         if mode in ('recirc', 'fresh'):
             clim.ac = 0
+            # Set the one-shot notification flag so that the next 0x1E3 frame
+            # includes bit1 (0x02) — the real BSI does this for exactly one
+            # frame to trigger the MFD popup ("Cabin air recycling activated"
+            # for recirc, "Forced intake of outside air" for fresh).
+            # Workbench: 0x87 = 0x85|0x02 on recirc entry; 0x07 = 0x05|0x02
+            # on fresh entry.  See workbench_airflow.csv analysis.
+            clim.intake_notify = True
         if mode == 'auto':
             # In AUTO mode the climate controller manages direction; reset to auto.
             clim.dir_left = 0x00
