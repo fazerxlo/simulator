@@ -11,6 +11,8 @@ For each item the document specifies:
 - the capture / comparison commands to run
 - the decode snippet to apply to the captured data
 
+Resolved items are marked **✅ RESOLVED** with a note on what confirmed them.
+
 ---
 
 ## How to capture and compare
@@ -34,108 +36,55 @@ python -m tools.can_sniff_ai_agent identify "<action description>" \
 
 ## Category 1 — Source conflicts (highest priority)
 
-These items have contradictory documentation from two or more sources.  A
-single bench capture is enough to pick the correct interpretation.
+These items had contradictory documentation from two or more sources.
 
 ---
 
 ### 1.1  0x0B6 RPM encoding — 13-bit shift vs ×10 multiplier
 
-**Conflict:** autowp documents a 13-bit raw-RPM packed into bits 15-3 of the
-first 16-bit word (`raw_rpm << 3`).  The simulator uses RPM × 10 as a plain
-uint16 big-endian (`rpm * 10`).
+**✅ RESOLVED** — Workbench combine verification confirmed the 13-bit shift
+encoding (`rpm << 3`).  The simulator was updated in `Msg0B6.encode()` to use
+`int(car.bsi.rpm) << 3`.  The real-car dump (`dump_real_car.csv`) further
+confirmed the decode by cross-checking `0xD900 >> 3 = 6912 RPM` against bench
+behaviour.
 
-For 800 RPM:
-- autowp: `800 << 3 = 0x1900` → bytes `0x19 0x00`
-- Simulator: `800 × 10 = 8000 = 0x1F40` → bytes `0x1F 0x40`
-
-**Bench action:** with the engine running at a known idle RPM (read from the
-cluster tacho), capture `0x0B6` and decode bytes 0-1.
-
-```bash
-candump -L can0 | grep " 0B6 " > logs/YYYYMMDD_rpm_idle.log
-```
-
-**Decode:**
-
-```python
-raw = (data[0] << 8) | data[1]
-rpm_autowp = raw >> 3          # 13-bit right-shifted
-rpm_sim    = raw / 10.0        # ×10 scale
-# Compare with tacho reading
-```
-
-**Expected:** one of the two values will match the cluster display; record which.
-
-**Reference:** `CAN2004_autowp_comparison.md` §0x0B6
+**Reference:** `CAN2004_autowp_comparison.md` §0x0B6, `CAN2004_real_car_dump.md` §0x0B6
 
 ---
 
-### 1.2  0x1D0 fan speed byte position
+### 1.2  0x1D0 fan speed raw encoding
 
-**Conflict:** autowp places fan speed as a 3-bit value `FFF` in byte 2
-**bits 3-1** (`byte_value = fan_speed << 1`).  The simulator writes fan speed
-as the raw 0-7 integer into the **full byte 2**.
+**✅ RESOLVED** — Workbench captures confirmed the fan raw nibble encoding
+used in the simulator: `0x0F` = fan off; `0x00`–`0x07` = levels 1–8.  This
+differs from both the simple 0-7 integer and the autowp left-shifted value.
+The `_encode_clim_fan()` helper in `can_messages.py` reflects this.
 
-For fan level 3:
-- autowp: `3 << 1 = 0x06`
-- Simulator: `0x03`
-
-**Bench action:** set the climate panel to a known fan level (e.g. level 3)
-and capture `0x1D0` byte 2 (0-indexed).
-
-```bash
-candump -L can0 | grep " 1D0 " > logs/YYYYMMDD_clim_fan.log
-```
-
-**Decode:**
-
-```python
-byte2 = data[2]
-fan_autowp = (byte2 >> 1) & 0x07
-fan_sim    = byte2 & 0x07
-# Compare with panel display
-```
-
-**Reference:** `CAN2004_autowp_comparison.md` §0x1D0
+**Reference:** `CAN2004_clima.md` §Fan encoding
 
 ---
 
 ### 1.3  0x1D0 air direction encoding — 3-bit DDD vs repeated nibble
 
-**Conflict:** autowp shows a single 3-bit `DDD` field in byte 3 bits 7-5.
-The simulator encodes direction as a **repeated nibble**: `(dir << 4) | dir`.
+**✅ RESOLVED** — Workbench captures confirmed the repeated-nibble format:
+byte 3 = `(dir_left << 4) | dir_right`.  The autowp single 3-bit `DDD` field
+is specific to a different climate-panel variant.
 
-For direction value 4 (Up):
-- autowp: `0x80` (bit 7 set)
-- Simulator: `0x44` (nibble 4 repeated)
-
-**Bench action:** step through air direction positions on the climate panel and
-capture `0x1D0` byte 3 for each position.
-
-```bash
-candump -L can0 | grep " 1D0 " > logs/YYYYMMDD_clim_dir_<position>.log
-```
-
-Record byte 3 for each direction.  Compare with both decode formulas above.
-
-**Reference:** `CAN2004_autowp_comparison.md` §0x1D0
+**Reference:** `CAN2004_clima.md` §Byte layout
 
 ---
 
 ### 1.4  0x0F6 coolant temperature offset — raw−40 vs raw−39
 
-**Conflict:** PSA-RE says `coolant_°C = raw − 40`.  autowp says `coolant_°C =
-raw − 39` (1 °C off).
+**Status: open** — PSA-RE says `coolant_°C = raw − 40`; autowp says
+`raw − 39`.  The real-car dump confirmed the formula works for observed
+values but did not include an independent cluster-readout reference.
 
-**Bench action:** with a warm engine at a known coolant temperature (read from
-the cluster gauge or a scan tool), capture `0x0F6` byte 1 and test both formulas.
+**Bench action:** with the engine warm and the cluster showing a specific
+coolant temperature, capture `0x0F6` byte 1 and apply both formulas.
 
 ```bash
 candump -L can0 | grep " 0F6 " | head -5
 ```
-
-**Decode:**
 
 ```python
 raw = data[1]
@@ -144,40 +93,23 @@ t_autowp = raw - 39
 # Compare with cluster reading
 ```
 
-**Expected:** PSA-RE (`raw − 40`) is treated as authoritative; confirm or note
-any discrepancy.
-
 **Reference:** `CAN2004_autowp_comparison.md` §0x0F6, `CAN2004_0x0F6.md`
 
 ---
 
-### 1.5  0x1D0 climate temperature scale start — 14 °C vs 15 °C at index 1
+### 1.5  0x1D0 climate temperature scale — index 1 = 14 °C vs 15 °C
 
-**Conflict:** the simulator temperature lookup table begins at 15 °C for index 1.
-PSA-RE shows index 1 = **14 °C**.
+**✅ RESOLVED** — PSA-RE value confirmed: index 1 = 14 °C.  The temperature
+lookup table in `modules/clim/__init__.py` was corrected accordingly.
+Full table is documented in `CAN2004_clima.md` §Temperature index.
 
-**Bench action:** set left zone to the lowest available temperature and read
-byte 5 of `0x1D0`.  If the index is `0x01` compare with both 14 °C and 15 °C.
-
-```bash
-candump -L can0 | grep " 1D0 " > logs/YYYYMMDD_clim_temp_lo.log
-```
-
-**Decode:**
-
-```python
-index = data[5] & 0x1F   # bits 4-0
-temp_sim   = 15 + (index - 1) * 0.5
-temp_psare = 14 + (index - 1) * 0.5
-```
-
-**Reference:** `PSA_RE_comparison.md` §0x1D0
+**Reference:** `CAN2004_clima.md` §Temperature index
 
 ---
 
 ## Category 2 — Observed frames, unverified bit assignments
 
-These frames are seen on the bus but their individual bit assignments have not
+These frames are seen on the bus but individual bit assignments have not yet
 been verified against a known physical state on this vehicle.
 
 ---
@@ -186,8 +118,7 @@ been verified against a known physical state on this vehicle.
 
 **Current state:** autowp and PSA-RE agree on bits 7-3 (four doors + trunk).
 The simulator also encodes bit 2 (hood), bit 1 (rear window), bit 0 (fuel flap)
-based on the PSA-RE `DOOR_STATUS` map, but these have not been verified on the
-bench.
+from the PSA-RE `DOOR_STATUS` map, but these have not been verified on the bench.
 
 **Note from PSA-RE:** the rear window bit (bit 1) is only present on SW (estate)
 variants.  A 407 saloon may never set this bit.
@@ -214,10 +145,10 @@ python -m tools.can_sniff_ai_agent compare logs/YYYYMMDD_doors_baseline.log \
 
 ### 2.2  0x131 — door state vs CD-changer traffic
 
-**Current state:** older workspace notes treat `0x131` as a door-state frame
-(byte 1 bits 0-5 = FL, FR, RL, RR, bonnet, tailgate).  The canbox source and
-autowp treat it as CD-changer command traffic.  The observed dump shows mostly
-byte 0 activity with byte 1 staying zero, which does not fit the door mapping.
+**Current state:** older workspace notes treat `0x131` as a door-state frame.
+The canbox source and autowp treat it as CD-changer command traffic.  The
+observed dump shows mostly byte 0 activity with byte 1 staying zero, which
+does not fit the door mapping.
 
 **Bench action:** open and close individual doors while monitoring `0x131`.
 
@@ -248,8 +179,6 @@ python -m tools.can_sniff_ai_agent identify "wiper on" \
     --duration 5 --interface can0
 ```
 
-**Decode:**
-
 ```python
 wipers = (data[7] >> 6) & 1   # 1 = wiping
 ```
@@ -260,30 +189,25 @@ wipers = (data[7] >> 6) & 1   # 1 = wiping
 
 ### 2.4  0x0F6 external temperature byte 5 vs byte 6 (filtered lag)
 
-**Current state:** PSA-RE describes byte 5 as the raw external temperature and
-byte 6 as a BSI-filtered (damped) version of the same signal.  The simulator
-sends the same value in both positions.  It is unknown how quickly byte 6 tracks
-byte 5 on a real vehicle.
+**Partially answered** — The real-car dump shows bytes 5 and 6 diverge
+significantly on a bench because the external sensor is physically absent and
+byte 6 retains the last EEPROM-stored filtered value from the previous drive.
+On a moving vehicle with the sensor connected the lag behaviour has not yet
+been measured.
 
-**Bench action:** move the temperature sensor (or use a hair dryer / cold spray
-if available) to create a rapid temperature change.  Log `0x0F6` bytes 5 and 6
-over ~30 s.
+**Bench action (driving vehicle only):** create a rapid temperature change and
+log `0x0F6` bytes 5 and 6 over ~30 s to measure the filter time constant.
 
 ```bash
 candump -L can0 | grep " 0F6 " > logs/YYYYMMDD_ext_temp_ramp.log
 ```
-
-**Decode:**
 
 ```python
 t_raw  = data[5] * 0.5 - 40.0
 t_filt = data[6] * 0.5 - 40.0
 ```
 
-Record both values over time.  If they track identically → single-source.  If
-byte 6 lags → filter constant is measurable.
-
-**Reference:** `CAN2004_0x0F6.md` §Open Questions, `PSA_RE_comparison.md` §0x0F6
+**Reference:** `CAN2004_real_car_dump.md` §0x0F6, `CAN2004_0x0F6.md`
 
 ---
 
@@ -298,8 +222,7 @@ after turning the key).  Check whether bit 3 of byte 7 is ever set to 1.
 
 ```bash
 candump -L can0 > logs/YYYYMMDD_ignition_lamptest.log
-# analyse byte 7 of 0x0F6
-grep " 0F6 " logs/YYYYMMDD_ignition_lampttest.log | \
+grep " 0F6 " logs/YYYYMMDD_ignition_lamptest.log | \
     awk '{print $9}' | sort -u
 ```
 
@@ -309,39 +232,23 @@ grep " 0F6 " logs/YYYYMMDD_ignition_lampttest.log | \
 
 ### 2.6  0x1A8 cruise / limiter state and partial odometer
 
-**Current state:** the simulator now emits `0x1A8` with the correct PSA-RE
-layout, but it has not been verified against a real cruise-control engagement on
-this bench.
+**✅ RESOLVED** — The real-car dump (`dump_real_car.csv`) confirmed the PSA-RE
+byte layout.  The partial odometer value of 40.96 km was read back correctly,
+showing the BSI retains partial trip across power cycles.  `Msg1A8.encode()`
+and `Msg1A8.decode()` are confirmed correct.
 
-**Bench action:** engage cruise control at a fixed speed and capture `0x1A8`.
-
-```bash
-candump -L can0 | grep " 1A8 " > logs/YYYYMMDD_cruise_engaged.log
-```
-
-**Decode:**
-
-```python
-ctrl_type   = (data[0] >> 6) & 0x03   # 1=regulator, 2=limiter
-status      = (data[0] >> 3) & 0x07   # 1=active
-set_speed   = ((data[1] << 8) | data[2]) * 0.01   # km/h
-partial_odo = ((data[5] << 16) | (data[6] << 8) | data[7]) * 0.001  # km
-```
-
-Confirm that `set_speed` matches the displayed cruise setpoint and that
-`partial_odo` increments as the car moves.
-
-**Reference:** `CAN2004_0x1A8.md`, `PSA_RE_comparison.md` §0x1A8
+**Reference:** `CAN2004_real_car_dump.md` §0x1A8, `CAN2004_0x1A8.md`
 
 ---
 
 ### 2.7  0x361 vehicle feature availability bits
 
-**Current state:** the frame is observed on the bus (`01 01 91 40 30 10`) but
-individual capability bits have not been mapped to this vehicle's option list.
+**Current state:** the frame is observed on the bench bus (`01 01 91 40 30 10`)
+but was **absent** in the real-car dump, suggesting it may only appear at a
+specific startup phase or may not be present on all 407 trim levels.
 
-**Bench action:** log `0x361` at ignition-on and verify selected bits against
-known options.
+**Bench action:** log `0x361` across a full ignition-on cycle and verify
+selected bits against known vehicle options.
 
 ```bash
 candump -L can0 | grep " 361 " | head -3
@@ -358,39 +265,176 @@ Check:
 
 ---
 
-## Category 3 — Period mismatches
+## Category 3 — Real-car discrepancies (cosmetic but worth verifying)
 
-The simulator runs these frames at a shorter period than the real BSI.  This
-usually does not affect bench behaviour but should be confirmed and noted.
-
-| Frame | Simulator period | PSA-RE / real bus period | Action |
-|-------|-----------------|--------------------------|--------|
-| `0x0F6` | 100 ms | 500 ms | candump timestamp diff |
-| `0x161` | 100 ms | 500 ms | candump timestamp diff |
-| `0x221` | 100 ms | 1000 ms | candump timestamp diff |
-| `0x2A1` | 100 ms | 1000 ms | candump timestamp diff |
-| `0x336` / `0x3B6` / `0x2B6` | 100 ms | ~1000 ms | candump timestamp diff |
-
-**How to measure:**
-
-```bash
-candump can0 | grep " 0F6 "   # timestamp in first column
-# measure delta between consecutive lines (should be ~500 ms for real BSI)
-```
-
-If on a mixed bench (simulator + real BSI) a period mismatch causes the real
-module to behave differently, adjust the simulator period in `can_runner.py`.
+These items were discovered by comparing the real-car dump against the
+simulator output.  None break functional simulation but should be settled
+if wire-accurate encoding is required.
 
 ---
 
-## Category 4 — Cold-start and power-sequence unknowns
+### 3.1  0x0F6 status byte — 0x88 (simulator) vs 0x86/0x8E (real car)
+
+**Current state:** the real-car dump shows the status byte alternates between
+`0x86` and `0x8E` during warm-up (bit 3 = `MAIN_STATUS` toggling).  The
+simulator sends a fixed `0x88`.
+
+**Bench action:** capture `0x0F6` byte 0 during a cold-start and warm-up
+sequence.  Record all distinct values and the temperature range at each value.
+
+```bash
+candump -L can0 | grep " 0F6 " > logs/YYYYMMDD_0F6_warmup.log
+awk '{print $4, $5}' logs/YYYYMMDD_0F6_warmup.log | sort -u
+```
+
+**Decode:**
+
+```python
+config_mode       = (data[0] >> 6) & 0x03   # 2=customer
+main_status       = (data[0] >> 3) & 0x03   # toggles 0↔1
+gen_status        = (data[0] >> 2) & 0x01   # 1=generator ok
+powertrain_status = data[0] & 0x03          # 2=running
+```
+
+**Reference:** `CAN2004_real_car_dump.md` §0x0F6
+
+---
+
+### 3.2  0x0B6 byte 5 and byte 7 constant values
+
+**Current state:**
+
+| Byte | Real car | Simulator | Meaning |
+|------|---------|-----------|---------|
+| 5    | `0xFF`  | `0x00`    | Unused — cosmetic difference |
+| 7    | `0xA0`  | `0xD0`    | Flags byte — bits 6 and 4 differ |
+
+Bit 6 of byte 7 (`0x40`) and bit 4 (`0x10`) are set in the real car but not
+in the simulator.  Their meaning is not decoded.
+
+**Bench action:** check whether these bits ever change (e.g. when engine
+starts, reverse is engaged, or ABS is active).
+
+```bash
+candump -L can0 | grep " 0B6 " | awk '{print $9}' | sort -u
+```
+
+**Reference:** `CAN2004_real_car_dump.md` §0x0B6
+
+---
+
+### 3.3  0x161 bytes 4-5 — 0x00 (real car) vs 0xFF (simulator)
+
+**Current state:** the real-car dump shows bytes 4-5 of `0x161` as `0x00 0x00`.
+The simulator sends `0xFF 0xFF` (treating them as unused/invalid).
+
+**Bench action:** log `0x161` and verify bytes 4-5 are consistently zero.
+If so, update the simulator to send `0x00 0x00` for better wire accuracy.
+
+```bash
+candump -L can0 | grep " 161 " | head -5
+```
+
+**Reference:** `CAN2004_real_car_dump.md` §0x161
+
+---
+
+### 3.4  0x128 byte 6 bit 4 — purpose unknown
+
+**Current state:** the real-car dump shows `0x128` byte 6 bit 4 (`0x10`) sets
+alongside the `LOW_FUEL` indicator (byte 0 bit 4).  It may be a secondary fuel
+warning flag or a gear-display signal.
+
+**Bench action:** intentionally set the fuel level near-zero and watch whether
+byte 6 bit 4 mirrors byte 0 bit 4, or triggers at a different threshold.
+
+```bash
+python -m tools.can_sniff_ai_agent identify "low fuel warning" \
+    --duration 10 --interface can0
+```
+
+```python
+b6_bit4 = (data[6] >> 4) & 1
+b0_bit4 = (data[0] >> 4) & 1  # LOW_FUEL
+```
+
+**Reference:** `CAN2004_real_car_dump.md` §0x128
+
+---
+
+### 3.5  0x168 byte 4 bit 1 — unresolved alert
+
+**Current state:** the real-car dump shows `0x168` byte 4 value `0x02` (bit 1
+set) appearing intermittently.  The PSA-RE signal at that position is
+`ALTERNATOR_FAULT` (`GENE_DEF`).  However the dump is a warm-engine capture
+and alternator faults are unexpected; it may be a different signal.
+
+**Bench action:** disable the alternator or measure battery voltage while
+capturing `0x168`.  Check whether byte 4 bit 1 corresponds to a charging
+system indicator on the cluster.
+
+```bash
+candump -L can0 | grep " 168 " > logs/YYYYMMDD_168.log
+awk '{print $5}' logs/YYYYMMDD_168.log | sort -u   # unique byte 4 values
+```
+
+**Reference:** `CAN2004_real_car_dump.md` §0x168
+
+---
+
+## Category 4 — Not-yet-implemented frames seen in real-car dump
+
+These frames appeared in the real-car dump but are not implemented in the
+simulator.  Confirm their content and determine whether they need to be
+added for bench realism.
+
+---
+
+### 4.1  0x228 — Unknown static frame
+
+**Current state:** `0x228` appeared in the real-car dump at ~10 ms with a
+constant payload `80 00 80 80 00 00 00 00`.  No PSA-RE or community source
+documents this ID.
+
+**Bench action:** capture `0x228` across different ignition states and actions
+to check if it ever changes.
+
+```bash
+candump -L can0 | grep " 228 " | head -5
+```
+
+If it remains constant it is likely a module-present heartbeat.  No decode
+action required until the payload varies.
+
+**Reference:** `CAN2004_real_car_dump.md` §0x228
+
+---
+
+### 4.2  0x3F6 — Date/time from radio to display
+
+**Current state:** autowp documents `0x3F6` as a date/time frame sent by the
+radio to the display.  It appeared in the real-car dump with a constant 7-byte
+payload.
+
+**Bench action:** change the radio time display and observe `0x3F6`.
+
+```bash
+python -m tools.can_sniff_ai_agent identify "change time on radio display" \
+    --duration 5 --interface can0
+```
+
+**Reference:** `CAN2004_autowp_comparison.md` §New data, `CAN2004_real_car_dump.md`
+
+---
+
+## Category 5 — Cold-start and power-sequence unknowns
 
 These questions come from analysing `power_on_and_ignition_on.csv`.  They
 require targeted passive captures.
 
 ---
 
-### 4.1  0x036 D5 power-mode sequence
+### 5.1  0x036 D5 power-mode sequence
 
 **Observation:** at bench power-on D5 = `0x02` for ~14 s, then drops to `0x00`
 before the key is turned.  The transition `0x00 → 0x03 → 0x01` lasts ~40 ms.
@@ -410,7 +454,7 @@ candump -L can0 | grep " 036 " > logs/YYYYMMDD_036_powerup.log
 
 ---
 
-### 4.2  0x52D byte meanings
+### 5.2  0x52D byte meanings
 
 **Observation:** `0x52D` is all-zero pre-ignition; bytes D1 and D5 both flip to
 `0x01` at ignition-on.
@@ -426,15 +470,13 @@ candump -L can0 | grep " 52D " > logs/YYYYMMDD_52D.log
 
 ---
 
-### 4.3  0x190 D4 upper nibble meaning
+### 5.3  0x190 D4 upper nibble meaning
 
-**Observation:** D4 upper nibble is constant `0x7` (= `0111b`), while the lower
-nibble alternates `0x7 ↔ 0xE` as a rolling counter.  The upper nibble purpose
-is unknown.
+**Observation:** D4 upper nibble is constant `0x7`, lower nibble alternates
+`0x7 ↔ 0xE` as a rolling counter.  Upper nibble purpose is unknown.
 
 **Bench action:** log `0x190` across different ignition states.  Check if the
-upper nibble ever changes (e.g. to `0x0` when engine is started or a fault is
-present).
+upper nibble ever changes (e.g. when engine starts or a fault is present).
 
 ```bash
 candump -L can0 | grep " 190 " > logs/YYYYMMDD_190.log
@@ -444,13 +486,10 @@ candump -L can0 | grep " 190 " > logs/YYYYMMDD_190.log
 
 ---
 
-### 4.4  0x110 purpose
+### 5.4  0x110 purpose
 
 **Observation:** `0x110` is active at 100 ms from the moment the bench has
 power (even before ignition).  Data is always `FF FF FF FF 00 00 00 00`.
-
-**Question:** is this a keep-alive heartbeat, a module-present advertisement,
-or something else?
 
 **Bench action:** check whether `0x110` disappears when a specific module is
 disconnected.  If it changes when ignition goes off it likely belongs to the BSI
@@ -465,7 +504,7 @@ python -m tools.can_sniff_ai_agent identify "any state change on 0x110" \
 
 ---
 
-### 4.5  0x1E1 steering-wheel column status
+### 5.5  0x1E1 steering-wheel column status
 
 **Observation:** `0x1E1` shows an all-`0x80` pattern at ignition-on and changes
 shortly after, but a wheel-turn test showed it remaining static.  It may be a
@@ -483,15 +522,15 @@ python -m tools.can_sniff_ai_agent identify "steering wheel button press" \
 
 ---
 
-## Category 5 — Not-yet-implemented frames worth confirming on this bench
+## Category 6 — Not-yet-implemented community-documented frames
 
 These frames are documented in autowp or PSA-RE but not implemented in the
-simulator.  The goal here is to confirm whether they are actually present and
-useful on the 407 workbench.
+simulator.  The goal here is to confirm whether they are present and useful
+on the 407 workbench.
 
 ---
 
-### 5.1  0x276 — Date, time, and average speed
+### 6.1  0x276 — Date, time, and average speed
 
 autowp documents this for C4 B7 and newer trims.  It may not be present on all
 407 variants.
@@ -505,7 +544,7 @@ candump -L can0 | grep " 276 "
 
 ---
 
-### 5.2  0x39B — Set system date/time (Display → BSI)
+### 6.2  0x39B — Set system date/time (Display → BSI)
 
 The MFD display sends this to update the BSI clock.  Verify it appears when the
 user sets the time via the MFD menu.
@@ -517,7 +556,7 @@ python -m tools.can_sniff_ai_agent identify "set clock via MFD menu" \
 
 ---
 
-### 5.3  0x0E6 — Wheels rotation and voltage
+### 6.3  0x0E6 — Wheel rotation and battery voltage
 
 autowp documents `0x0E6` as wheel rotation counts and battery voltage.  It is
 not implemented in the simulator.  Confirm whether it appears on this bench and
@@ -529,7 +568,7 @@ candump -L can0 | grep " 0E6 " | head -5
 
 ---
 
-### 5.4  0x0E2 / 0x162 / 0x1A0 / 0x1A2 / 0x1E2 — Yatour / CD-changer frames
+### 6.4  0x0E2 / 0x162 / 0x1A0 / 0x1A2 / 0x1E2 — Yatour / CD-changer frames
 
 These are CD-changer and Yatour-specific frames.  Verify whether they are
 present on this bench with its real CD changer.
@@ -543,7 +582,7 @@ done
 
 ---
 
-### 5.5  0x21F — Steering wheel multimedia remote (alternate frame)
+### 6.5  0x21F — Steering wheel multimedia remote (alternate frame)
 
 Some PSA vehicles use `0x21F` (3-byte) instead of or in addition to `0x3E5`
 (6-byte).  The 407 is believed to use `0x3E5` only, but this should be
@@ -557,16 +596,18 @@ python -m tools.can_sniff_ai_agent identify "steering wheel volume button" \
 
 ---
 
-## Category 6 — Gauge and sensor verification
+## Category 7 — Gauge and sensor verification
 
 These items need a known physical reference value to verify the decode formula.
 
 ---
 
-### 6.1  0x161 oil level (byte 6)
+### 7.1  0x161 oil level (byte 6)
 
-PSA-RE added `OIL_LEVEL` at byte 6 (idx 6), scale 0-250 %, invalid = `0xFF`.
-The simulator now sends `0xFF` (invalid) at that position.
+PSA-RE documents `OIL_LEVEL` at byte 6 (idx 6), scale 0-250, invalid = `0xFF`.
+The simulator sends `0xFF` (invalid) at that position.  The real-car dump
+showed `0x00` in all captured frames, which may mean oil-level data is not
+available on a static bench.
 
 **Bench action:** if the bench BSI has oil-level data, log `0x161` byte 6 and
 check whether it reports a plausible value.
@@ -574,8 +615,6 @@ check whether it reports a plausible value.
 ```bash
 candump -L can0 | grep " 161 " | head -5
 ```
-
-**Decode:**
 
 ```python
 oil_level_pct = data[6] if data[6] != 0xFF else None
@@ -585,20 +624,18 @@ oil_level_pct = data[6] if data[6] != 0xFF else None
 
 ---
 
-### 6.2  0x0B6 bytes 4-5 trip odometer (cm) and byte 6 fuel counter
+### 7.2  0x0B6 bytes 4-5 trip odometer (cm) and byte 6 fuel counter
 
 autowp documents bytes 4-5 as a uint16 trip-odometer from ignition-on in cm,
 and byte 6 as a fuel-injection pulse counter.  The simulator sends `0x00 0x00 0x00`
 in those positions.
 
-**Bench action:** drive (or simulate movement) and log `0x0B6` bytes 4-5 to
-confirm they increment, then calculate distance from the cm count.
+**Bench action:** with the engine running for several minutes, log `0x0B6`
+bytes 4-5 to confirm they increment.
 
 ```bash
 candump -L can0 | grep " 0B6 " > logs/YYYYMMDD_0B6_drive.log
 ```
-
-**Decode:**
 
 ```python
 trip_cm     = (data[4] << 8) | data[5]
@@ -611,15 +648,15 @@ fuel_pulses = data[6]
 
 ## Quick reference — priority order for a single bench session
 
-If you have limited bench time, work in this order:
+Items already marked ✅ RESOLVED above do not need bench time.
 
-1. **RPM encoding** (1.1) — one idle capture resolves a long-standing conflict
-2. **0x1D0 fan byte** (1.2) — two climate panel steps
-3. **0x1D0 air direction** (1.3) — step through all directions
-4. **0x220 hood / fuel flap** (2.1) — physically open each
-5. **0x131 door vs changer** (2.2) — open a door, watch 0x131
-6. **0x0F6 wiper bit** (2.3) — turn wipers on
-7. **Period measurements** (Category 3) — passive, no action needed
-8. **0x036 power sequence** (4.1) — power-on without key, 30 s log
-9. **Cruise/limiter** (2.6) — if bench supports it
-10. **Oil level** (6.1) — passive read of 0x161 byte 6
+1. **0x0F6 coolant offset** (1.4) — one warm-engine capture with cluster readout
+2. **0x220 hood / fuel flap** (2.1) — physically open each and watch 0x220
+3. **0x131 door vs changer** (2.2) — open a door and watch 0x131
+4. **0x0F6 wiper bit** (2.3) — turn wipers on, watch byte 7 bit 6
+5. **0x0F6 status byte** (3.1) — cold-start capture to map 0x86/0x8E toggling
+6. **0x128 byte 6 bit 4** (3.4) — low-fuel scenario
+7. **0x168 byte 4 bit 1** (3.5) — charging system state during capture
+8. **Period measurements** (Category 3 table) — passive, no action needed
+9. **0x036 power sequence** (5.1) — power-on without key, 30 s log
+10. **0x228 static frame** (4.1) — passive read, check for variation
