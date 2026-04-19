@@ -3484,14 +3484,14 @@ class TestRadioToggleGroupHelper:
 
 
 # ---------------------------------------------------------------------------
-# Msg0A4 – RDS RadioText (RT) segment decode
+# Msg0A4 – RDS RadioText (ISO 15765-2) decode
 # ---------------------------------------------------------------------------
 
 from can_messages import Msg0A4
 
 
 class TestMsg0A4RadioText:
-    """0x0A4 — RDS RadioText segment accumulation."""
+    """0x0A4 — RDS RadioText ISO 15765-2 (SF / FF / CF) accumulation."""
 
     def test_is_listen_only(self):
         assert Msg0A4.listen_only is True
@@ -3500,41 +3500,92 @@ class TestMsg0A4RadioText:
         assert 0x0A4 in ALL_MESSAGES
         assert ALL_MESSAGES[0x0A4] is Msg0A4
 
-    def test_single_segment_sets_rds_text(self):
-        """A segment-0 frame populates rds_text with its 7 chars."""
+    def test_sf_sets_rds_text(self):
+        """A Single Frame (SF) populates rds_text immediately."""
         car = VirtualCar()
-        # segment_idx=0, chars = "RMF FM "
-        data = bytes([0x00, 0x52, 0x4D, 0x46, 0x20, 0x46, 0x4D, 0x20])
+        # SF: PCI=0x06 (length=6), payload = "RMF FM"
+        data = bytes([0x06, 0x52, 0x4D, 0x46, 0x20, 0x46, 0x4D])
         Msg0A4().decode(car, data)
         assert car.radio.rds_text == 'RMF FM'
 
-    def test_multi_segment_accumulates(self):
-        """Multiple segments are joined in order to form the full RT string."""
+    def test_sf_trailing_space_stripped(self):
+        """Trailing spaces in an SF are stripped from rds_text."""
         car = VirtualCar()
-        Msg0A4().decode(car, bytes([0x00]) + b'Hello, ')
-        Msg0A4().decode(car, bytes([0x01]) + b'World! ')
+        # SF: length=7, "RMF FM " (trailing space)
+        data = bytes([0x07, 0x52, 0x4D, 0x46, 0x20, 0x46, 0x4D, 0x20])
+        Msg0A4().decode(car, data)
+        assert car.radio.rds_text == 'RMF FM'
+
+    def test_ff_cf_accumulates(self):
+        """First Frame + Consecutive Frame assembles the full RT string."""
+        car = VirtualCar()
+        # FF: total=13, bytes 2-7 = "Hello,"
+        ff = bytes([0x10, 0x0D, 0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x2C])
+        # CF SN=1: bytes 1-7 = " World!"
+        cf1 = bytes([0x21, 0x20, 0x57, 0x6F, 0x72, 0x6C, 0x64, 0x21])
+        Msg0A4().decode(car, ff)
+        Msg0A4().decode(car, cf1)
         assert car.radio.rds_text == 'Hello, World!'
 
-    def test_segment_0_resets_buffer(self):
-        """Receiving segment 0 flushes any previous accumulation."""
+    def test_new_ff_resets_buffer(self):
+        """A new First Frame discards any in-progress transfer."""
         car = VirtualCar()
-        Msg0A4().decode(car, bytes([0x00]) + b'OldText')
-        Msg0A4().decode(car, bytes([0x01]) + b'OldMore')
-        # New cycle starts with segment 0 — old segments must be gone
-        Msg0A4().decode(car, bytes([0x00]) + b'NewText')
+        # Start old transfer (14 chars, partial after CF1 = 13 of 14 received)
+        Msg0A4().decode(car, bytes([0x10, 0x0E]) + b'OldTex')  # FF total=14
+        Msg0A4().decode(car, bytes([0x21]) + b'tOldMor')       # CF1 → 13/14
+        # New FF resets the buffer
+        Msg0A4().decode(car, bytes([0x10, 0x07]) + b'NewTex')  # FF total=7
+        Msg0A4().decode(car, bytes([0x21]) + b't      ')       # CF1 → ≥7, done
         assert car.radio.rds_text == 'NewText'
 
     def test_null_byte_terminates_text(self):
-        """A NUL byte inside the accumulated string marks the end of RT."""
+        """A NUL byte inside the RT string marks the end of the message."""
         car = VirtualCar()
-        Msg0A4().decode(car, bytes([0x00]) + b'Hello\x00X')
+        # SF: length=6, data = "Hello\x00"
+        Msg0A4().decode(car, bytes([0x06, 0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x00]))
         assert car.radio.rds_text == 'Hello'
 
     def test_short_frame_ignored(self):
         """Frames shorter than 2 bytes do not crash."""
         car = VirtualCar()
-        Msg0A4().decode(car, bytes([0x00]))  # only 1 byte — should not raise
+        Msg0A4().decode(car, bytes([0x06]))  # only 1 byte — should not raise
 
     def test_rt_buf_initialised_empty(self):
         """car_state.Radio._rt_buf starts as an empty dict."""
         assert VirtualCar().radio._rt_buf == {}
+
+    def test_out_of_sequence_cf_discards_buffer(self):
+        """A CF with the wrong SN discards the in-progress transfer."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x10, 0x0D]) + b'Hello,')  # FF total=13
+        Msg0A4().decode(car, bytes([0x23]) + b' World!')        # Wrong SN (3, expected 1)
+        assert car.radio._rt_buf == {}
+
+    def test_sf_invalid_length_zero_ignored(self):
+        """SF with length=0 is silently ignored."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x00]) + b'\x00' * 7)
+        assert car.radio.rds_text == ''
+
+    def test_cf_without_ff_ignored(self):
+        """A CF without a preceding FF is silently ignored."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x21]) + b'orphan ')
+        assert car.radio.rds_text == ''
+
+    def test_full_64_char_rt(self):
+        """A 64-char RT assembled from FF + 9 CFs decodes correctly."""
+        car = VirtualCar()
+        rt_str = 'RMF FM wita w Krakowie na czestotliwosci 96 MHz'
+        # Pad to exactly 64 chars with spaces
+        rt_padded = rt_str.ljust(64)
+        rt_bytes = rt_padded.encode('ascii')
+        # FF: total=64, first 6 chars
+        Msg0A4().decode(car, bytes([0x10, 0x40]) + rt_bytes[0:6])
+        # 9 CFs (SN 1-9) carry 7 chars each; after CF9 accumulated ≥ 64
+        for i in range(9):
+            sn = (i + 1) & 0x0F
+            offset = 6 + i * 7
+            chunk = rt_bytes[offset:offset + 7].ljust(7, b' ')
+            Msg0A4().decode(car, bytes([0x20 | sn]) + chunk)
+        assert car.radio.rds_text == rt_str

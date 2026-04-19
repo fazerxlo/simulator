@@ -1365,18 +1365,28 @@ class Msg2A5(CanMessage):
 
 
 # ---------------------------------------------------------------------------
-# 0x0A4 – RDS RadioText segments
+# 0x0A4 – RDS RadioText (ISO 15765-2)
 # ---------------------------------------------------------------------------
 
 class Msg0A4(CanMessage):
-    """RDS RadioText (RT) segment frame (0x0A4).
+    """RDS RadioText (RT) multi-frame message (0x0A4).
 
-    Byte 0: segment index (bits 3:0) and flags (bits 7:4).
-    Bytes 1-7: 7 ASCII characters of the RT string at that segment position.
+    The radio head-unit transmits the RDS RT string using ISO 15765-2
+    (ISO-TP) framing, which allows a text up to 64 characters to be split
+    across multiple 8-byte CAN frames:
 
-    Multiple frames are accumulated in ``car.radio._rt_buf`` keyed by segment
-    index.  After each frame the full RT string is reconstructed by joining
-    sorted segments; a NUL byte marks the end of the RT message.
+    * **Single Frame (SF)** — PCI byte ``0x0N``, N = data length (1–7).
+      The complete RT fits in one frame.
+    * **First Frame (FF)** — PCI bytes ``0x1H 0xLL``, total length
+      = ``(H<<8)|LL``.  Payload bytes 2–7 carry the first 6 RT chars.
+    * **Consecutive Frame (CF)** — PCI byte ``0x2N``, N = sequence number
+      (1–15, wrapping to 0 after 15).  Bytes 1–7 carry the next 7 chars.
+
+    Accumulation state is stored in ``car.radio._rt_buf``.  ``car.radio.rds_text``
+    is updated after every received frame so the UI shows text building up
+    progressively.  A new SF or FF resets the buffer and discards any
+    incomplete in-progress transfer.  An out-of-sequence CF also discards
+    the buffer.
     """
 
     can_id = 0x0A4
@@ -1384,29 +1394,68 @@ class Msg0A4(CanMessage):
     required_modules = frozenset({'radio'})
     listen_only = True
 
+    @staticmethod
+    def _trim_rt(text: str) -> str:
+        """Strip NUL terminator and trailing whitespace from an RT string."""
+        nul = text.find('\x00')
+        if nul >= 0:
+            text = text[:nul]
+        return text.strip()
+
     def encode(self, car) -> list:
         return [0x00] * 8
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 2:
             return
-        segment_idx = data[0] & 0x0F
-        # Bytes 1..7 hold up to 7 ASCII chars for this segment
-        raw = bytes(data[1:min(len(data), 8)])
-        chunk = raw.rstrip(b'\x00').decode('ascii', errors='replace')
+        pci_type = (data[0] >> 4) & 0x0F
 
-        # Reset the buffer when we receive the first segment of a new cycle
-        if segment_idx == 0:
+        if pci_type == 0:
+            # Single Frame: complete RT text fits in one CAN frame.
+            length = data[0] & 0x0F
+            if length == 0 or length > 7 or len(data) < 1 + length:
+                return
+            text = bytes(data[1:1 + length]).decode('ascii', errors='replace')
             car.radio._rt_buf = {}
+            car.radio.rds_text = self._trim_rt(text)
 
-        car.radio._rt_buf[segment_idx] = chunk
+        elif pci_type == 1:
+            # First Frame: start of a multi-frame transfer.
+            if len(data) < 3:
+                return
+            total_len = ((data[0] & 0x0F) << 8) | data[1]
+            chunk = bytes(data[2:8]).decode('ascii', errors='replace')
+            car.radio._rt_buf = {
+                'total': total_len,
+                'next_sn': 1,
+                'data': chunk,
+            }
+            # Show the first 6 chars immediately.
+            car.radio.rds_text = self._trim_rt(chunk)
 
-        # Rebuild the full RT string from all collected segments
-        full = ''.join(v for _, v in sorted(car.radio._rt_buf.items()))
-        # Trim at embedded NUL (marks end of RT message)
-        if '\x00' in full:
-            full = full[:full.index('\x00')]
-        car.radio.rds_text = full.strip()
+        elif pci_type == 2:
+            # Consecutive Frame: continuation of a multi-frame transfer.
+            buf = car.radio._rt_buf
+            if not buf or 'data' not in buf:
+                return
+            sn = data[0] & 0x0F
+            if sn != (buf.get('next_sn', 1) & 0x0F):
+                # Out-of-sequence CF — discard the in-progress transfer.
+                car.radio._rt_buf = {}
+                return
+            chunk = bytes(data[1:8]).decode('ascii', errors='replace')
+            buf['data'] += chunk
+            # Sequence numbers wrap: 15 → 0 → 1 → …
+            buf['next_sn'] = (sn + 1) & 0x0F
+            total = buf.get('total', 0)
+            accumulated = buf['data']
+            if len(accumulated) >= total:
+                # Transfer complete — commit the final text.
+                car.radio.rds_text = self._trim_rt(accumulated[:total])
+                car.radio._rt_buf = {}
+            else:
+                # Show partial text as it builds up.
+                car.radio.rds_text = self._trim_rt(accumulated)
 
 
 # ---------------------------------------------------------------------------

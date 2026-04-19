@@ -304,7 +304,132 @@ encodings are consistent.
 
 ---
 
-## 7. `0x2A5` — Radio Station Name / RDS PS
+## 7. `0x0A4` — RDS RadioText (RT)
+
+**PSA name:** `TEXTE_RADIO` (inferred)  
+**Period:** variable (100–500 ms between frames; head unit transmits when RDS RT is available)  
+**Module:** `radio` (listen-only — emitted by head unit, received by display/simulator)  
+**Confidence:** Inferred — ISO 15765-2 framing confirmed by autowp cross-reference; no real-car
+0x0A4 frames in the available bench capture (radio was not active during that capture)
+
+This frame carries the RDS RadioText (RT) string — a free-form text message up to 64 characters
+broadcast by FM radio stations.  The head unit splits the text across multiple CAN frames using
+**ISO 15765-2 (ISO-TP)** transport protocol framing.
+
+### ISO 15765-2 Frame Types
+
+| PCI high nibble | Frame type | Abbrev | Description |
+|---|---|---|---|
+| `0x0` | Single Frame | SF | Complete text fits in one CAN frame (1–7 bytes) |
+| `0x1` | First Frame | FF | Start of multi-frame transfer; total length encoded in bytes 0–1 |
+| `0x2` | Consecutive Frame | CF | Continuation; sequence number in low nibble (1–15, wraps to 0) |
+
+### Single Frame (SF) layout
+
+Used when the RT text is ≤ 7 characters.
+
+| Byte | Bits | Field | Notes |
+|---|---|---|---|
+| 0 | 7:4 | PCI type = `0x0` | Single Frame |
+| 0 | 3:0 | Data length N | 1–7 |
+| 1–N | 7:0 | RT text | ASCII; NUL-terminated if shorter than N |
+
+### First Frame (FF) layout
+
+Used when the RT text is > 7 characters (typically 32 or 64 chars).
+
+| Byte | Bits | Field | Notes |
+|---|---|---|---|
+| 0 | 7:4 | PCI type = `0x1` | First Frame |
+| 0 | 3:0 | Total length [11:8] | High nibble of total message length |
+| 1 | 7:0 | Total length [7:0] | Low byte of total message length |
+| 2–7 | 7:0 | RT text [0:5] | First 6 bytes of the RT string |
+
+### Consecutive Frame (CF) layout
+
+| Byte | Bits | Field | Notes |
+|---|---|---|---|
+| 0 | 7:4 | PCI type = `0x2` | Consecutive Frame |
+| 0 | 3:0 | Sequence number N | 1–15, wraps to 0 after 15 |
+| 1–7 | 7:0 | RT text [chunk] | Next 7 bytes |
+
+### Typical multi-frame sequence for a 64-char RT
+
+```
+0x0A4  10 40 52 4D 46 20 46 4D   # FF: total=64, text[0:6]="RMF FM"
+0x0A4  21 20 77 69 74 61 20 77   # CF SN=1: text[6:13]=" wita w"
+0x0A4  22 20 4B 72 61 6B 6F 77   # CF SN=2: text[13:20]=" Krakow"
+0x0A4  23 69 65 20 6E 61 20 63   # CF SN=3: text[20:27]="ie na c"
+0x0A4  24 7A 65 73 74 6F 74 6C   # CF SN=4: text[27:34]="zestotl"
+0x0A4  25 69 77 6F 73 63 69 20   # CF SN=5: text[34:41]="iwosci "
+0x0A4  26 39 36 20 4D 48 7A 20   # CF SN=6: text[41:48]="96 MHz "
+0x0A4  27 20 20 20 20 20 20 20   # CF SN=7: text[48:55]="       "
+0x0A4  28 20 20 20 20 20 20 20   # CF SN=8: text[55:62]="       "
+0x0A4  29 20 20 00 00 00 00 00   # CF SN=9: text[62:64]="  " + padding
+```
+
+### Decode snippet
+
+```python
+pci_type = (data[0] >> 4) & 0x0F
+
+if pci_type == 0:          # Single Frame
+    length = data[0] & 0x0F
+    text = data[1:1+length].decode('ascii', errors='replace').strip('\x00').strip()
+
+elif pci_type == 1:        # First Frame — start accumulation buffer
+    total_len = ((data[0] & 0x0F) << 8) | data[1]
+    text_start = data[2:8].decode('ascii', errors='replace')
+    buf = {'total': total_len, 'next_sn': 1, 'data': text_start}
+
+elif pci_type == 2:        # Consecutive Frame — extend buffer
+    sn = data[0] & 0x0F
+    chunk = data[1:8].decode('ascii', errors='replace')
+    buf['data'] += chunk
+    buf['next_sn'] = (sn + 1) & 0x0F
+    if len(buf['data']) >= buf['total']:
+        text = buf['data'][:buf['total']].strip('\x00').strip()
+```
+
+### Test vectors
+
+#### SF — short RT (6 chars)
+
+| Payload (hex) | Decoded RT |
+|---|---|
+| `06 52 4D 46 20 46 4D` | `"RMF FM"` |
+
+#### SF — NUL-terminated RT
+
+| Payload (hex) | Decoded RT |
+|---|---|
+| `06 48 65 6C 6C 6F 00` | `"Hello"` (NUL at position 5 terminates) |
+
+#### FF + CF — 13-char RT
+
+| Frame | Payload (hex) | Notes |
+|---|---|---|
+| FF | `10 0D 48 65 6C 6C 6F 2C` | total=13, text[0:6]="Hello," |
+| CF SN=1 | `21 20 57 6F 72 6C 64 21` | text[6:13]=" World!" → complete: `"Hello, World!"` |
+
+### Notes
+
+- The simulator only **receives** this frame (`listen_only = True`).  
+- The RD4 radio broadcasts RT asynchronously when an FM station provides an RDS signal.  
+  RT is not always present; when absent, `car.radio.rds_text` stays at its last value (or
+  empty string on startup).  
+- RDS RT messages are typically padded to 32 or 64 characters with spaces.  The decoder strips
+  trailing whitespace and truncates at the first `0x00` (NUL) byte.  
+- If a Consecutive Frame arrives with the wrong sequence number the in-progress transfer is
+  discarded silently; the previous `rds_text` is preserved.  
+- Partial text is written to `car.radio.rds_text` after the First Frame (first 6 chars) and
+  after each subsequent CF, so the UI label updates progressively.  
+- The related `0x125` frame carries CD track lists and radio station lists using the same
+  ISO-TP framing; it is not yet implemented.
+
+---
+
+## 9. `0x2A5` — Radio Station Name / RDS PS
 
 **PSA name:** `NOM_STATION` (inferred)  
 **Period:** 100 ms  
@@ -326,7 +451,7 @@ description (serial frame `0x07`), both stripped of leading/trailing whitespace.
 
 ---
 
-## 8. `0x3E5` — Steering Wheel Panel Buttons
+## 10. `0x3E5` — Steering Wheel Panel Buttons
 
 **PSA name:** `CDE_CLAVIER_VOLANT` / `COMMANDES_CLAVIER` (inferred)  
 **Period:** 50 ms  
@@ -367,7 +492,7 @@ Different keys: `TRIP` (b1[7:6]), `SOURCE` (b1[5:4]), `DARK` (b1[1:0]), `NEXT` (
 
 ---
 
-## 9. Comparison summary: simulator vs ios-car-dashboard
+## 11. Comparison summary: simulator vs ios-car-dashboard
 
 | Signal | Simulator (Peugeot 407) | ios-car-dashboard (Peugeot 207) | Match? |
 |---|---|---|---|
@@ -385,7 +510,7 @@ positions are expected to be identical for infotainment-related frames.
 
 ---
 
-## 10. Open questions
+## 12. Open questions
 
 - `0x265` byte 0 flag meanings are inferred from the simulator source; independent capture
   is needed to confirm each bit.
