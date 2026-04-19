@@ -45,19 +45,20 @@ Workbench captures show this frame carries a constant payload throughout the ent
 
 **Period:** 500 ms.
 
-When `car.clim.enabled` is `False` or ignition is off, the BSI idle frame is sent:
+Three operating conditions:
 
-```
-08 00 00 00 00 0B 0B 00
-```
+- **Ignition off**: BSI idle frame — `08 00 00 00 00 0B 0B 00`
+- **Standby** (`enabled=False`, ignition on — fan dragged to 0): workbench-verified standby frame with `byte0=0xA8`, fan nibble `0x0F`, and both zone temperatures preserved from the last active state:
+  ```
+  A8 00 0F 00 00 <temp_left> <temp_right> 00
+  ```
+- **Active** (`enabled=True`, ignition on): full climate panel state (see byte layout below).
 
-When climate is active:
-
-### Byte layout
+### Byte layout (active mode)
 
 | Byte | Meaning                                                                 |
 |------|-------------------------------------------------------------------------|
-| 0    | `0x08` base constant; `0x19` when front demist is active (`0x08\|0x11`) |
+| 0    | Mode byte — see table below                                             |
 | 1    | Constant `0x00`                                                         |
 | 2    | Fan speed raw value (see [Fan encoding](#fan-encoding))                 |
 | 3    | High nibble = left zone air distribution, low nibble = right zone       |
@@ -66,13 +67,23 @@ When climate is active:
 | 6    | Right zone temperature index                                            |
 | 7    | Constant `0x00`                                                         |
 
+### Byte 0 — mode flags
+
+| Value  | Condition                                        |
+|--------|--------------------------------------------------|
+| `0x08` | AUTO mode (`auto=1`)                             |
+| `0x28` | Manual mode (`auto=0`) — `0x08 \| 0x20` (manual distribution bit) |
+| `0x19` | Front demist active — `0x08 \| 0x11`             |
+| `0xA8` | **Standby** — `0x80 \| 0x20 \| 0x08` (fan=0, ignition on) |
+
 ### Workbench example frames
 
-| Frame (hex)            | Condition                                |
-|------------------------|------------------------------------------|
-| `08 00 02 00 00 16 00 00` | Auto mode, fan 3, temp 22 (left), left/right dir=auto |
-| `08 00 02 42 00 08 0A 00` | Dual mode, left dir=up(4), right dir=down(2), temp differs |
-| `19 00 02 11 10 08 0A 00` | Front demist active, recirculation on |
+| Frame (hex)                       | Condition                                            |
+|-----------------------------------|------------------------------------------------------|
+| `08 00 02 00 00 0B 0B 00`         | AUTO mode, fan 3, both zones 21°C, both dir=auto     |
+| `28 00 02 42 00 08 0A 00`         | Manual mode, left dir=up(4), right dir=down(2)       |
+| `19 00 02 11 10 08 0A 00`         | Front demist active, recirculation on                |
+| `A8 00 0F 00 00 0B 0B 00`         | Standby (fan=0), both zone temps preserved at 21°C   |
 
 ---
 
@@ -80,17 +91,21 @@ When climate is active:
 
 **Period:** 200 ms.
 
-When `car.clim.enabled` is `False` or ignition is off, the BSI standby frame is sent:
-- Ignition on, climate off: `1C 30 0B 0B 00 00 00 00`
-- Ignition off: `1C 40 0B 0B 00 00 00 00`
+Three operating conditions:
 
-When climate is active:
+- **Ignition off**: `1C 40 0B 0B 00 00 00 00`
+- **Standby** (`enabled=False`, ignition on): byte 0 = `(ac << 4) | 0x20 | dual`, fan nibble `0x0F`, zone temperatures preserved:
+  ```
+  <(ac<<4)|0x20|dual>  <0x30|(unfrost_front<<7)>  <temp_left>  <temp_right>  00 00 0F 00
+  ```
+  Example: ac=1, dual=0 → byte0 = `0x30` (0x10|0x20|0); ac=1, dual=1 → byte0 = `0x31` (0x10|0x20|1)
+- **Active** (`enabled=True`, ignition on): full climate EMF state (see byte layout below).
 
-### Byte layout
+### Byte layout (active mode)
 
 | Byte | Encoding                                                           |
 |------|--------------------------------------------------------------------|
-| 0    | `0x14 \| (auto << 3) \| dual`                                      |
+| 0    | `(ac << 4) \| mode_bits \| dual` — see table below                |
 | 1    | `0x30 \| (unfrost_front << 7)`                                     |
 | 2    | `clim.bits \| temp_left` (bits 0–4 = left temperature index)       |
 | 3    | Right zone temperature index                                       |
@@ -101,12 +116,20 @@ When climate is active:
 
 ### Byte 0 — mode flags
 
-| Value  | auto | dual | Condition              |
-|--------|------|------|------------------------|
-| `0x1C` | 1    | 0    | Auto mode, single zone |
-| `0x1D` | 1    | 1    | Auto mode, dual zone   |
-| `0x14` | 0    | 0    | Manual, single zone    |
-| `0x15` | 0    | 1    | Manual, dual zone      |
+`mode_bits = 0x0C` when `auto=1` (bits 2 and 3 both set); `mode_bits = 0x00` when `auto=0`.
+
+```python
+mode_bits = 0x0C if clim.auto else 0x00
+byte0 = (clim.ac << 4) | mode_bits | clim.dual
+```
+
+| Value  | ac | auto | dual | Condition              |
+|--------|----|------|------|------------------------|
+| `0x1C` | 1  | 1    | 0    | Auto mode, single zone |
+| `0x1D` | 1  | 1    | 1    | Auto mode, dual zone   |
+| `0x10` | 1  | 0    | 0    | Manual, single zone    |
+| `0x11` | 1  | 0    | 1    | Manual, dual zone      |
+| `0x0C` | 0  | 1    | 0    | A/C off, auto mode     |
 
 ---
 
@@ -185,11 +208,11 @@ All controls in the **Clim** tab are disabled when ignition is off.
 
 | Button ID           | Label         | Effect                                                    |
 |---------------------|---------------|-----------------------------------------------------------|
-| `clim_on`           | ON            | Toggles `clim.enabled`; when off sends BSI idle frames and resets all state |
+| `clim_on`           | ON            | Toggles `clim.enabled`; when off resets direction, fan, airflow mode (but preserves `ac`, `dual`, and zone temperatures) |
 | `ac_on`             | A/C           | Toggles `clim.ac` (A/C compressor); reflected in `0x1E3` byte 0 bit 4 |
-| `dual`              | dual          | Toggles `clim.dual`; also auto-enabled when right zone temperature is changed independently |
+| `dual`              | dual          | Toggles `clim.dual`; also auto-enabled when right zone temperature is changed independently, or when right zone direction is changed |
 | `unfrost_rear`      | unfrost rear  | Toggles `clim.unfrost_rear` (rear demist)                 |
-| `mode_auto`         | AUTO          | **Mutex group** — sets `auto=1`, resets both direction zones to 0x00 (auto) |
+| `mode_auto`         | AUTO          | **Mutex group** — sets `auto=1`, resets both direction zones to 0x00 (auto), forces `ac=1` |
 | `mode_unfrost_front`| Unfrost Frt   | **Mutex group** — sets `unfrost_front=1`, clears auto and recycle |
 | `mode_recirc`       | Recirc        | **Mutex group** — sets `recycle=1` (cabin recirculation), clears others |
 | `mode_fresh`        | Fresh         | **Mutex group** — clears auto, unfrost_front, and recycle (outside fresh air, manual mode) |
@@ -224,6 +247,10 @@ Left zone `+`/`−` buttons adjust `clim.temp_left`.
 
 The fan slider maps UI values 0–8 to the raw CAN nibble via the [Fan encoding](#fan-encoding) table.
 
+- **Dragging fan to 0** suspends climate (`enabled=False`) but **preserves all settings** (ac, dual, direction, temps, recycle, unfrost).  The CAN frames switch to the standby encoding.
+- **Raising fan from 0** re-enables climate (`enabled=True`), exits AUTO mode (enters manual/fresh distribution), and resumes with the previously preserved settings.
+- **Changing fan while AUTO is active** automatically exits AUTO mode (`auto=0`) before applying the new fan level.
+
 ### Air distribution grids
 
 Two 2-column grids (left zone and right zone) each contain eight `ToggleButton`s in a Kivy `group` so only one direction is active at a time per zone:
@@ -247,7 +274,26 @@ When the simulator starts with climate enabled, `clim.dual = 0`.  The `0x1E3` fr
 
 **Mono mode (dual=0):** Changing the **left zone** temperature via the UI (`on_temp(zone=0)`) also updates `clim.temp_right` to the same value, keeping both zones in sync.  This matches the real climate panel where a single set-point governs both sides.
 
-**Entering dual mode:** As soon as the **right zone temperature** is adjusted via the UI (`on_temp(zone=1)`), `clim.dual` is set to 1 and the next `0x1E3` byte 0 transitions to `0x1D` (auto=1, dual=1).  After that, left and right zones are independently tracked.
+**Entering dual mode:** Dual mode is automatically activated when:
+- The **right zone temperature** is adjusted via the UI (`on_temp(zone=1)`)
+- The **right zone air direction** is changed via the UI (`on_dir(seat=1, ...)`)
+- The **DUAL** button is pressed directly
+
+Once dual=1, the next `0x1E3` byte 0 transitions to `0x1D` (auto=1, dual=1). After that, left and right zones are independently tracked.
+
+---
+
+## Standby / fan=0 behaviour
+
+Setting the fan slider to 0 puts climate into **standby**:
+- `clim.enabled = False`; CAN frames switch to the standby encoding (see `0x1D0` and `0x1E3` standby rows above)
+- `ac`, `dual`, `dir_left`, `dir_right`, `temp_left`, `temp_right`, `recycle`, `unfrost_front`, `unfrost_rear` are **all preserved**
+- Raising the fan from 0 re-enables climate (`enabled=True`), automatically exits AUTO mode, and resumes with all preserved settings
+
+**Pressing the ON button to off** (`on_clim_on('normal')`) performs a fuller reset:
+- `fan=0`, `dir_left=0`, `dir_right=0`, `auto=0`, `unfrost_front=0`, `unfrost_rear=0`, `recycle=0`
+- `ac` and `dual` are preserved (they represent personal preferences)
+- Zone temperatures are preserved
 
 ---
 
@@ -255,11 +301,11 @@ When the simulator starts with climate enabled, `clim.dual = 0`.  The `0x1E3` fr
 
 The following sequence was captured from a real Peugeot 407 bench and is used to verify the simulator.
 
-1. **Climate on** — `0x1E3[0] = 0x1C` (auto=1, dual=0), all directions `0x00` (auto), fan off
-2. **Fan up to level 3** — `0x1D0[2] = 0x02`, `0x1E3[6] = 0x02`
-3. **Air direction left → Up** — `0x1E3[4] = 0x40`
-4. **Air direction right → Dwn** — `0x1E3[5] = 0x20`, `0x1D0[3] = 0x42`
-5. **Right temp +1** — `clim.dual = 1`, `0x1E3[0] = 0x1D`
+1. **Climate on** — `0x1E3[0] = 0x1C` (auto=1, ac=1, dual=0), all directions `0x00` (auto), fan standby
+2. **Fan up to level 3** — exits AUTO → manual mode; `0x1D0[0] = 0x28`, `0x1D0[2] = 0x02`, `0x1E3[6] = 0x02`, `0x1E3[0] = 0x10`
+3. **Air direction left → Up** — `0x1E3[4] = 0x40`, `0x1D0[3] = 0x40`
+4. **Air direction right → Dwn** — auto-enables dual; `0x1E3[5] = 0x20`, `0x1D0[3] = 0x42`, `0x1E3[0] = 0x11` (dual=1)
+5. **Right temp +1** — `0x1E3[0] = 0x11` (already dual), temp_right increments
 6. **Front demist on** — `0x1D0[0] = 0x19`, `0x1E3[1] = 0xB0`, `0x1D0[4] |= 0x10`
-7. **Recirc on** — `0x1D0[4] |= 0x20` (bit 5 set)
+7. **Recirc on** — `0x1D0[4] |= 0x20` (bit 5 set), `0x1D0[0] = 0x28`
 8. **Fresh (outside air)** — `0x1D0[4] &= ~0x20` (bit 5 cleared)
