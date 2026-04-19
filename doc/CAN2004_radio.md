@@ -309,12 +309,18 @@ encodings are consistent.
 **PSA name:** `TEXTE_RADIO` (inferred)  
 **Period:** variable (100–500 ms between frames; head unit transmits when RDS RT is available)  
 **Module:** `radio` (listen-only — emitted by head unit, received by display/simulator)  
-**Confidence:** Inferred — ISO 15765-2 framing confirmed by autowp cross-reference; no real-car
-0x0A4 frames in the available bench capture (radio was not active during that capture)
+**Confidence:** Bench-verified from the April 2026 `radio_loop.csv` capture
 
 This frame carries the RDS RadioText (RT) string — a free-form text message up to 64 characters
-broadcast by FM radio stations.  The head unit splits the text across multiple CAN frames using
+broadcast by FM radio stations. The head unit splits the text across multiple CAN frames using
 **ISO 15765-2 (ISO-TP)** transport protocol framing.
+
+The verified dump shows a slightly richer real-world format than the earlier synthetic example:
+
+- the first frame starts with `10 44`, meaning a **68-byte** total payload
+- the reassembled payload begins with an internal **4-byte prefix** `10 00 00 00`
+- the remaining **64 bytes** are the actual ASCII RadioText, space-padded on the right
+- in monitor mode the simulator now strips that prefix and displays the recovered text directly in the Radio tab
 
 ### ISO 15765-2 Frame Types
 
@@ -353,20 +359,31 @@ Used when the RT text is > 7 characters (typically 32 or 64 chars).
 | 0 | 3:0 | Sequence number N | 1–15, wraps to 0 after 15 |
 | 1–7 | 7:0 | RT text [chunk] | Next 7 bytes |
 
-### Typical multi-frame sequence for a 64-char RT
+### Verified multi-frame sequence from the real dump
 
 ```
-0x0A4  10 40 52 4D 46 20 46 4D   # FF: total=64, text[0:6]="RMF FM"
-0x0A4  21 20 77 69 74 61 20 77   # CF SN=1: text[6:13]=" wita w"
-0x0A4  22 20 4B 72 61 6B 6F 77   # CF SN=2: text[13:20]=" Krakow"
-0x0A4  23 69 65 20 6E 61 20 63   # CF SN=3: text[20:27]="ie na c"
-0x0A4  24 7A 65 73 74 6F 74 6C   # CF SN=4: text[27:34]="zestotl"
-0x0A4  25 69 77 6F 73 63 69 20   # CF SN=5: text[34:41]="iwosci "
-0x0A4  26 39 36 20 4D 48 7A 20   # CF SN=6: text[41:48]="96 MHz "
-0x0A4  27 20 20 20 20 20 20 20   # CF SN=7: text[48:55]="       "
-0x0A4  28 20 20 20 20 20 20 20   # CF SN=8: text[55:62]="       "
-0x0A4  29 20 20 00 00 00 00 00   # CF SN=9: text[62:64]="  " + padding
+0x0A4  10 44 10 00 00 00 44 7A   # FF: total=68, embedded prefix + "Dz"
+0x0A4  21 77 6F 6E 63 69 65 20   # CF SN=1
+0x0A4  22 64 6F 20 6E 61 73 20   # CF SN=2
+0x0A4  23 2D 20 74 65 6C 2E 20   # CF SN=3
+0x0A4  24 31 32 20 44 57 41 20   # CF SN=4
+0x0A4  25 4D 49 4C 49 4F 4E 59   # CF SN=5
+0x0A4  26 20 63 7A 79 6E 6E 79   # CF SN=6
+0x0A4  27 20 63 61 6C 61 20 64   # CF SN=7
+0x0A4  28 6F 62 65 2E 20 20 20   # CF SN=8
+0x0A4  29 20 20 20 20 20 20 00   # CF SN=9 + final padding/NUL
 ```
+
+Decoded RadioText:
+
+> Dzwoncie do nas - tel. 12 DWA MILIONY czynny cala dobe.
+
+Other verified texts seen in the same capture include:
+
+- `Zapraszamy na nasza strone: www.rmf.fm`
+- `Osmioro dzieci nie zyje. Dramat w Luizjanie`
+- `Polacy chca jasnych decyzji prezydenta. Sondaz nie pozostawia...`
+- `RMF FM wita w Krakowie na czestotliwosci 96 MHz`
 
 ### Decode snippet
 
@@ -374,20 +391,21 @@ Used when the RT text is > 7 characters (typically 32 or 64 chars).
 pci_type = (data[0] >> 4) & 0x0F
 
 if pci_type == 0:          # Single Frame
-    length = data[0] & 0x0F
-    text = data[1:1+length].decode('ascii', errors='replace').strip('\x00').strip()
+    payload = bytes(data[1:1 + (data[0] & 0x0F)])
 
 elif pci_type == 1:        # First Frame — start accumulation buffer
     total_len = ((data[0] & 0x0F) << 8) | data[1]
-    text_start = data[2:8].decode('ascii', errors='replace')
-    buf = {'total': total_len, 'next_sn': 1, 'data': text_start}
+    buf = {'total': total_len, 'next_sn': 1, 'data': bytearray(data[2:8])}
 
 elif pci_type == 2:        # Consecutive Frame — extend buffer
     sn = data[0] & 0x0F
-    chunk = data[1:8].decode('ascii', errors='replace')
-    buf['data'] += chunk
+    buf['data'].extend(data[1:8])
     buf['next_sn'] = (sn + 1) & 0x0F
     if len(buf['data']) >= buf['total']:
+        payload = bytes(buf['data'][:buf['total']])
+        if payload.startswith(b'\x10\x00\x00\x00'):
+            payload = payload[4:]
+        text = payload.split(b'\x00', 1)[0].decode('ascii', errors='replace').strip()
         text = buf['data'][:buf['total']].strip('\x00').strip()
 ```
 

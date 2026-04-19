@@ -56,7 +56,7 @@ project (Peugeot 207 RD4 head unit), see [CAN2004_radio.md](CAN2004_radio.md).
 | CAN ID | Purpose | Confidence | Notes |
 |--------|---------|------------|-------|
 | 0x131 | CD-changer command or mixed auxiliary traffic | Inferred/Observed | not a reliable universal door-state source |
-| 0x0A4 / 0x125 | radio text and track/list transport | Inferred | ISO-TP style display payloads |
+| 0x0A4 / 0x125 | radio text and track/list transport | Verified | 0x0A4 bench-verified as ISO-TP style RDS RadioText transport; display/list payloads |
 | 0x0DF / 0x167 / 0x3F6 | display/menu/button state | Inferred | UI-oriented, not vehicle-state core |
 | 0x122 / 0x21F | multimedia and steering-wheel controls | Inferred | input/control frames |
 | 0x165 | radio source / input select | Verified | byte 2 high nibble = source code; see [CAN2004_radio.md §2](CAN2004_radio.md) |

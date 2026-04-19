@@ -2,8 +2,9 @@
 
 Replaces the separate radio-gen, radio-fm, and radio-cd modules with a single
 panel that:
-  - Listens to all radio CAN frames (0x165, 0x1A5, 0x1E0, 0x1E5, 0x225, 0x265,
-    0x2A5, 0x3E5) and decodes them into shared car.radio state.  The real
+  - Listens to all radio CAN frames (0x0A4, 0x165, 0x1A5, 0x1E0, 0x1E5,
+    0x225, 0x265, 0x2A5, 0x3E5) and decodes them into shared car.radio state.
+    The real
     workbench radio is the only transmitter of these frames; the simulator
     never sends them.
   - In monitor mode (runner.monitor == True) or regular simulator mode the
@@ -19,7 +20,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg165, Msg1A5, Msg1E0, Msg1E5, Msg225, Msg265, Msg2A5, Msg3E5
+from can_messages import Msg0A4, Msg165, Msg1A5, Msg1E0, Msg1E5, Msg225, Msg265, Msg2A5, Msg3E5
 
 _modname = 'Radio'
 _version = '1.0.0'
@@ -41,6 +42,7 @@ class Radio(TabbedPanelItem):
 
         # Register all radio CAN message objects.
         logger.debug('registering unified radio module')
+        runner.register_message(Msg0A4())
         runner.register_message(Msg165())
         runner.register_message(Msg1A5())
         runner.register_message(Msg1E0())
@@ -59,6 +61,7 @@ class Radio(TabbedPanelItem):
 
         # Apply monitor-mode read-only lock if needed.
         self._apply_monitor_lock()
+        self._refresh_readouts()
 
     # ------------------------------------------------------------------
     # Convenience accessor
@@ -275,6 +278,22 @@ class Radio(TabbedPanelItem):
         for btn_id, value in flags.items():
             if btn_id in self.ids:
                 self.ids[btn_id].state = 'down' if value else 'normal'
+
+    def _refresh_readouts(self):
+        """Populate the visible station / RadioText readouts from shared state."""
+        if 'cur_vol' in self.ids:
+            self.ids['cur_vol'].text = str(self._radio.volume)
+        if 'slider_vol' in self.ids:
+            self.ids['slider_vol'].value = self._radio.volume
+        if 'cur_station' in self.ids:
+            self.ids['cur_station'].text = self._radio.station_name or ''
+        if 'cur_rds_text' in self.ids:
+            self.ids['cur_rds_text'].text = self._radio.rds_text or ''
+        self.on_freq(self._radio.freq)
+        self._update_source_toggle()
+        self._update_band_toggle()
+        self._update_mem_toggle()
+        self._update_flag_toggles()
 
     # ------------------------------------------------------------------
     # Incoming CAN message handler (monitor + loopback)

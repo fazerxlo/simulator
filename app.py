@@ -66,10 +66,9 @@ class PeugeotSim(App):
             monitor=self.monitor,
         )
         self.can_runner.set_enabled_modules(self.conf.get('modules', []))
-        self.can_runner.run()
-        Clock.schedule_interval(self.can_runner.process_events, 0)
 
-        # Init modules
+        # Init modules before starting the runner so monitor mode does not
+        # miss the first burst of workbench traffic.
         self.modules = {}
         for name in self.conf['modules']:
             module = importlib.import_module(f'modules.{name}')
@@ -84,6 +83,9 @@ class PeugeotSim(App):
                 Clock.schedule_once(partial(tabs.switch_to, module_instance))
             else:
                 tabs.add_widget(module_instance)
+
+        self.can_runner.run()
+        Clock.schedule_interval(self.can_runner.process_events, 0)
 
     def on_stop(self):
         logging.info('closing app')

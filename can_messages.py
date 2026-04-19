@@ -1395,12 +1395,23 @@ class Msg0A4(CanMessage):
     listen_only = True
 
     @staticmethod
-    def _trim_rt(text: str) -> str:
-        """Strip NUL terminator and trailing whitespace from an RT string."""
-        nul = text.find('\x00')
+    def _trim_rt(raw) -> str:
+        """Normalize an RT payload to a displayable ASCII string.
+
+        Real bench captures sometimes prepend an internal 4-byte control
+        prefix ``10 00 00 00`` before the 64-character RadioText body.
+        Strip that prefix when present, then stop at the first NUL and trim
+        outer whitespace used as display padding.
+        """
+        if isinstance(raw, str):
+            raw = raw.encode('ascii', errors='replace')
+        raw = bytes(raw)
+        if raw.startswith(b'\x10\x00\x00\x00'):
+            raw = raw[4:]
+        nul = raw.find(b'\x00')
         if nul >= 0:
-            text = text[:nul]
-        return text.strip()
+            raw = raw[:nul]
+        return raw.decode('ascii', errors='replace').strip()
 
     def encode(self, car) -> list:
         return [0x00] * 8
@@ -1415,22 +1426,22 @@ class Msg0A4(CanMessage):
             length = data[0] & 0x0F
             if length == 0 or length > 7 or len(data) < 1 + length:
                 return
-            text = bytes(data[1:1 + length]).decode('ascii', errors='replace')
+            payload = bytes(data[1:1 + length])
             car.radio._rt_buf = {}
-            car.radio.rds_text = self._trim_rt(text)
+            car.radio.rds_text = self._trim_rt(payload)
 
         elif pci_type == 1:
             # First Frame: start of a multi-frame transfer.
             if len(data) < 3:
                 return
             total_len = ((data[0] & 0x0F) << 8) | data[1]
-            chunk = bytes(data[2:8]).decode('ascii', errors='replace')
+            chunk = bytearray(data[2:8])
             car.radio._rt_buf = {
                 'total': total_len,
                 'next_sn': 1,
                 'data': chunk,
             }
-            # Show the first 6 chars immediately.
+            # Show the first bytes immediately so the UI updates progressively.
             car.radio.rds_text = self._trim_rt(chunk)
 
         elif pci_type == 2:
@@ -1443,12 +1454,11 @@ class Msg0A4(CanMessage):
                 # Out-of-sequence CF — discard the in-progress transfer.
                 car.radio._rt_buf = {}
                 return
-            chunk = bytes(data[1:8]).decode('ascii', errors='replace')
-            buf['data'] += chunk
+            buf['data'].extend(data[1:8])
             # Sequence numbers wrap: 15 → 0 → 1 → …
             buf['next_sn'] = (sn + 1) & 0x0F
             total = buf.get('total', 0)
-            accumulated = buf['data']
+            accumulated = bytes(buf['data'])
             if len(accumulated) >= total:
                 # Transfer complete — commit the final text.
                 car.radio.rds_text = self._trim_rt(accumulated[:total])
