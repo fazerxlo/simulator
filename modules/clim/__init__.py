@@ -33,11 +33,11 @@ class Clim(TabbedPanelItem):
 
         # Initialise climate state on the shared VirtualCar.
         clim = runner.car.clim
-        clim.fan = 0
+        clim.fan = 2
         clim.dir_left = 0
         clim.dir_right = 0
-        clim.temp_left = 0
-        clim.temp_right = 0
+        clim.temp_left = 11
+        clim.temp_right = 11
         clim.unfrost_front = 0
         clim.unfrost_rear = 0
         clim.recycle = 0
@@ -203,18 +203,11 @@ class Clim(TabbedPanelItem):
         if new_fan != self._clim.fan:
             logger.info('Fan speed set to %d', new_fan)
         if new_fan == 0:
-            # Turn climate off but preserve all other settings (a/c, dual,
-            # direction, temps, recycle, etc.) so they are restored when fan
-            # is turned back on.
-            self._clim.fan = 0
+            self._set_off_state()
             self._clim.enabled = False
-            self._update_fan(0)
             self._update_options()
             return
         clim = self._clim
-        # Re-enable climate if it was turned off by setting fan to 0.
-        if not clim.enabled:
-            clim.enabled = True
         if clim.auto:
             clim.auto = 0
             self._update_options()
