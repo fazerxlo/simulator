@@ -7,7 +7,7 @@ Primary sources used:
 - simulator implementation in [modules/bsi-base](../modules/bsi-base), [modules/bsi-trip](../modules/bsi-trip), [modules/combine](../modules/combine), [modules/clim](../modules/clim), and [modules/bsi-log](../modules/bsi-log)
 - workspace notes in [doc/peugeot407can.yaml](peugeot407can.yaml), [doc/psa_pf2.md](psa_pf2.md), and [doc/psa_pf2_comfort.md](psa_pf2_comfort.md)
 - cross-project notes in [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md)
-- observed traffic in [dump.csv](../dump.csv)
+- observed traffic in [dump.csv](../dump.csv) (bench) and [dump_real_car.csv](../dump_real_car.csv) (real car)
 - community data from [autowp/autowp.github.io](https://github.com/autowp/autowp.github.io) (see [CAN2004_autowp_comparison.md](CAN2004_autowp_comparison.md))
 
 This is a monitoring-oriented reference. Where sources disagree, the document marks the confidence level and describes the conflict instead of pretending the signal is fully confirmed.
@@ -37,9 +37,10 @@ These frames are the primary set for a car-parameter monitor.
 | 0x128 | cluster warning and lamp state | Verified (PSA-RE) | full 8-byte signal map confirmed; rich signal set |
 | 0x161 | oil temperature, fuel level, oil level | Verified (PSA-RE) | byte 6 = oil level 0-100 % |
 | 0x168 | dashboard alert/fault indicators | Verified (PSA-RE) | **NOT ambient temperature** — see correction below |
-| 0x220 | door and body openings | Observed | present in dump, not implemented in simulator |
-| 0x1A8 | cruise/speed-limiter state | Observed | present in dump, not implemented in simulator |
-| 0x361 | vehicle configuration/features | Observed | present in dump, not implemented in simulator |
+| 0x220 | door and body openings | Observed | present in dump, implemented in simulator |
+| 0x1A8 | cruise/speed-limiter state | Verified | present in dump, implemented in simulator (Msg1A8) |
+| 0x228 | unknown static frame | Observed | present in real-car dump; constant payload `80 00 80 80 00 00 00 00`; not implemented |
+| 0x361 | vehicle configuration/features | Observed | present in bench dump, not in real-car dump; not implemented |
 | 0x0E1 | parking sensors | Inferred | decode available in workspace notes |
 | 0x14C / 0x28C | vehicle speed and odometer | Inferred | important for monitoring, not comfort-only |
 | 0x1D0 / 0x1E3 | HVAC status | Verified | useful if climate monitoring is needed |
@@ -67,7 +68,10 @@ The workspace contains two documentation tracks:
 
 The canbox source document adds a useful third track: Peugeot 407 and Citroen infotainment-oriented notes that strongly support `0x036`, `0x0F6`, `0x0E1`, `0x1D0`, and the radio/display IDs, while also treating `0x131` as CD-changer command traffic and `0x220` as a compact door-status frame.
 
-The observed dump confirms that `0x220`, `0x1A8`, and `0x361` are real on the bus, even though the current simulator does not implement them.
+The bench dump confirms that `0x220`, `0x1A8`, and `0x361` are real on the bus. The real-car dump
+(`dump_real_car.csv`) additionally shows `0x228` and `0x3F6`. Both `0x220` and `0x1A8` are now
+implemented in the simulator (`Msg220` and `Msg1A8`). See
+[CAN2004_real_car_dump.md](CAN2004_real_car_dump.md) for a full analysis of the real-car log.
 
 ## Message Details
 
@@ -537,7 +541,8 @@ If infotainment integration is also needed, add these separately:
 
 ## Known Gaps In The Workspace
 
-- The simulator does not currently implement `0x220`, `0x1A8`, or `0x361`.
+- `0x220` and `0x1A8` are now implemented (`Msg220`, `Msg1A8`). `0x361` remains unimplemented.
+- `0x228` is observed in real-car captures with a constant payload; signal mapping is unknown.
 - The simulator only partially models `0x128` and does not decode real gear/mode bytes.
 - `0x0F6` byte 5 conflict between autowp (constant `0x8E`) and PSA-RE (external temperature)
   is resolved in favour of PSA-RE — see [CAN2004_autowp_comparison.md](CAN2004_autowp_comparison.md).
@@ -547,7 +552,9 @@ If infotainment integration is also needed, add these separately:
 
 ## Quick Raw Examples
 
-These payloads are useful as smoke-test samples when developing a decoder:
+These payloads are useful as smoke-test samples when developing a decoder.
+
+Bench capture:
 
 ```text
 0x036  0E 00 00 2F 03 00 00 A0
@@ -557,6 +564,21 @@ These payloads are useful as smoke-test samples when developing a decoder:
 0x1A8  00 FF FF 00 00 13 E2 2D
 0x220  04 00
 0x361  01 01 91 40 30 10
+```
+
+Real-car capture (see `dump_real_car.csv` and `doc/CAN2004_real_car_dump.md`):
+
+```text
+0x036  00 00 06 2F 00 80 00 00
+0x0B6  00 00 00 00 00 FF 00 A0
+0x0F6  86 64 00 00 00 08 63 20
+0x128  10 00 00 00 00 A0 00 00
+0x161  00 00 62 00 00 00 00
+0x168  00 00 00 00 02 00 00 00
+0x1A1  00 8B C6 00 00 00 00 00
+0x1A8  00 00 00 00 00 00 A0 00
+0x228  80 00 80 80 00 00 00 00
+0x3F6  00 00 00 00 00 C0 00
 ```
 
 ## Summary
