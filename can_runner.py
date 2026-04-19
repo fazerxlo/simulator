@@ -310,6 +310,8 @@ class CanRunner():
             for can_id, msg_obj in list(self._can_message_objects.items()):
                 if not self.message_enabled(msg_obj):
                     continue
+                if getattr(msg_obj, 'listen_only', False):
+                    continue
                 now = datetime.datetime.now()
                 timer = self._message_object_timers.get(can_id, now)
                 try:
