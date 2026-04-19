@@ -272,7 +272,7 @@ class Msg12D(CanMessage):
     def encode(self, car) -> list | None:
         if not car.bsi.ignition_on:
             return None
-        return [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        return [0x00, 0x32, 0x32, 0x00, 0x00, 0x00, 0x98, 0x80]
 
 
 # ---------------------------------------------------------------------------
@@ -720,14 +720,30 @@ class Msg1D0(CanMessage):
         return 500
 
     def encode(self, car) -> list:
-        if not car.clim.enabled or not car.bsi.ignition_on:
+        if not car.bsi.ignition_on:
             return [0x08, 0x00, 0x00, 0x00, 0x00, 0x0B, 0x0B, 0x00]
         clim = car.clim
+        if not clim.enabled:
+            # Standby (fan=0, ignition on): climate suspended but ignition is on.
+            # Workbench byte0=0xA8 (0x80|0x20|0x08); fan=0x0F; temps preserved.
+            return [0xA8, 0x00, 0x0F, 0x00, 0x00, clim.temp_left, clim.temp_right, 0x00]
         dir_left = int(clim.dir_left) & 0x0F
-        dir_byte = (dir_left << 4) | dir_left
-        b4 = clim.recycle << 5 | clim.unfrost_front << 4
+        dir_right = int(clim.dir_right) & 0x0F
+        dir_byte = (dir_left << 4) | dir_right
+        if clim.unfrost_front:
+            b0 = 0x19  # 0x08 | 0x11
+        elif clim.auto:
+            b0 = 0x08  # AUTO mode — no manual-distribution bit
+        else:
+            b0 = 0x28  # 0x08 | 0x20 — manual fan/direction mode
+        # Byte 4 bit layout (workbench-verified from clima_auto_inside_outside_auto.csv):
+        #   bit5 (0x20): "explicit non-auto intake mode" — set when Fresh, Recirc, or
+        #                UnfrostFront was actively selected by the user.
+        #   bit4 (0x10): "recirculation" — set only when recirc is active.
+        # AUTO mode: byte4=0x00; Fresh explicit: 0x20; Recirc explicit: 0x30.
+        b4 = (0x20 if clim.intake_explicit else 0x00) | (0x10 if clim.recycle else 0x00)
         fan_raw = _encode_clim_fan(clim.fan)
-        return [0x00, 0x00, fan_raw, dir_byte, b4,
+        return [b0, 0x00, fan_raw, dir_byte, b4,
                 clim.temp_left, clim.temp_right, 0x00]
 
     def decode(self, car, data: bytes) -> None:
@@ -743,8 +759,8 @@ class Msg1D0(CanMessage):
         # per-side airflow state to 0x1E3 which carries both zones explicitly.
         if high and high == low:
             car.clim.dir_left = high
-        car.clim.recycle = (data[4] >> 5) & 1
-        car.clim.unfrost_front = (data[4] >> 4) & 1
+        # bit4 = recirculation (workbench-verified); bit5 = non-auto intake flag.
+        car.clim.recycle = (data[4] >> 4) & 1
         car.clim.temp_left = data[5]
         car.clim.temp_right = data[6]
 
@@ -765,12 +781,35 @@ class Msg1E3(CanMessage):
     required_modules = frozenset({'clim'})
 
     def encode(self, car) -> list:
-        if not car.clim.enabled or not car.bsi.ignition_on:
-            d2 = 0x30 if car.bsi.ignition_on else 0x40
-            return [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
+        if not car.bsi.ignition_on:
+            return [0x1C, 0x40, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
         clim = car.clim
-        b1 = clim.auto << 3 | clim.dual
-        b2 = clim.unfrost_front << 7
+        if not clim.enabled:
+            # Standby (fan=0, ignition on): climate suspended but ignition is on.
+            # Workbench byte0=(ac<<4)|0x20|dual; fan=0x0F; temps preserved.
+            b1 = (clim.ac << 4) | 0x20 | clim.dual
+            b2 = 0x30 | (clim.unfrost_front << 7)
+            return [b1, b2, clim.temp_left, clim.temp_right, 0x00, 0x00, 0x0F, 0x00]
+        # In AUTO mode bits 2+3 (0x0C) are set together; when an explicit
+        # non-auto intake mode is active (Fresh/Recirc/UnfrostFront selected by
+        # the user) bit2 (0x04) alone is set; in implicit manual mode both are
+        # clear.  Bit 7 (0x80) is the recirculation indicator, set when
+        # clim.recycle=1.
+        # Verified against workbench:
+        #   auto=1, ac=1, dual=0        → 0x1C
+        #   auto=1, ac=1, dual=1        → 0x1D
+        #   auto=0, ac=1, dual=1 (implicit fresh, from standby raise) → 0x11
+        #   explicit fresh, ac=0, dual=1 → 0x05
+        #   explicit recirc, ac=0, dual=1 → 0x85
+        if clim.auto:
+            mode_bits = 0x0C
+        elif clim.intake_explicit:
+            mode_bits = 0x04
+        else:
+            mode_bits = 0x00
+        recirc_bit = 0x80 if clim.recycle else 0x00
+        b1 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
+        b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right
         b5 = clim.dir_left << 4
@@ -784,8 +823,11 @@ class Msg1E3(CanMessage):
         car.clim.fan = _decode_clim_fan(data[6])
         car.clim.dir_left = data[4] >> 4
         car.clim.dir_right = data[5] >> 4
+        car.clim.ac = (data[0] >> 4) & 1
         car.clim.auto = (data[0] >> 3) & 1
         car.clim.dual = data[0] & 1
+        # bit7 of byte0 = recirculation indicator (workbench-verified).
+        car.clim.recycle = (data[0] >> 7) & 1
         car.clim.unfrost_front = (data[1] >> 7) & 1
         car.clim.temp_left = data[2] & 0x1F
         car.clim.temp_right = data[3]
