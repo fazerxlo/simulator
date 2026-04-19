@@ -7,7 +7,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg12B
+from generated.bte_messages import Msg12B
 
 _modname = 'BTE'
 _modversion = '0.0.1'

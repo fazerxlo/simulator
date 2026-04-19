@@ -4,7 +4,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg1A0, Msg131
+from generated import Msg1A0, Msg131
 
 _modname = 'CDC'
 _modversion = '0.0.1'

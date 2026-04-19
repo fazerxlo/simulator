@@ -2,7 +2,7 @@
 
 import pytest
 from car_state import VirtualCar, Radio
-from can_messages import ALL_MESSAGES, Msg165, Msg1E5, Msg1E0, Msg225, Msg265, Msg2A5, Msg0A4, Msg1A5, Msg3E5
+from generated import ALL_MESSAGES, Msg165, Msg1E5, Msg1E0, Msg225, Msg265, Msg2A5, Msg0A4, Msg1A5, Msg3E5
 from conftest import DummyWidget
 
 
@@ -491,8 +491,6 @@ class TestRadioToggleGroupHelper:
 # ---------------------------------------------------------------------------
 # Msg0A4 – RDS RadioText (ISO 15765-2) decode
 # ---------------------------------------------------------------------------
-
-from can_messages import Msg0A4
 
 
 class TestMsg0A4RadioText:

@@ -3,7 +3,7 @@
 import pytest
 
 from car_state import VirtualCar, CDChanger
-from can_messages import ALL_MESSAGES, Msg1A0, Msg131
+from generated import ALL_MESSAGES, Msg1A0, Msg131
 
 
 class TestCDChangerDefaults:

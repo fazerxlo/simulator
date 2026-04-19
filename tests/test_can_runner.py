@@ -9,7 +9,7 @@ import types
 import pytest
 
 from car_state import VirtualCar
-from can_messages import (Msg036, Msg1D0, Msg12D, Msg1A5, Msg3E5, Msg12B, Msg0B6, Msg1E3, CanMessage)
+from generated import (Msg036, Msg1D0, Msg12D, Msg1A5, Msg3E5, Msg12B, Msg0B6, Msg1E3, CanMessage)
 from conftest import make_can_mock
 
 
@@ -277,4 +277,3 @@ class TestCanRunnerDuplicateDetection:
             runner.reg(lambda: None, 0x1D0, 500)
             runner.reg(lambda: None, 0x1E3, 500)
         assert not any(r.levelno == logging.WARNING for r in caplog.records)
-

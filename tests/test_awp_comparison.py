@@ -3,7 +3,7 @@
 import pytest
 
 from car_state import VirtualCar
-from can_messages import Msg0B6, Msg0F6, Msg128, Msg1D0
+from generated import Msg0B6, Msg0F6, Msg128, Msg1D0
 
 
 # ---------------------------------------------------------------------------
@@ -287,4 +287,3 @@ class TestMsg1D0AwpCompare:
         car.clim.dir_left = 3
         data = Msg1D0().encode(car)
         assert data[3] == 0x30  # (3 << 4) | dir_right=0
-

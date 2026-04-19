@@ -20,7 +20,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg0A4, Msg165, Msg1A5, Msg1E0, Msg1E5, Msg225, Msg265, Msg2A5, Msg3E5
+from generated.radio_messages import Msg0A4, Msg165, Msg1A5, Msg1E0, Msg1E5, Msg225, Msg265, Msg2A5, Msg3E5
 
 _modname = 'Radio'
 _version = '1.0.0'

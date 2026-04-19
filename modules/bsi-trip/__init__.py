@@ -7,7 +7,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg221, Msg2A1, Msg261
+from generated.trip_messages import Msg221, Msg2A1, Msg261
 
 _modname = 'BSI_trip'
 _modversion = '0.0.1'

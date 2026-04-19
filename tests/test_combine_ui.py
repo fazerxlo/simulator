@@ -47,4 +47,3 @@ class TestCombineUiHelpers:
         car.bsi.power_mode = 0x01
         widget = CombineModule(types.SimpleNamespace(car=car))
         assert widget.runner.car.dashboard.on == 1
-

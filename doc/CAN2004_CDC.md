@@ -284,7 +284,7 @@ The radio head unit sees a real CDC sequence: the CDC powers on (loading), then 
 | `STATUS_LOADING` | `3` | `0x01` |
 | `STATUS_SEARCHING` | `4` | `0x40` |
 
-### CAN message classes (`can_messages.py`)
+### CAN message classes (`generated/cdc_messages.py`)
 
 | Class | CAN ID | Direction | Note |
 |-------|--------|-----------|------|
@@ -297,7 +297,7 @@ Both classes require the `cdc` module to be enabled (`required_modules = frozens
 
 ```python
 from car_state import VirtualCar, CDChanger
-from can_messages import Msg1A0
+from generated import Msg1A0
 
 car = VirtualCar()
 car.cdc.active = True

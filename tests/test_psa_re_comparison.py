@@ -3,7 +3,7 @@
 import pytest
 
 from car_state import VirtualCar, SpeedControl
-from can_messages import ALL_MESSAGES, Msg0F6, Msg128, Msg168, Msg1A8, Msg161
+from generated import ALL_MESSAGES, Msg0F6, Msg128, Msg168, Msg1A8, Msg161
 from conftest import DummyWidget
 
 
@@ -191,7 +191,7 @@ class TestMsg128PSARe:
         assert (data[2] >> 5) & 1 == 1  # simulator uses bit 5
 
     def test_decode_stop_from_byte1_bit6(self):
-        """Decode: STOP bit at byte1 (idx 1) bit 6 updates car.dashboard.stop."""
+        """Decode: STOP bit at byte1 (idx 1) bit6 updates car.dashboard.stop."""
         car = VirtualCar()
         car.dashboard.active = True
         # byte1 = 0x40 = 0b01000000 → bit6=1 (STOP)
@@ -508,4 +508,3 @@ class TestMsg161OilLevel:
         car = VirtualCar()
         data = Msg161().encode(car)
         assert len(data) == 7
-

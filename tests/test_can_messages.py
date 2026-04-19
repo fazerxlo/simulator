@@ -1,4 +1,4 @@
-"""Tests for CAN message encoders and decoders."""
+"""Tests for generated CAN message encoders and decoders."""
 import datetime
 import importlib
 import os
@@ -7,15 +7,15 @@ import types
 
 import pytest
 
-from car_state import (BSI, Buttons, Clim, CDChanger, Dashboard, Doors, MFDPopup,
+from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
                        Parktronic, Tyres, VirtualCar, Radio, Trip,
                        KMLState, BTEState, SpeedControl)
-from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
-                          Msg128, Msg131, Msg168, Msg190, Msg1A0, Msg1A1,
-                          Msg1D0, Msg1E3, Msg221, Msg2A1, Msg261, Msg12B,
-                          Msg1A3, Msg223, Msg323, Msg165, Msg1A5, Msg1E5,
-                          Msg3E5, Msg52D, Msg110, Msg0F6, Msg161, Msg1A8,
-                          Msg217, Msg12D, STARTUP_WAKEUP_BURST)
+from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
+                          Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
+                          Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
+                          Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
+                          Msg110, Msg0F6, Msg161, Msg1A8, Msg217, Msg12D,
+                          STARTUP_WAKEUP_BURST)
 from conftest import make_can_mock, DummyWidget
 
 BSIBaseModule = importlib.import_module('modules.bsi-base').BSI_base
@@ -993,4 +993,3 @@ class TestMsg3E5Buttons:
         frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
         Msg3E5().decode(car, frame)
         assert car.radio.panel['ok'] == 1
-
