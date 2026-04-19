@@ -1848,7 +1848,8 @@ class TestMsg1A5Buttons:
         car.radio.volflag = 0xE0
         car.radio.volume = 15
         data = Msg1A5().encode(car)
-        assert data == [0xE0 | 15]
+        # radio is listen-only; encode returns None when buttons are not active
+        assert data is None
 
     def test_buttons_encoding_when_active(self):
         car = VirtualCar()
@@ -1888,8 +1889,8 @@ class TestMsg3E5Buttons:
         car = VirtualCar()
         car.radio.panel['tel'] = 1
         data = Msg3E5().encode(car)
-        # radio module layout: tel is in b0 bits [5:4]
-        assert (data[0] >> 4) & 1 == 1
+        # radio is listen-only; encode returns None when buttons are not active
+        assert data is None
 
     def test_buttons_encoding_when_active(self):
         car = VirtualCar()
@@ -2997,7 +2998,7 @@ class TestMsg1D0AwpCompare:
 # See doc/CAN2004_radio.md for full signal documentation.
 # ---------------------------------------------------------------------------
 
-from can_messages import Msg165, Msg1E5
+from can_messages import Msg165, Msg1E5, Msg1E0, Msg225, Msg265, Msg2A5
 
 
 class TestMsg165RadioSource:
@@ -3240,3 +3241,39 @@ class TestMsg1E5AudioSettings:
         car = VirtualCar()
         data = Msg1E5().encode(car)
         assert data[3] == 0x00
+
+
+# ---------------------------------------------------------------------------
+# listen_only flag tests
+# ---------------------------------------------------------------------------
+
+class TestListenOnlyRadioMessages:
+    """Radio CAN messages must be listen-only (never transmitted by simulator)."""
+
+    def test_msg165_is_listen_only(self):
+        assert Msg165.listen_only is True
+
+    def test_msg1e0_is_listen_only(self):
+        assert Msg1E0.listen_only is True
+
+    def test_msg1e5_is_listen_only(self):
+        assert Msg1E5.listen_only is True
+
+    def test_msg225_is_listen_only(self):
+        assert Msg225.listen_only is True
+
+    def test_msg265_is_listen_only(self):
+        assert Msg265.listen_only is True
+
+    def test_msg2a5_is_listen_only(self):
+        assert Msg2A5.listen_only is True
+
+    def test_msg1a5_returns_none_when_buttons_inactive(self):
+        """Msg1A5 radio path should not transmit."""
+        car = VirtualCar()
+        assert Msg1A5().encode(car) is None
+
+    def test_msg3e5_returns_none_when_buttons_inactive(self):
+        """Msg3E5 radio path should not transmit."""
+        car = VirtualCar()
+        assert Msg3E5().encode(car) is None

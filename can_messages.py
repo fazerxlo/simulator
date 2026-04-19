@@ -54,6 +54,12 @@ class CanMessage:
     #: Config-module names that must be enabled for this message to transmit.
     required_modules: frozenset[str] = frozenset()
 
+    #: When True the runner only calls decode() on this message and never
+    #: calls encode() / transmits it.  Set on CAN IDs that are owned by an
+    #: external node (e.g. the real workbench radio) so the simulator only
+    #: monitors and displays the traffic without injecting its own frames.
+    listen_only: bool = False
+
     def get_period_ms(self, car) -> int:
         """Return the active transmit period for the current car state."""
         return self.period_ms
@@ -404,6 +410,7 @@ class Msg165(CanMessage):
     can_id = 0x165
     period_ms = 50
     required_modules = frozenset({'radio'})
+    listen_only = True
 
     def encode(self, car) -> list:
         b2 = car.radio.INPUT_CODES.get(car.radio.input, 0x01) << 4
@@ -608,11 +615,11 @@ class Msg1A5(CanMessage):
     period_ms = 100
     required_modules = frozenset({'buttons', 'radio'})
 
-    def encode(self, car) -> list:
+    def encode(self, car) -> list | None:
         if car.buttons.active:
             car.buttons.step_volume()
             return [car.buttons.volflag | (car.buttons.volume & 0x1F)]
-        return [car.radio.volflag | (car.radio.volume & 0x1F)]
+        return None  # radio is listen-only; do not transmit on its behalf
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 1:
@@ -889,6 +896,7 @@ class Msg1E5(CanMessage):
     can_id = 0x1E5
     period_ms = 100
     required_modules = frozenset({'radio'})
+    listen_only = True
 
     _AMBIANCE_CODES = {
         'none': 0x03, 'classical': 0x07, 'jazz-blues': 0x0B,
@@ -1163,15 +1171,16 @@ class Msg3E5(CanMessage):
     """Steering wheel control panel buttons.
 
     Encodes from ``car.buttons`` when the ``buttons`` module is active
-    (different bit layout and key set); otherwise encodes from
-    ``car.radio.panel`` for the ``radio`` module.
+    (different bit layout and key set).  When only the ``radio`` module is
+    active the real workbench radio owns this frame, so the simulator does
+    not transmit it (returns ``None``).
     """
 
     can_id = 0x3E5
     period_ms = 50
     required_modules = frozenset({'buttons', 'radio'})
 
-    def encode(self, car) -> list:
+    def encode(self, car) -> list | None:
         if car.buttons.active:
             p = car.buttons.panel
             car.buttons.step_pulses()
@@ -1180,12 +1189,7 @@ class Msg3E5(CanMessage):
             b2 = (p['ok'] << 6) | (p['esc'] << 4) | (p['next'] << 2) | p['prev']
             b5 = (p['up'] << 6) | (p['down'] << 4) | (p['right'] << 2) | p['left']
             return [b0, b1, b2, 0x00, 0x00, b5]
-        k = car.radio.panel
-        b0 = k['menu'] << 6 | k['tel'] << 4 | k['clim']
-        b1 = k['trip'] << 6 | k['mode'] << 4 | k['audio']
-        b2 = k['ok'] << 6 | k['esc'] << 4
-        b5 = k['up'] << 6 | k['down'] << 4 | k['right'] << 2 | k['left']
-        return [b0, b1, b2, 0x00, 0x00, b5]
+        return None  # radio is listen-only; do not transmit on its behalf
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 6:
@@ -1231,13 +1235,14 @@ class Msg3E5(CanMessage):
 class Msg1E0(CanMessage):
     """Radio internal status frame (0x1E0).
 
-    Observed constant payload from the head unit; re-emitted by the radio
-    module so that the MFD and other listeners see an active head unit.
+    Observed constant payload from the head unit; decoded by the radio
+    module to detect an active head unit on the bench.
     """
 
     can_id = 0x1E0
     period_ms = 100
     required_modules = frozenset({'radio'})
+    listen_only = True
 
     def encode(self, car) -> list:
         return [0x24, 0x00, 0x00, 0x00, 0x20]
@@ -1260,6 +1265,7 @@ class Msg225(CanMessage):
     can_id = 0x225
     period_ms = 100
     required_modules = frozenset({'radio'})
+    listen_only = True
 
     def encode(self, car) -> list:
         r = car.radio
@@ -1296,6 +1302,7 @@ class Msg265(CanMessage):
     can_id = 0x265
     period_ms = 100
     required_modules = frozenset({'radio'})
+    listen_only = True
 
     def encode(self, car) -> list:
         b0 = (1 << 5) | (1 << 4)   # TA (bit5) and TP (bit4) flags
@@ -1321,6 +1328,7 @@ class Msg2A5(CanMessage):
     can_id = 0x2A5
     period_ms = 100
     required_modules = frozenset({'radio'})
+    listen_only = True
 
     def encode(self, car) -> list:
         name = (car.radio.station_name or '')[:8]

@@ -2,11 +2,12 @@
 
 Replaces the separate radio-gen, radio-fm, and radio-cd modules with a single
 panel that:
-  - Transmits all radio CAN frames (0x165, 0x1A5, 0x1E0, 0x1E5, 0x225, 0x265,
-    0x2A5, 0x3E5) via the shared CanMessage object mechanism.
-  - Decodes incoming frames and updates the shared car.radio state.
-  - In monitor mode (runner.monitor == True) all interactive controls are
-    disabled so the panel becomes read-only, showing live bus data only.
+  - Listens to all radio CAN frames (0x165, 0x1A5, 0x1E0, 0x1E5, 0x225, 0x265,
+    0x2A5, 0x3E5) and decodes them into shared car.radio state.  The real
+    workbench radio is the only transmitter of these frames; the simulator
+    never sends them.
+  - In monitor mode (runner.monitor == True) or regular simulator mode the
+    radio panel is always read-only, reflecting what the real head unit is doing.
 
 Signal documentation: doc/CAN2004_radio.md
 """
