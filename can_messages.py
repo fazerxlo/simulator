@@ -778,6 +778,7 @@ class Msg1E3(CanMessage):
         clim = car.clim
         # In AUTO mode bits 2+3 (0x0C) are set together; in manual mode they
         # are both clear and only the dual bit at position 0 applies.
+        # Bit 3 = AUTO active, bit 2 = paired with AUTO (both set/clear together).
         # Verified against workbench: auto=1,ac=1,dual=0 → 0x1C; auto=0,ac=1,dual=1 → 0x11
         mode_bits = 0x0C if clim.auto else 0x00
         b1 = (clim.ac << 4) | mode_bits | clim.dual

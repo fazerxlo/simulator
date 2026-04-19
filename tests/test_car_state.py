@@ -1094,6 +1094,7 @@ class TestMsg1E3EncodeBenchAlignment:
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 0
+        car.clim.ac = 1
         car.clim.dual = 0
         data = Msg1E3().encode(car)
         assert data[0] == 0x10  # (1<<4) | 0 | 0
