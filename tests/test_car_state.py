@@ -667,22 +667,35 @@ class TestClimUiHelpers:
 
     def test_on_airflow_mode_recirc(self):
         widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1  # start with A/C on
         widget.on_airflow_mode('recirc', 'down')
         assert widget.runner.car.clim.auto == 0
         assert widget.runner.car.clim.unfrost_front == 0
         assert widget.runner.car.clim.recycle == 1
+        # Workbench-verified: recirc turns A/C off (0x1E3 byte0 ac bit = 0).
+        assert widget.runner.car.clim.ac == 0
         assert widget.ids['intake_recycle'].state == 'down'
         assert widget.ids['mode_recirc'].state == 'down'
 
     def test_on_airflow_mode_fresh(self):
         widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1  # start with A/C on
         widget.runner.car.clim.recycle = 1
         widget.on_airflow_mode('fresh', 'down')
         assert widget.runner.car.clim.auto == 0
         assert widget.runner.car.clim.unfrost_front == 0
         assert widget.runner.car.clim.recycle == 0
+        # Workbench-verified: fresh turns A/C off (0x1E3 byte0 ac bit = 0).
+        assert widget.runner.car.clim.ac == 0
         assert widget.ids['mode_fresh'].state == 'down'
         assert widget.ids['mode_recirc'].state == 'normal'
+
+    def test_on_airflow_mode_unfrost_front_preserves_ac(self):
+        """Workbench-verified: unfrost_front does NOT turn A/C off (0x1E3 byte0 ac bit stays)."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1
+        widget.on_airflow_mode('unfrost_front', 'down')
+        assert widget.runner.car.clim.ac == 1  # A/C preserved
 
     def test_on_airflow_mode_ignored_when_ignition_off(self):
         widget = self._make_clim_widget(ignition_on=False)

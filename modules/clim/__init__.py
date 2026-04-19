@@ -165,6 +165,10 @@ class Clim(TabbedPanelItem):
         # This gates the bit2 (0x04) mode indicator in 0x1E3 byte0 and the
         # bit5 (0x20) non-auto flag in 0x1D0 byte4 (workbench-verified).
         clim.intake_explicit = (mode != 'auto')
+        # Workbench-verified: recirc and fresh modes turn the A/C compressor off;
+        # AUTO mode turns it back on.  unfrost_front leaves A/C unchanged.
+        if mode in ('recirc', 'fresh'):
+            clim.ac = 0
         if mode == 'auto':
             # In AUTO mode the climate controller manages direction; reset to auto.
             clim.dir_left = 0x00
