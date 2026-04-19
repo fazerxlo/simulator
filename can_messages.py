@@ -1365,6 +1365,51 @@ class Msg2A5(CanMessage):
 
 
 # ---------------------------------------------------------------------------
+# 0x0A4 – RDS RadioText segments
+# ---------------------------------------------------------------------------
+
+class Msg0A4(CanMessage):
+    """RDS RadioText (RT) segment frame (0x0A4).
+
+    Byte 0: segment index (bits 3:0) and flags (bits 7:4).
+    Bytes 1-7: 7 ASCII characters of the RT string at that segment position.
+
+    Multiple frames are accumulated in ``car.radio._rt_buf`` keyed by segment
+    index.  After each frame the full RT string is reconstructed by joining
+    sorted segments; a NUL byte marks the end of the RT message.
+    """
+
+    can_id = 0x0A4
+    period_ms = 500
+    required_modules = frozenset({'radio'})
+    listen_only = True
+
+    def encode(self, car) -> list:
+        return [0x00] * 8
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 2:
+            return
+        segment_idx = data[0] & 0x0F
+        # Bytes 1..7 hold up to 7 ASCII chars for this segment
+        raw = bytes(data[1:min(len(data), 8)])
+        chunk = raw.rstrip(b'\x00').decode('ascii', errors='replace')
+
+        # Reset the buffer when we receive the first segment of a new cycle
+        if segment_idx == 0:
+            car.radio._rt_buf = {}
+
+        car.radio._rt_buf[segment_idx] = chunk
+
+        # Rebuild the full RT string from all collected segments
+        full = ''.join(v for _, v in sorted(car.radio._rt_buf.items()))
+        # Trim at embedded NUL (marks end of RT message)
+        if '\x00' in full:
+            full = full[:full.index('\x00')]
+        car.radio.rds_text = full.strip()
+
+
+# ---------------------------------------------------------------------------
 # 0x52D – BSI wake/sleep frame
 # ---------------------------------------------------------------------------
 
@@ -1388,7 +1433,7 @@ class Msg52D(CanMessage):
 ALL_MESSAGES: dict[int, type] = {
     cls.can_id: cls
     for cls in (
-        Msg036, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
+        Msg036, Msg0A4, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
         Msg128, Msg161, Msg165, Msg168, Msg190, Msg1A1, Msg1A3,
         Msg1A5, Msg1A8, Msg1D0, Msg1E0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
         Msg223, Msg225, Msg265, Msg2A1, Msg261, Msg2A5, Msg2B6, Msg323, Msg336,

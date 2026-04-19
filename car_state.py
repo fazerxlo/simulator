@@ -213,6 +213,9 @@ class Radio:
         self.tundir = 0
         self.station_name = 'test'
         self.rds_text = ''
+        # Accumulation buffer for multi-frame RDS RadioText (0x0A4)
+        # keyed by segment index → 7-char string
+        self._rt_buf: dict = {}
 
 
 class Trip:

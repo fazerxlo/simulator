@@ -306,10 +306,15 @@ class Radio(TabbedPanelItem):
             if 'cur_station' in self.ids:
                 self.ids['cur_station'].text = self._radio.station_name
 
-        elif aid == 0x265 and len(data) >= 1:
-            # Msg265.decode() updated car.radio.rds_text (RadioText / RT).
+        elif aid == 0x0A4 and len(data) >= 2:
+            # Msg0A4.decode() updated car.radio.rds_text (RadioText / RT).
             if 'cur_rds_text' in self.ids:
                 self.ids['cur_rds_text'].text = self._radio.rds_text
+
+        elif aid == 0x265 and len(data) >= 1:
+            # Msg265 carries RDS status flags; flag toggles already updated
+            # by _update_flag_toggles() when a 0x225 frame arrives.
+            pass
 
         elif aid == 0x1E5 and len(data) >= 7:
             # Msg1E5.decode() updated car.radio.audio; refresh all labels.

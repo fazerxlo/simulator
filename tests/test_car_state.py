@@ -3481,3 +3481,60 @@ class TestRadioToggleGroupHelper:
         assert ids['x'].state == 'normal'
         assert ids['y'].state == 'normal'
         assert ids['z'].state == 'down'
+
+
+# ---------------------------------------------------------------------------
+# Msg0A4 – RDS RadioText (RT) segment decode
+# ---------------------------------------------------------------------------
+
+from can_messages import Msg0A4
+
+
+class TestMsg0A4RadioText:
+    """0x0A4 — RDS RadioText segment accumulation."""
+
+    def test_is_listen_only(self):
+        assert Msg0A4.listen_only is True
+
+    def test_registered_in_all_messages(self):
+        assert 0x0A4 in ALL_MESSAGES
+        assert ALL_MESSAGES[0x0A4] is Msg0A4
+
+    def test_single_segment_sets_rds_text(self):
+        """A segment-0 frame populates rds_text with its 7 chars."""
+        car = VirtualCar()
+        # segment_idx=0, chars = "RMF FM "
+        data = bytes([0x00, 0x52, 0x4D, 0x46, 0x20, 0x46, 0x4D, 0x20])
+        Msg0A4().decode(car, data)
+        assert car.radio.rds_text == 'RMF FM'
+
+    def test_multi_segment_accumulates(self):
+        """Multiple segments are joined in order to form the full RT string."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x00]) + b'Hello, ')
+        Msg0A4().decode(car, bytes([0x01]) + b'World! ')
+        assert car.radio.rds_text == 'Hello, World!'
+
+    def test_segment_0_resets_buffer(self):
+        """Receiving segment 0 flushes any previous accumulation."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x00]) + b'OldText')
+        Msg0A4().decode(car, bytes([0x01]) + b'OldMore')
+        # New cycle starts with segment 0 — old segments must be gone
+        Msg0A4().decode(car, bytes([0x00]) + b'NewText')
+        assert car.radio.rds_text == 'NewText'
+
+    def test_null_byte_terminates_text(self):
+        """A NUL byte inside the accumulated string marks the end of RT."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x00]) + b'Hello\x00X')
+        assert car.radio.rds_text == 'Hello'
+
+    def test_short_frame_ignored(self):
+        """Frames shorter than 2 bytes do not crash."""
+        car = VirtualCar()
+        Msg0A4().decode(car, bytes([0x00]))  # only 1 byte — should not raise
+
+    def test_rt_buf_initialised_empty(self):
+        """car_state.Radio._rt_buf starts as an empty dict."""
+        assert VirtualCar().radio._rt_buf == {}
