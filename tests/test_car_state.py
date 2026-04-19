@@ -888,7 +888,7 @@ class TestClimUiHelpers:
 
         widget._send_0x1A1_popup()
 
-        assert sent[-1] == (0x1A1, [0x7F, 0xDE, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert sent[-1] == (0x1A1, [0x00, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def test_send_popup_show_contains_door_bitmap(self):
         widget, sent = self._make_doors_widget()
@@ -897,16 +897,16 @@ class TestClimUiHelpers:
 
         widget._send_popup_show(0)
 
-        assert sent[-1] == (0x1A1, [0x80, 0x0B, 0xC7, 0x48, 0x00, 0x00, 0x00, 0x00])
+        assert sent[-1] == (0x1A1, [0x80, 0x0B, 0xC6, 0x48, 0x00, 0x00, 0x00, 0x00])
 
-    def test_send_popup_clear_uses_explicit_clear_frame(self):
+    def test_send_popup_clear_uses_idle_baseline_frame(self):
         widget, sent = self._make_doors_widget()
         widget._doors.display_active = True
         widget._doors.popup_msg_id = 0xDE
 
         widget._send_popup_clear(0)
 
-        assert sent[-1] == (0x1A1, [0xFF, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert sent[-1] == (0x1A1, [0x00, 0x8B, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
         assert widget._doors.display_active is False
 
 
@@ -1156,6 +1156,59 @@ class TestBsiBaseMonitorFastData:
         assert widget.ids['cur_rpm'].text == 'RPM: 0'
         assert widget.ids['cur_speed'].text == 'Speed: 0 km/h'
         assert widget.ids['engine'].state == 'normal'
+
+
+class TestBsiBaseCombineSync:
+    def _make_bsi_widget(self):
+        widget = BSIBaseModule.__new__(BSIBaseModule)
+        widget.runner = types.SimpleNamespace(car=VirtualCar(), monitor=True)
+        engine = DummyWidget(state='normal', text='Engine')
+        engine.disabled = True
+        widget.ids = {
+            'engine': engine,
+            'ignition': DummyWidget(state='normal'),
+            'sleeping': DummyWidget(state='normal'),
+            'wakeup': DummyWidget(state='normal'),
+            'lights_off': DummyWidget(state='down'),
+            'lights_side': DummyWidget(state='normal'),
+            'lights_low': DummyWidget(state='normal'),
+            'lights_high': DummyWidget(state='normal'),
+            'dash_lights': DummyWidget(state='normal'),
+            'dark_mode': DummyWidget(state='normal'),
+            'cur_lum': DummyWidget(text='lum: 15'),
+            'slider_lum': DummyWidget(value=15),
+        }
+        widget._updating_power_buttons = False
+        widget._updating_light_buttons = False
+        return widget
+
+    def test_set_power_mode_turns_combine_on_when_dashboard_active(self):
+        widget = self._make_bsi_widget()
+        widget.runner.car.dashboard.active = True
+
+        widget.set_power_mode(0x01)
+
+        assert widget.runner.car.bsi.ignition_on is True
+        assert widget.runner.car.dashboard.on == 1
+
+    def test_set_light_mode_updates_combine_light_icons(self):
+        widget = self._make_bsi_widget()
+        widget.runner.car.dashboard.active = True
+
+        widget.set_light_mode(2, update_ui=True)
+        assert widget.runner.car.dashboard.backlight == 1
+        assert widget.runner.car.dashboard.low_beam == 1
+        assert widget.runner.car.dashboard.high_beam == 0
+
+        widget.set_light_mode(3, update_ui=True)
+        assert widget.runner.car.dashboard.backlight == 1
+        assert widget.runner.car.dashboard.low_beam == 0
+        assert widget.runner.car.dashboard.high_beam == 1
+
+        widget.set_light_mode(0, update_ui=True)
+        assert widget.runner.car.dashboard.backlight == 0
+        assert widget.runner.car.dashboard.low_beam == 0
+        assert widget.runner.car.dashboard.high_beam == 0
 
 
 class TestMsg0E1Encode:
@@ -1540,7 +1593,7 @@ class TestMsg12DEncode:
         car = VirtualCar()
         car.doors.display_active = True
         car.doors.front_left = 1
-        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC7, 0x40, 0x00, 0x00, 0x00, 0x00]
+        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC6, 0x40, 0x00, 0x00, 0x00, 0x00]
 
     def test_encodes_door_status_bits_for_workbench_mfd_popup(self):
         car = VirtualCar()
@@ -1549,7 +1602,7 @@ class TestMsg12DEncode:
         car.doors.rear_right = 1
         car.doors.boot = 1
         car.doors.fuel_flap = 1
-        assert Msg1A1().encode(car) == [0x80, 0x0B, 0xC7, 0x68, 0x40, 0x00, 0x00, 0x00]
+        assert Msg1A1().encode(car) == [0x80, 0x0B, 0xC6, 0x68, 0x40, 0x00, 0x00, 0x00]
 
     def test_idle_encoding_matches_dump_style(self):
         car = VirtualCar()
@@ -2585,7 +2638,27 @@ class TestMsg1A8:
 
 
 class TestMsg161OilLevel:
-    """0x161 — BSI_GAUGES: oil level signal at byte 6 (PSA-RE confirmed)."""
+    """0x161 — BSI_GAUGES oil temperature and oil level behavior."""
+
+    def test_encode_oil_temp_uses_workbench_conversion_low(self):
+        """UI 75 °C should encode to the raw value that matches the workbench combine."""
+        car = VirtualCar()
+        car.bsi.oil = 75
+        data = Msg161().encode(car)
+        assert abs(data[2] - 91) <= 1
+
+    def test_encode_oil_temp_uses_workbench_conversion_high(self):
+        """UI 154 °C should encode to the raw value that matches the workbench combine."""
+        car = VirtualCar()
+        car.bsi.oil = 154
+        data = Msg161().encode(car)
+        assert abs(data[2] - 216) <= 1
+
+    def test_decode_oil_temp_uses_standard_raw_minus_40(self):
+        """Incoming 0x161 frames still decode with the documented raw - 40 formula."""
+        car = VirtualCar()
+        Msg161().decode(car, [0x00, 0x00, 0x62, 0x32, 0xFF, 0xFF, 0x4B])
+        assert car.bsi.oil == 58
 
     def test_encode_oil_level_at_byte6(self):
         """OIL_LEVEL encoded at byte 6 (0-indexed)."""
@@ -2620,18 +2693,13 @@ class TestMsg161OilLevel:
         Msg161().decode(car, [0x00, 0x00, 0x50, 0x32, 0xFF, 0xFF])
         assert car.bsi.oil_level == 50  # unchanged
 
-    def test_encode_decode_roundtrip_all_fields(self):
-        """Encode then decode should preserve oil_temp, fuel, and oil_level."""
+    def test_decode_raw_payload_all_fields(self):
+        """Decode should preserve the documented oil/fuel/oil-level semantics from a literal payload."""
         car = VirtualCar()
-        car.bsi.oil = 95        # oil temp 95 °C
-        car.bsi.fuel = 60       # 60 %
-        car.bsi.oil_level = 80  # 80 %
-        data = Msg161().encode(car)
-        car2 = VirtualCar()
-        Msg161().decode(car2, data)
-        assert car2.bsi.oil == 95
-        assert car2.bsi.fuel == 60
-        assert car2.bsi.oil_level == 80
+        Msg161().decode(car, [0x00, 0x00, 0x87, 0x3C, 0xFF, 0xFF, 0x50])
+        assert car.bsi.oil == 95
+        assert car.bsi.fuel == 60
+        assert car.bsi.oil_level == 80
 
     def test_frame_length_is_7_bytes(self):
         """PSA-RE defines 0x161 as 7 bytes; simulator encodes exactly 7."""
@@ -2647,23 +2715,21 @@ class TestMsg161OilLevel:
 # ---------------------------------------------------------------------------
 
 class TestMsg0B6AwpCompare:
-    """0x0B6 — autowp cross-reference for RPM/Speed encoding.
+    """0x0B6 — workbench-verified RPM/Speed encoding.
 
-    Tests verify the simulator's RPM×10 and speed×100 encoding against
-    autowp's alternative 13-bit RPM encoding.  The ×10 encoding is derived
-    from observed bench captures and is kept as authoritative.  These tests
-    lock down the simulator's actual encoding so any future change is
-    immediately visible.
+    The workbench combine expects RPM as a 13-bit raw value packed into bits
+    15..3 of bytes 0-1, i.e. displayed RPM shifted left by 3. Speed remains a
+    16-bit integer scaled by 100.
     """
 
-    def test_encode_rpm_uses_times_ten_scaling(self):
-        """RPM is encoded as integer(rpm × 10) in a 16-bit big-endian word."""
+    def test_encode_rpm_uses_shifted_raw_scaling(self):
+        """Workbench combine expects RPM encoded as rpm << 3."""
         car = VirtualCar()
         car.bsi.ignition_on = True
         car.bsi.rpm = 800
         data = Msg0B6().encode(car)
         raw_rpm = (data[0] << 8) | data[1]
-        assert raw_rpm == 8000  # 800 × 10
+        assert raw_rpm == (800 << 3)
 
     def test_encode_speed_uses_times_hundred_scaling(self):
         """Speed is encoded as integer(speed × 100) in a 16-bit big-endian word.
@@ -2703,6 +2769,13 @@ class TestMsg0B6AwpCompare:
         Msg0B6().decode(car2, data)
         assert car2.bsi.rpm == 1500
         assert car2.bsi.speed == 90
+
+    def test_decode_accepts_workbench_shifted_rpm_payload(self):
+        """A raw workbench payload with rpm << 3 decodes to the displayed RPM."""
+        car = VirtualCar()
+        Msg0B6().decode(car, [0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD0])
+        assert car.bsi.rpm == 800
+        assert car.bsi.engine_running == 1
 
     def test_decode_sets_engine_running_when_rpm_nonzero(self):
         """engine_running flag should be set from RPM field."""
