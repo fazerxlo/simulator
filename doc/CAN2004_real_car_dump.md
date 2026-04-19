@@ -52,7 +52,7 @@ as the BSI iterates through warm-up states.
 ### 0x036 — BSI Commands (COMMANDES_BSI)
 
 **Documentation status:** Verified  
-**Implementation:** `Msg036` in `can_messages.py`, encoder in `modules/bsi-base/__init__.py`
+**Implementation:** `Msg036` in `generated/bsi_messages.py`, encoder in `modules/bsi-base/__init__.py`
 
 **Observed payloads:**
 
@@ -85,7 +85,7 @@ the simulator but appears infrequently and may be an event-driven one-shot bit.
 ### 0x0B6 — Fast Dynamic Data (RPM / Speed)
 
 **Documentation status:** Verified  
-**Implementation:** `Msg0B6` in `can_messages.py`
+**Implementation:** `Msg0B6` in `generated/bsi_messages.py`
 
 **Observed payloads:**
 
@@ -124,7 +124,7 @@ were spun at high speed or the BSI was exercising sensors.
 ### 0x0F6 — BSI Slow Data (Temperature, Odometer, Reverse)
 
 **Documentation status:** Verified (PSA-RE)  
-**Implementation:** `Msg0F6` in `can_messages.py`
+**Implementation:** `Msg0F6` in `generated/bsi_messages.py`
 
 **Observed payloads:**
 
@@ -168,7 +168,7 @@ the odometer (appropriate for bench simulation). No action required, but note th
 ### 0x128 — Cluster Warning and Lamp Status
 
 **Documentation status:** Verified/Observed  
-**Implementation:** `Msg128` in `can_messages.py`, encoder in `modules/combine/__init__.py`
+**Implementation:** `Msg128` in `generated/bsi_messages.py`, encoder in `modules/combine/__init__.py`
 
 **Observed payloads:**
 
@@ -201,7 +201,7 @@ signal is not decoded in the current implementation; its purpose is unconfirmed.
 ### 0x161 — BSI Gauges (Oil Temperature, Fuel Level, Oil Level)
 
 **Documentation status:** Verified (PSA-RE)  
-**Implementation:** `Msg161` in `can_messages.py`
+**Implementation:** `Msg161` in `generated/bsi_messages.py`
 
 **Observed payloads (DLC = 7):**
 
@@ -235,7 +235,7 @@ cosmetic; `0xFF` is the standard PSA "invalid/not available" sentinel but real B
 ### 0x168 — Dashboard Alerts and Fault Indicators
 
 **Documentation status:** Verified (PSA-RE: COMBINE_ALERTS_INDICATORS)  
-**Implementation:** `Msg168` in `can_messages.py`
+**Implementation:** `Msg168` in `generated/bsi_messages.py`
 
 **Observed payloads:**
 
@@ -264,7 +264,7 @@ correspond to a generic warning light not yet enumerated in the workspace.
 ### 0x1A1 — MFD Popup / BSI Log Message
 
 **Documentation status:** Observed/Verified  
-**Implementation:** `Msg1A1` in `can_messages.py`
+**Implementation:** `Msg1A1` in `generated/bsi_messages.py`
 
 **Observed payloads:**
 
@@ -297,7 +297,7 @@ door is open, then back to idle when closed.
 ### 0x1A8 — Speed Control / Cruise Limiter (GESTION_VITESSE)
 
 **Documentation status:** Verified (PSA-RE, CAN2004_0x1A8.md)  
-**Implementation:** `Msg1A8` in `can_messages.py`
+**Implementation:** `Msg1A8` in `generated/bsi_messages.py`
 
 **Observed payloads:**
 
