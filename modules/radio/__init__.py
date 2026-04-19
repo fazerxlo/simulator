@@ -201,7 +201,7 @@ class Radio(TabbedPanelItem):
         self._radio.freq = freq
         disp = freq * 0.05 + 50
         if 'cur_freq' in self.ids:
-            if self._radio.band == 0x50:
+            if self._radio.band == 0xD0:
                 self.ids['cur_freq'].text = f'{int(freq)} kHz'
             else:
                 self.ids['cur_freq'].text = f'{disp:.2f} MHz'
@@ -249,9 +249,9 @@ class Radio(TabbedPanelItem):
     def _update_band_toggle(self):
         """Set the band toggle to match car.radio.band."""
         band_map = {
-            0x00: 'toggle_band_none', 0x10: 'toggle_band_fm1',
-            0x20: 'toggle_band_fm2', 0x40: 'toggle_band_fmast',
-            0x50: 'toggle_band_am',
+            0x00: 'toggle_band_none', 0x90: 'toggle_band_fm1',
+            0xA0: 'toggle_band_fm2', 0xC0: 'toggle_band_fmast',
+            0xD0: 'toggle_band_am',
         }
         self._set_toggle_group(band_map, band_map.get(self._radio.band) or band_map[0x00])
 

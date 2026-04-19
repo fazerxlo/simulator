@@ -3286,25 +3286,25 @@ class TestMsg225Decode:
     """0x225 FM tuner status — bit layout verified from real bench capture."""
 
     def test_workbench_frame_decode(self):
-        """Real bench frame: FM2, 96.0 MHz, mem=1, RDS on, PTY on, TA off.
+        """Real bench frame: FM1, 96.0 MHz, mem=1, RDS on.
 
-        Payload: 30 10 20 03 98
-          byte0=0x30 → scan=0, rds=1 (bit5), pty=1 (bit4), tun=0, ta=0, tundir=0
+        Payload: 20 10 90 03 98
+          byte0=0x20 → rds=1 (bit5), pty=0, tun=0, ta=0, tundir=0
           byte1=0x10 → mem=0x10 (preset 1)
-          byte2=0x20 → band=FM Band 2
+          byte2=0x90 → band=FM Band 1
           bytes3-4=0x0398 → freq=920 → 96.0 MHz
         """
         car = VirtualCar()
-        Msg225().decode(car, bytes([0x30, 0x10, 0x20, 0x03, 0x98]))
+        Msg225().decode(car, bytes([0x20, 0x10, 0x90, 0x03, 0x98]))
         r = car.radio
         assert r.rds == 1
-        assert r.pty == 1
+        assert r.pty == 0
         assert r.ta == 0
         assert r.scan == 0
         assert r.tun == 0
         assert r.tundir == 0
         assert r.mem == 0x10        # preset 1
-        assert r.band == 0x20       # FM Band 2
+        assert r.band == 0x90       # FM Band 1
         assert r.freq == 920        # 96.0 MHz
 
     def test_rds_decoded_from_bit5(self):
@@ -3334,16 +3334,16 @@ class TestMsg225Decode:
         assert car.radio.scan == 1
 
     def test_band_fm2_code(self):
-        """Band code 0x20 = FM Band 2 (verified from bench)."""
+        """Band code 0xA0 = FM Band 2 (verified from bench)."""
         car = VirtualCar()
-        Msg225().decode(car, bytes([0x00, 0x00, 0x20, 0x00, 0x00]))
-        assert car.radio.band == 0x20
+        Msg225().decode(car, bytes([0x00, 0x00, 0xA0, 0x00, 0x00]))
+        assert car.radio.band == 0xA0
 
     def test_band_am_code(self):
-        """Band code 0x50 = AM."""
+        """Band code 0xD0 = AM."""
         car = VirtualCar()
-        Msg225().decode(car, bytes([0x00, 0x00, 0x50, 0x00, 0x00]))
-        assert car.radio.band == 0x50
+        Msg225().decode(car, bytes([0x00, 0x00, 0xD0, 0x00, 0x00]))
+        assert car.radio.band == 0xD0
 
     def test_frequency_96mhz(self):
         """Freq raw=920 = 96.0 MHz."""
@@ -3361,7 +3361,7 @@ class TestMsg225Decode:
         r.scan = 0
         r.ta = 0
         r.mem = 0x10
-        r.band = 0x20
+        r.band = 0xA0
         r.freq = 920
         payload = Msg225().encode(car_a)
         car_b = VirtualCar()
@@ -3369,7 +3369,7 @@ class TestMsg225Decode:
         assert car_b.radio.rds == 1
         assert car_b.radio.pty == 1
         assert car_b.radio.mem == 0x10
-        assert car_b.radio.band == 0x20
+        assert car_b.radio.band == 0xA0
         assert car_b.radio.freq == 920
 
 

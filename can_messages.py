@@ -1276,10 +1276,10 @@ class Msg225(CanMessage):
 
     Band codes (byte 2, verified from real bench capture):
       0x00 = no band / unset
-      0x10 = FM Band 1
-      0x20 = FM Band 2
-      0x40 = FM Auto-store (AST)
-      0x50 = AM / medium wave
+      0x90 = FM Band 1
+      0xA0 = FM Band 2
+      0xC0 = FM Auto-store (AST)
+      0xD0 = AM / medium wave
     """
 
     can_id = 0x225
