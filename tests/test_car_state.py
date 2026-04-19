@@ -658,13 +658,13 @@ class TestClimUiHelpers:
         widget.on_clim_on('normal')
         assert widget.runner.car.clim.enabled is False
 
-    def test_on_clim_on_off_resets_auto_and_ac(self):
+    def test_on_clim_on_off_resets_auto_and_preserves_ac(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.runner.car.clim.auto = 1
         widget.runner.car.clim.ac = 1
         widget.on_clim_on('normal')
         assert widget.runner.car.clim.auto == 0
-        assert widget.runner.car.clim.ac == 0
+        assert widget.runner.car.clim.ac == 1
 
     def test_on_clim_on_on_enables_clim_enabled(self):
         widget = self._make_clim_widget(ignition_on=True)

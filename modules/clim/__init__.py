@@ -89,10 +89,6 @@ class Clim(TabbedPanelItem):
         clim.unfrost_rear = 0
         clim.recycle = 0
         clim.auto = 0
-        clim.ac = 0
-        clim.dual = 0
-        clim.temp_left = 0
-        clim.temp_right = 0
         self._update_fan(clim.fan)
         self._update_temps()
         self._update_options()
@@ -110,6 +106,9 @@ class Clim(TabbedPanelItem):
         if seat == 0:
             clim.dir_left = dir
         else:
+            if not clim.dual:
+                clim.dual = 1
+                self._update_options()
             clim.dir_right = dir
 
     def on_clim_on(self, state):
@@ -150,6 +149,7 @@ class Clim(TabbedPanelItem):
             # In AUTO mode the climate controller manages direction; reset to auto.
             clim.dir_left = 0x00
             clim.dir_right = 0x00
+            clim.ac = 1  # AUTO mode always has A/C on
             self._update_dir_buttons()
         logger.info('Climate airflow mode: %s', mode)
         self._update_options()
@@ -200,6 +200,11 @@ class Clim(TabbedPanelItem):
             self._update_fan(self._clim.fan)
             return
         new_fan = self._normalize_ui_fan(value)
+        if self._clim.fan == 0 and new_fan > 0:
+            # Raising fan from 0 always exits standby mode; re-enable climate if needed.
+            self._clim.enabled = True
+            self._update_options()
+            logger.info('Climate enabled from standby by raising fan from 0')
         if new_fan != self._clim.fan:
             logger.info('Fan speed set to %d', new_fan)
         if new_fan == 0:
