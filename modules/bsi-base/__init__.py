@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 from functools import partial
 
@@ -15,6 +16,8 @@ from can_messages import (
 
 _modname = 'BSI_base'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class BSI_base(TabbedPanelItem):
 
@@ -50,7 +53,7 @@ class BSI_base(TabbedPanelItem):
         # Register per-CAN-ID message objects.  Each class owns exactly one
         # arbitration ID; the runner calls encode() periodically and decode()
         # when a matching frame is received.
-        print('registering BSI calls')
+        logger.debug('registering BSI base messages')
         runner.register_message(Msg036())
         runner.register_message(Msg0B6())
         runner.register_message(Msg0F6())
@@ -96,12 +99,31 @@ class BSI_base(TabbedPanelItem):
         self._ignition_finalize_event = None
         self._wakeup_burst_events = []
         self.set_power_mode(bsi.power_mode)
+        self.set_light_mode(bsi.light_mode, update_ui=True)
         self._apply_monitor_ui_lock()
 
     @property
     def _bsi(self):
         """Convenience accessor for the shared BSI car state."""
         return self.runner.car.bsi
+
+    def _sync_dashboard_power_from_bsi(self):
+        dash = getattr(self.runner.car, 'dashboard', None)
+        if dash is None:
+            return
+        dash.on = 1 if (
+            self._bsi.ignition_on
+            or int(self._bsi.power_mode) in (BSI_base._ignition_on, BSI_base._ignition_wakeup)
+        ) else 0
+
+    def _sync_dashboard_lights_from_bsi(self):
+        dash = getattr(self.runner.car, 'dashboard', None)
+        if dash is None:
+            return
+        mode = int(self._bsi.light_mode)
+        dash.backlight = 1 if mode >= BSI_base._lights_side else 0
+        dash.low_beam = 1 if mode == BSI_base._lights_low else 0
+        dash.high_beam = 1 if mode == BSI_base._lights_high else 0
 
     def on_command(self, command, value):
         if command in ['economy', 'dash_lights', 'dark_mode']:
@@ -141,7 +163,17 @@ class BSI_base(TabbedPanelItem):
         if mode > BSI_base._lights_high:
             mode = BSI_base._lights_high
 
+        _light_names = {
+            BSI_base._lights_off: 'off',
+            BSI_base._lights_side: 'side lights',
+            BSI_base._lights_low: 'low beam',
+            BSI_base._lights_high: 'high beam',
+        }
+        if self._bsi.light_mode != mode:
+            logger.info('Lights set to %s', _light_names.get(mode, str(mode)))
+
         self._bsi.light_mode = mode
+        self._sync_dashboard_lights_from_bsi()
 
         # Keep this behavior for local UI actions, but do not force lum/dash when
         # synchronizing from received 0x128 frames.
@@ -225,8 +257,17 @@ class BSI_base(TabbedPanelItem):
     def set_power_mode(self, value):
         previous_mode = int(self._bsi.power_mode)
         power_mode = int(value)
+        _mode_names = {
+            BSI_base._ignition_settled_off: 'sleeping',
+            BSI_base._ignition_on: 'ON',
+            BSI_base._ignition_off: 'OFF',
+            BSI_base._ignition_wakeup: 'wakeup',
+        }
+        if previous_mode != power_mode:
+            logger.info('Ignition %s', _mode_names.get(power_mode, f'mode 0x{power_mode:02X}'))
         self._bsi.power_mode = power_mode
         self._bsi.ignition_on = (power_mode == BSI_base._ignition_on)
+        self._sync_dashboard_power_from_bsi()
         self._updating_power_buttons = True
         if power_mode == BSI_base._ignition_on:
             if 'engine' in self.ids:
@@ -258,6 +299,7 @@ class BSI_base(TabbedPanelItem):
         if self._bsi.power_mode != BSI_base._ignition_on:
             return
         if state == 'down':
+            logger.info('Engine started')
             self._bsi.engine_running = 1
             self.on_val('rpm', 800)
             self.on_val('speed', 10)
@@ -265,6 +307,7 @@ class BSI_base(TabbedPanelItem):
             self.on_val('oil', 65)
             self.on_val('coolant', 60)
         else:
+            logger.info('Engine stopped')
             self._bsi.engine_running = 0
             self.on_val('rpm', 0)
             self.on_val('speed', 0)
@@ -282,6 +325,7 @@ class BSI_base(TabbedPanelItem):
             self._bsi.temperature += value
         else:
             self._bsi.temperature = value
+        logger.info('Outside temperature set to %s°C', self._bsi.temperature)
         self.ids['cur_ext_temp'].text = f'temp: {self._bsi.temperature}'
         if 'slider_temp' in self.ids and self.ids['slider_temp'].value != self._bsi.temperature:
             self.ids['slider_temp'].value = self._bsi.temperature
@@ -294,7 +338,15 @@ class BSI_base(TabbedPanelItem):
             'oil': 'Oil temp: {} deg',
             'coolant': 'Coolant temp: {} deg'
         }
+        log_msgs = {
+            'rpm': 'RPM set to {}',
+            'speed': 'Speed set to {} km/h',
+            'fuel': 'Fuel level set to {}%',
+            'oil': 'Oil temperature set to {}°C',
+            'coolant': 'Coolant temperature set to {}°C',
+        }
 
+        logger.info(log_msgs[name].format(value))
         self.ids[f'cur_{name}'].text = texts[name].format(value)
         slider_id = f'slider_{name}'
         if slider_id in self.ids and self.ids[slider_id].value != value:
@@ -317,9 +369,9 @@ class BSI_base(TabbedPanelItem):
 
     def can_fast(self):
         bsi = self._bsi
-        rpm = int(bsi.rpm * 10)
+        rpm = max(0, int(bsi.rpm)) << 3
         speed = int(bsi.speed * 100)
-        return 0x0B6, [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF, 0x00, 0x00, 0x00, 0x00]
+        return 0x0B6, [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF, 0x00, 0x00, 0x00, 0xD0]
 
     def can_vin_vis(self):
         #32 31 37 31 35 33 38 33
@@ -332,11 +384,6 @@ class BSI_base(TabbedPanelItem):
     def can_vin_vds(self):
         #36 4A 52 48 52 48
         return 0x3B6, [0x36, 0x4A, 0x52, 0x48, 0x52, 0x48]
-
-    def can_temp_level(self):
-        bsi = self._bsi
-        oil = bsi.oil + 40
-        return 0x161, [0x00, 0x00, oil, bsi.fuel, 0xff, 0xff, 0xff, 0xff]
 
     def can_110(self):
         return 0x110, [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
@@ -391,16 +438,15 @@ class BSI_base(TabbedPanelItem):
                 self.ids['slider_lum'].value = lum
             self.set_power_mode(power_mode)
         elif msg.arbitration_id == 0x0B6 and len(msg.data) >= 4:
-            rpm = (msg.data[0] << 8) | msg.data[1]
-            speed = (msg.data[2] << 8) | msg.data[3]
-            self.on_val('rpm', int(rpm / 10))
-            self.on_val('speed', int(speed / 100))
-            engine_running = 1 if rpm > 0 else 0
+            # Msg0B6.decode() has already normalized invalid placeholders such
+            # as 0xFFFF into sane shared state values; sync the UI from that.
+            self.on_val('rpm', self._bsi.rpm)
+            self.on_val('speed', self._bsi.speed)
             if 'engine' in self.ids:
-                self.ids['engine'].state = 'down' if engine_running else 'normal'
+                self.ids['engine'].state = 'down' if self._bsi.engine_running else 'normal'
         elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
-            self.on_val('oil', int(msg.data[2]) - 40)
-            self.on_val('fuel', int(msg.data[3]))
+            self.on_val('oil', self._bsi.oil)
+            self.on_val('fuel', self._bsi.fuel)
         elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
             coolant = int(msg.data[1])
             temp = int(msg.data[5])

@@ -1,5 +1,6 @@
 import can
 import datetime
+import logging
 import time
 import threading
 import sched
@@ -7,8 +8,15 @@ import queue
 
 from car_state import VirtualCar
 
+logger = logging.getLogger(__name__)
+
 class CanRunner():
     PRE_IGNITION_ALLOWED_IDS = {0x036, 0x110, 0x190, 0x1D0, 0x1E3, 0x217, 0x52D}
+    # Small timing lead so periodic frames can land up to ~5% earlier than the
+    # measured workbench cadence, compensating for thread jitter without making
+    # the simulator visibly faster than the bench.
+    SCHEDULE_ADVANCE_FACTOR = 0.95
+    SENDER_SLEEP_S = 0.005
 
     def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
         self.monitor = monitor
@@ -42,6 +50,12 @@ class CanRunner():
         # Keys are CAN arbitration IDs; values are CanMessage instances.
         self._can_message_objects: dict = {}
         self._message_object_timers: dict = {}
+
+        # Transient SocketCAN/slcan backpressure can happen on a busy bench or
+        # when the adapter/bus is not ready to accept another frame yet.
+        # Track the error state per arbitration ID so one temporary failure on
+        # one frame does not suppress the entire keepalive set.
+        self._tx_error_state: dict = {}
 
     def set_enabled_modules(self, modules):
         self.enabled_modules = {str(module) for module in modules}
@@ -132,10 +146,10 @@ class CanRunner():
     def reg(self, func, id, schedule, tp_id=None, tp_callback=None, *args, **kwargs):
         if id in self._can_id_owners:
             existing = self._can_id_owners[id]
-            print(
-                f'WARNING: CAN ID 0x{id:03X} already registered by '
-                f'{getattr(existing, "__qualname__", existing)}, '
-                f'now overridden by {getattr(func, "__qualname__", func)}'
+            logger.warning(
+                'CAN ID 0x%03X already registered by %s, now overridden by %s',
+                id, getattr(existing, '__qualname__', existing),
+                getattr(func, '__qualname__', func),
             )
         self._can_id_owners[id] = func
         new_module = {
@@ -147,6 +161,56 @@ class CanRunner():
             'tp_callback': tp_callback
         }
         self.mess.append(new_module)
+
+    def _safe_send(self, arbitration_id, data):
+        if self.monitor or not self.can_send(arbitration_id, data):
+            return None
+
+        state = self._tx_error_state.setdefault(
+            arbitration_id,
+            {'count': 0, 'last_error': None, 'backoff_until': 0.0},
+        )
+
+        now = time.monotonic()
+        if now < state['backoff_until']:
+            return False
+
+        message = can.Message(
+            arbitration_id=arbitration_id,
+            data=data,
+            is_extended_id=False,
+        )
+
+        try:
+            try:
+                self.bus.send(message, timeout=0.05)
+            except TypeError:
+                self.bus.send(message)
+            state['count'] = 0
+            state['last_error'] = None
+            state['backoff_until'] = 0.0
+            logger.debug(
+                'TX 0x%03X  %s',
+                arbitration_id,
+                ' '.join(f'{b:02X}' for b in data),
+            )
+            return True
+        except can.CanError as exc:
+            state['count'] += 1
+            err_text = str(exc)
+            backoff_s = min(0.05, 0.005 * state['count'])
+            if 'buffer' in err_text.lower() or 'space available' in err_text.lower():
+                state['backoff_until'] = time.monotonic() + backoff_s
+            else:
+                state['backoff_until'] = 0.0
+            should_log = err_text != state['last_error'] or state['count'] in (1, 10, 50, 100)
+            if should_log:
+                print(
+                    f'CanRunner TX warning for 0x{arbitration_id:03X}: '
+                    f'{exc} (retrying after {int(backoff_s * 1000)} ms)'
+                )
+            state['last_error'] = err_text
+            return False
 
     def register(self, schedule, call):
         new_module = {
@@ -166,9 +230,9 @@ class CanRunner():
         can_id = msg.can_id
         if can_id in self._can_message_objects:
             existing = self._can_message_objects[can_id]
-            print(
-                f'WARNING: CAN ID 0x{can_id:03X} already owned by '
-                f'{type(existing).__name__}, overriding with {type(msg).__name__}'
+            logger.warning(
+                'CAN ID 0x%03X already owned by %s, overriding with %s',
+                can_id, type(existing).__name__, type(msg).__name__,
             )
         self._can_message_objects[can_id] = msg
         self._message_object_timers[can_id] = datetime.datetime.now()
@@ -180,6 +244,12 @@ class CanRunner():
             recvd = self.bus.recv(1.0)
             if not recvd:
                 continue
+
+            logger.debug(
+                'RX 0x%03X  %s',
+                recvd.arbitration_id,
+                ' '.join(f'{b:02X}' for b in recvd.data),
+            )
 
             for listener in self.listeners:
                 if listener['id'] is None or listener['id'] == recvd.arbitration_id:
@@ -196,7 +266,7 @@ class CanRunner():
                 try:
                     msg_obj.decode(self.car, recvd.data)
                 except Exception as exc:
-                    print(f'CanRunner decode error for 0x{recvd.arbitration_id:03X}: {exc}')
+                    logger.error('CanRunner decode error for 0x%03X: %s', recvd.arbitration_id, exc)
 
 
     def process_events(self, dt=None):
@@ -208,7 +278,11 @@ class CanRunner():
             try:
                 callback(payload)
             except Exception as exc:
-                print(f'CanRunner callback error: {exc}')
+                logger.error('CanRunner callback error: %s', exc)
+
+    def _period_due(self, elapsed_s, period_ms):
+        target_s = max(0.001, (max(1, int(period_ms)) / 1000.0) * self.SCHEDULE_ADVANCE_FACTOR)
+        return elapsed_s >= target_s
 
     def sender(self):
         while True:
@@ -218,19 +292,19 @@ class CanRunner():
 
             for message in self.mess:
                 now = datetime.datetime.now()
-                if (now - message['timer']).total_seconds() >= message['schedule']:
+                if self._period_due((now - message['timer']).total_seconds(), int(message['schedule'] * 1000)):
                     data = message['call']()
-                    if not self.monitor and self.can_send(message['id'], data):
-                        self.bus.send(can.Message(arbitration_id=message['id'], data=data, is_extended_id=False))
-                    message['timer'] = now
+                    send_result = self._safe_send(message['id'], data)
+                    if send_result is not False:
+                        message['timer'] = now
 
             for message in self.messages:
                 now = datetime.datetime.now()
-                if (now - message['timer']).total_seconds() >= message['schedule']:
+                if self._period_due((now - message['timer']).total_seconds(), int(message['schedule'] * 1000)):
                     id, data = message['call']()
-                    if not self.monitor and self.can_send(id, data):
-                        self.bus.send(can.Message(arbitration_id=id, data=data, is_extended_id=False))
-                    message['timer'] = now
+                    send_result = self._safe_send(id, data)
+                    if send_result is not False:
+                        message['timer'] = now
 
             # CanMessage objects registered via register_message().
             for can_id, msg_obj in list(self._can_message_objects.items()):
@@ -241,28 +315,26 @@ class CanRunner():
                 try:
                     active_period_ms = max(1, int(msg_obj.get_period_ms(self.car)))
                 except Exception as exc:
-                    print(f'CanRunner period error for 0x{can_id:03X}: {exc}')
+                    logger.error('CanRunner period error for 0x%03X: %s', can_id, exc)
                     active_period_ms = max(1, int(getattr(msg_obj, 'period_ms', 100)))
-                if (now - timer).total_seconds() >= active_period_ms / 1000:
+                if self._period_due((now - timer).total_seconds(), active_period_ms):
                     try:
                         data = msg_obj.encode(self.car)
                     except Exception as exc:
-                        print(f'CanRunner encode error for 0x{can_id:03X}: {exc}')
+                        logger.error('CanRunner encode error for 0x%03X: %s', can_id, exc)
                         data = None
-                    if not self.monitor and self.can_send(can_id, data):
-                        self.bus.send(can.Message(arbitration_id=can_id, data=data, is_extended_id=False))
-                    self._message_object_timers[can_id] = now
+                    send_result = self._safe_send(can_id, data)
+                    if send_result is not False:
+                        self._message_object_timers[can_id] = now
 
             # Wait until next round
-            time.sleep(0.02)
+            time.sleep(self.SENDER_SLEEP_S)
 
     def listen(self, can_id, callback):
         self.listeners.append({'id': can_id, 'callback': callback})
 
     def send_message(self, arbitration_id, data):
-        if self.monitor or not self.can_send(arbitration_id, data):
-            return
-        self.bus.send(can.Message(arbitration_id=arbitration_id, data=data, is_extended_id=False))
+        self._safe_send(arbitration_id, data)
 
     def run(self):
         if not self.monitor:
