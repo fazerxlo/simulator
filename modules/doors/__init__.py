@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 MSG_DOORS_OPEN = 0x0B
 MSG_DRIVER_DOOR_OPEN = 0xDE
-DOOR_DISPLAY_FLAGS = 0xC7
-DOOR_ANNOUNCE_FLAGS = 0x47
+DOOR_DISPLAY_FLAGS = 0xC6
+DOOR_ANNOUNCE_FLAGS = 0xC6
+IDLE_MESSAGE_ID = 0x8B
 
 
 class Doors(TabbedPanelItem):
@@ -196,14 +197,15 @@ class Doors(TabbedPanelItem):
         if self._any_open():
             self._doors.display_active = True
             self._doors.popup_msg_id = self._popup_message_id()
-            # The workbench cluster expects a short announce / reset stage
-            # before the door-bitmap frame is shown.
-            self.runner.send_message(0x1A1, [0x7F, self._doors.popup_msg_id, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
+            # The workbench responds more reliably to the real-car style
+            # announcement stage: flag=0x00 with the target popup id,
+            # followed by the active frame carrying the door bitmap.
+            self.runner.send_message(0x1A1, [0x00, self._doors.popup_msg_id, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
             self._pending_show_ev = Clock.schedule_once(self._send_popup_show, 0.05)
             return
 
         self._doors.display_active = True
-        self.runner.send_message(0x1A1, [0x7F, 0x00, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.runner.send_message(0x1A1, [0x00, IDLE_MESSAGE_ID, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._pending_clear_ev = Clock.schedule_once(self._send_popup_clear, 0.2)
 
     def _send_popup_show(self, _dt):
@@ -215,7 +217,7 @@ class Doors(TabbedPanelItem):
 
     def _send_popup_clear(self, _dt):
         self._pending_clear_ev = None
-        self.runner.send_message(0x1A1, [0xFF, 0x00, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self.runner.send_message(0x1A1, [0x00, IDLE_MESSAGE_ID, DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00])
         self._doors.display_active = False
 
     def on_can_message(self, msg):

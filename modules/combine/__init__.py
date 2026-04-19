@@ -32,6 +32,7 @@ class _DashboardOptionsProxy:
 
 class Combine(TabbedPanelItem):
     _ignition_on = 0x01
+    _ignition_wakeup = 0x03
     _ui_to_dash = {
         'coolant': 'coolant_warn',
         'oil': 'oil_warn',
@@ -71,10 +72,14 @@ class Combine(TabbedPanelItem):
         dash.esp = 0
         dash.esp_blink = 0
         dash.tyre = 0
-        dash.backlight = 0
-        dash.on = 1 if (runner.car.bsi.ignition_on or int(runner.car.bsi.power_mode) == self._ignition_on) else 0
-        dash.low_beam = 0
-        dash.high_beam = 0
+        current_light_mode = int(getattr(runner.car.bsi, 'light_mode', 0))
+        dash.backlight = 1 if current_light_mode >= 1 else 0
+        dash.on = 1 if (
+            runner.car.bsi.ignition_on
+            or int(runner.car.bsi.power_mode) in (self._ignition_on, self._ignition_wakeup)
+        ) else 0
+        dash.low_beam = 1 if current_light_mode == 2 else 0
+        dash.high_beam = 1 if current_light_mode == 3 else 0
         dash.fog_front = 0
         dash.fog_rear = 0
         dash.clig_r = 0
@@ -125,7 +130,7 @@ class Combine(TabbedPanelItem):
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
             # Keep combine ignition icon in sync with BSI power mode.
-            current_ignition = 1 if int(msg.data[4]) == self._ignition_on else 0
+            current_ignition = 1 if int(msg.data[4]) in (self._ignition_on, self._ignition_wakeup) else 0
             self._dash.on = current_ignition
             if 'on' in self.ids:
                 self.ids['on'].state = 'down' if self._dash.on else 'normal'

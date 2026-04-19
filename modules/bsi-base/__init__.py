@@ -99,12 +99,31 @@ class BSI_base(TabbedPanelItem):
         self._ignition_finalize_event = None
         self._wakeup_burst_events = []
         self.set_power_mode(bsi.power_mode)
+        self.set_light_mode(bsi.light_mode, update_ui=True)
         self._apply_monitor_ui_lock()
 
     @property
     def _bsi(self):
         """Convenience accessor for the shared BSI car state."""
         return self.runner.car.bsi
+
+    def _sync_dashboard_power_from_bsi(self):
+        dash = getattr(self.runner.car, 'dashboard', None)
+        if dash is None:
+            return
+        dash.on = 1 if (
+            self._bsi.ignition_on
+            or int(self._bsi.power_mode) in (BSI_base._ignition_on, BSI_base._ignition_wakeup)
+        ) else 0
+
+    def _sync_dashboard_lights_from_bsi(self):
+        dash = getattr(self.runner.car, 'dashboard', None)
+        if dash is None:
+            return
+        mode = int(self._bsi.light_mode)
+        dash.backlight = 1 if mode >= BSI_base._lights_side else 0
+        dash.low_beam = 1 if mode == BSI_base._lights_low else 0
+        dash.high_beam = 1 if mode == BSI_base._lights_high else 0
 
     def on_command(self, command, value):
         if command in ['economy', 'dash_lights', 'dark_mode']:
@@ -154,6 +173,7 @@ class BSI_base(TabbedPanelItem):
             logger.info('Lights set to %s', _light_names.get(mode, str(mode)))
 
         self._bsi.light_mode = mode
+        self._sync_dashboard_lights_from_bsi()
 
         # Keep this behavior for local UI actions, but do not force lum/dash when
         # synchronizing from received 0x128 frames.
@@ -247,6 +267,7 @@ class BSI_base(TabbedPanelItem):
             logger.info('Ignition %s', _mode_names.get(power_mode, f'mode 0x{power_mode:02X}'))
         self._bsi.power_mode = power_mode
         self._bsi.ignition_on = (power_mode == BSI_base._ignition_on)
+        self._sync_dashboard_power_from_bsi()
         self._updating_power_buttons = True
         if power_mode == BSI_base._ignition_on:
             if 'engine' in self.ids:

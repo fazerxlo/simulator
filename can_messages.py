@@ -303,7 +303,9 @@ class Msg128(CanMessage):
             b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
                   dash.fog_front << 4 | dash.fog_rear << 3 |
                   dash.clig_r << 2 | dash.clig_l << 1)
-            cluster_on = 1 if (dash.on or car.bsi.ignition_on or int(car.bsi.power_mode) == 0x01) else 0
+            cluster_on = 1 if (
+                dash.on or car.bsi.ignition_on or int(car.bsi.power_mode) in (0x01, 0x03)
+            ) else 0
             # Keep the workbench cluster in the default manual-gearbox view
             # unless explicit gear-simulation fields are added later.
             gear_display = int(getattr(dash, 'gear_display', 0x00)) & 0xFF
@@ -337,6 +339,15 @@ class Msg128(CanMessage):
             dash.clig_r = (data[4] >> 2) & 1
             dash.clig_l = (data[4] >> 1) & 1
             dash.on = (data[5] >> 7) & 1
+            if dash.high_beam:
+                car.bsi.light_mode = 3
+            elif dash.low_beam:
+                car.bsi.light_mode = 2
+            elif dash.backlight:
+                car.bsi.light_mode = 1
+            else:
+                car.bsi.light_mode = 0
+            car.bsi.dash_lights = 1 if dash.backlight else 0
         else:
             d5 = int(data[4]) & 0xE0
             if d5 & 0x20:
@@ -507,8 +518,8 @@ class Msg1A1(CanMessage):
     period_ms = 200
     IDLE_MESSAGE_ID = 0x8B
     DISPLAY_FLAGS = 0xC6
-    DOOR_DISPLAY_FLAGS = 0xC7
-    DOOR_ANNOUNCE_FLAGS = 0x47
+    DOOR_DISPLAY_FLAGS = 0xC6
+    DOOR_ANNOUNCE_FLAGS = 0xC6
 
     @staticmethod
     def _door_status_bytes(doors) -> tuple[int, int]:
@@ -554,7 +565,7 @@ class Msg1A1(CanMessage):
             if any_open:
                 d3, d4 = self._door_status_bytes(d)
                 return [flag, msg_id, self.DOOR_DISPLAY_FLAGS, d3, d4, 0x00, 0x00, 0x00]
-            return [0xFF, 0x00, self.DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+            return [0x00, self.IDLE_MESSAGE_ID, self.DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
 
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00

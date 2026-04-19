@@ -888,7 +888,7 @@ class TestClimUiHelpers:
 
         widget._send_0x1A1_popup()
 
-        assert sent[-1] == (0x1A1, [0x7F, 0xDE, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert sent[-1] == (0x1A1, [0x00, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
 
     def test_send_popup_show_contains_door_bitmap(self):
         widget, sent = self._make_doors_widget()
@@ -897,16 +897,16 @@ class TestClimUiHelpers:
 
         widget._send_popup_show(0)
 
-        assert sent[-1] == (0x1A1, [0x80, 0x0B, 0xC7, 0x48, 0x00, 0x00, 0x00, 0x00])
+        assert sent[-1] == (0x1A1, [0x80, 0x0B, 0xC6, 0x48, 0x00, 0x00, 0x00, 0x00])
 
-    def test_send_popup_clear_uses_explicit_clear_frame(self):
+    def test_send_popup_clear_uses_idle_baseline_frame(self):
         widget, sent = self._make_doors_widget()
         widget._doors.display_active = True
         widget._doors.popup_msg_id = 0xDE
 
         widget._send_popup_clear(0)
 
-        assert sent[-1] == (0x1A1, [0xFF, 0x00, 0x47, 0x00, 0x00, 0x00, 0x00, 0x00])
+        assert sent[-1] == (0x1A1, [0x00, 0x8B, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00])
         assert widget._doors.display_active is False
 
 
@@ -1156,6 +1156,59 @@ class TestBsiBaseMonitorFastData:
         assert widget.ids['cur_rpm'].text == 'RPM: 0'
         assert widget.ids['cur_speed'].text == 'Speed: 0 km/h'
         assert widget.ids['engine'].state == 'normal'
+
+
+class TestBsiBaseCombineSync:
+    def _make_bsi_widget(self):
+        widget = BSIBaseModule.__new__(BSIBaseModule)
+        widget.runner = types.SimpleNamespace(car=VirtualCar(), monitor=True)
+        engine = DummyWidget(state='normal', text='Engine')
+        engine.disabled = True
+        widget.ids = {
+            'engine': engine,
+            'ignition': DummyWidget(state='normal'),
+            'sleeping': DummyWidget(state='normal'),
+            'wakeup': DummyWidget(state='normal'),
+            'lights_off': DummyWidget(state='down'),
+            'lights_side': DummyWidget(state='normal'),
+            'lights_low': DummyWidget(state='normal'),
+            'lights_high': DummyWidget(state='normal'),
+            'dash_lights': DummyWidget(state='normal'),
+            'dark_mode': DummyWidget(state='normal'),
+            'cur_lum': DummyWidget(text='lum: 15'),
+            'slider_lum': DummyWidget(value=15),
+        }
+        widget._updating_power_buttons = False
+        widget._updating_light_buttons = False
+        return widget
+
+    def test_set_power_mode_turns_combine_on_when_dashboard_active(self):
+        widget = self._make_bsi_widget()
+        widget.runner.car.dashboard.active = True
+
+        widget.set_power_mode(0x01)
+
+        assert widget.runner.car.bsi.ignition_on is True
+        assert widget.runner.car.dashboard.on == 1
+
+    def test_set_light_mode_updates_combine_light_icons(self):
+        widget = self._make_bsi_widget()
+        widget.runner.car.dashboard.active = True
+
+        widget.set_light_mode(2, update_ui=True)
+        assert widget.runner.car.dashboard.backlight == 1
+        assert widget.runner.car.dashboard.low_beam == 1
+        assert widget.runner.car.dashboard.high_beam == 0
+
+        widget.set_light_mode(3, update_ui=True)
+        assert widget.runner.car.dashboard.backlight == 1
+        assert widget.runner.car.dashboard.low_beam == 0
+        assert widget.runner.car.dashboard.high_beam == 1
+
+        widget.set_light_mode(0, update_ui=True)
+        assert widget.runner.car.dashboard.backlight == 0
+        assert widget.runner.car.dashboard.low_beam == 0
+        assert widget.runner.car.dashboard.high_beam == 0
 
 
 class TestMsg0E1Encode:
@@ -1540,7 +1593,7 @@ class TestMsg12DEncode:
         car = VirtualCar()
         car.doors.display_active = True
         car.doors.front_left = 1
-        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC7, 0x40, 0x00, 0x00, 0x00, 0x00]
+        assert Msg1A1().encode(car) == [0x80, 0xDE, 0xC6, 0x40, 0x00, 0x00, 0x00, 0x00]
 
     def test_encodes_door_status_bits_for_workbench_mfd_popup(self):
         car = VirtualCar()
@@ -1549,7 +1602,7 @@ class TestMsg12DEncode:
         car.doors.rear_right = 1
         car.doors.boot = 1
         car.doors.fuel_flap = 1
-        assert Msg1A1().encode(car) == [0x80, 0x0B, 0xC7, 0x68, 0x40, 0x00, 0x00, 0x00]
+        assert Msg1A1().encode(car) == [0x80, 0x0B, 0xC6, 0x68, 0x40, 0x00, 0x00, 0x00]
 
     def test_idle_encoding_matches_dump_style(self):
         car = VirtualCar()
