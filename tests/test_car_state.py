@@ -1,5 +1,5 @@
 """
-Tests for car_state.VirtualCar, can_messages, and the CanRunner integration.
+Tests for car_state.VirtualCar, generated CAN message encoders, and the CanRunner integration.
 """
 import datetime
 import importlib
@@ -951,7 +951,7 @@ class TestCombineUiHelpers:
 
 
 # ---------------------------------------------------------------------------
-# can_messages tests
+# generated CAN message encoder tests
 # ---------------------------------------------------------------------------
 
 from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,

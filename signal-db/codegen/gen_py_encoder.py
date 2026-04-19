@@ -301,12 +301,18 @@ def main(module_names: list[str] | None = None) -> None:
         print("No YAML files found in", SIGNAL_DB_DIR)
         sys.exit(1)
 
+    def _rel(path: Path) -> str:
+        try:
+            return str(path.relative_to(REPO_ROOT))
+        except ValueError:
+            return str(path)
+
     module_info: dict[str, list[str]] = {}
 
     # Generate base.py
     base_path = GENERATED_DIR / "base.py"
     base_path.write_text(_generate_base())
-    print(f"  wrote {base_path.relative_to(REPO_ROOT)}")
+    print(f"  wrote {_rel(base_path)}")
 
     # Generate per-module files
     for yaml_path in yaml_files:
@@ -315,7 +321,7 @@ def main(module_names: list[str] | None = None) -> None:
         out_path = GENERATED_DIR / f"{group}_messages.py"
         out_path.write_text(source)
         module_info[group] = msg_names
-        print(f"  wrote {out_path.relative_to(REPO_ROOT)} ({len(msg_names)} messages)")
+        print(f"  wrote {_rel(out_path)} ({len(msg_names)} messages)")
 
     # If generating all modules, also produce __init__.py
     if not module_names or set(module_names) == {f.stem for f in sorted(SIGNAL_DB_DIR.glob("*.yaml"))}:
@@ -328,7 +334,7 @@ def main(module_names: list[str] | None = None) -> None:
             all_info[yp.stem] = list(spec["messages"].keys())
         init_path = GENERATED_DIR / "__init__.py"
         init_path.write_text(_generate_init(all_info))
-        print(f"  wrote {init_path.relative_to(REPO_ROOT)}")
+        print(f"  wrote {_rel(init_path)}")
 
     print(f"\nDone — {sum(len(v) for v in module_info.values())} message classes generated.")
 
