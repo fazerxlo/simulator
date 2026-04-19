@@ -183,20 +183,42 @@ All controls in the **Clim** tab are disabled when ignition is off.
 
 ### Options bar (top row)
 
-| Button ID      | Label         | Effect                                        |
-|----------------|---------------|-----------------------------------------------|
-| `auto`         | auto          | Toggles `clim.auto`; reflected in `0x1E3` byte 0 |
-| `dual`         | dual          | Toggles `clim.dual`; also auto-enabled when right zone temperature is changed independently |
-| `unfrost_front`| unfrost front | Toggles `clim.unfrost_front`; sets `0x1D0` byte 0 = `0x19` and `0x1E3` byte 1 bit 7 |
-| `intake_fresh` | Fresh         | **Air from outside** — sets `clim.recycle = 0`; default on startup |
-| `intake_recycle`| Recirc       | **Cabin recirculation** — sets `clim.recycle = 1`; reflected in `0x1D0` byte 4 bit 5 |
-| `unfrost_rear` | unfrost rear  | Toggles `clim.unfrost_rear` (rear demist)     |
+| Button ID           | Label         | Effect                                                    |
+|---------------------|---------------|-----------------------------------------------------------|
+| `clim_on`           | ON            | Toggles `clim.enabled`; when off sends BSI idle frames and resets all state |
+| `ac_on`             | A/C           | Toggles `clim.ac` (A/C compressor); reflected in `0x1E3` byte 0 bit 4 |
+| `dual`              | dual          | Toggles `clim.dual`; also auto-enabled when right zone temperature is changed independently |
+| `unfrost_rear`      | unfrost rear  | Toggles `clim.unfrost_rear` (rear demist)                 |
+| `mode_auto`         | AUTO          | **Mutex group** — sets `auto=1`, resets both direction zones to 0x00 (auto) |
+| `mode_unfrost_front`| Unfrost Frt   | **Mutex group** — sets `unfrost_front=1`, clears auto and recycle |
+| `mode_recirc`       | Recirc        | **Mutex group** — sets `recycle=1` (cabin recirculation), clears others |
+| `mode_fresh`        | Fresh         | **Mutex group** — clears auto, unfrost_front, and recycle (outside fresh air, manual mode) |
 
-> **Fresh** and **Recirc** are mutually exclusive (Kivy `group='intake'`).  Pressing **Fresh** corresponds to "set air flow from outside"; pressing **Recirc** corresponds to "set air flow circulation on in cabin".
+The four `mode_*` buttons form a Kivy `group='airflow_mode'` so only one can be active at a time.
+**AUTO** is selected by default on startup and when ignition returns.
+
+> Pressing **Recirc** corresponds to "set air flow circulation on in cabin";
+> pressing **Fresh** corresponds to "set air flow from outside".
+
+**Default startup state** (after ignition on / module load):
+- ON: active
+- A/C: active (`clim.ac = 1`)
+- DUAL: off
+- UNFROST REAR: off
+- AUTO: active (`clim.auto = 1`, both direction zones = 0x00)
+
+### AUTO mode and direction grids
+
+When **AUTO** is selected:
+- Both left and right direction button grids show the **Auto** button as active.
+- Pressing any other direction button (e.g. Up, Dwn) **automatically exits AUTO mode** (switches to **Fresh**) and applies the chosen direction. This mirrors the real climate panel behaviour.
 
 ### Temperature controls
 
-Left zone `+`/`−` buttons adjust `clim.temp_left`.  Right zone `+`/`−` buttons adjust `clim.temp_right` and **automatically enable dual mode** (`clim.dual = 1`) if it is not already active.
+Left zone `+`/`−` buttons adjust `clim.temp_left`.
+
+- When **DUAL** mode is off (single-zone / mono mode), changing the left temperature also syncs `clim.temp_right` to the same value (real panel mono behaviour).
+- Right zone `+`/`−` buttons adjust `clim.temp_right` and **automatically enable dual mode** (`clim.dual = 1`) if it is not already active.
 
 ### Fan slider
 
@@ -223,7 +245,9 @@ Two 2-column grids (left zone and right zone) each contain eight `ToggleButton`s
 
 When the simulator starts with climate enabled, `clim.dual = 0`.  The `0x1E3` frame opens at `0x1C` (auto=1, dual=0).
 
-As soon as the **right zone temperature** is adjusted via the UI (`on_temp(zone=1)`), `clim.dual` is set to 1 and the next `0x1E3` byte 0 transitions to `0x1D` (auto=1, dual=1).  This mirrors the real climate panel hardware, which enters dual-zone mode the moment the passenger-side temperature is changed independently.
+**Mono mode (dual=0):** Changing the **left zone** temperature via the UI (`on_temp(zone=0)`) also updates `clim.temp_right` to the same value, keeping both zones in sync.  This matches the real climate panel where a single set-point governs both sides.
+
+**Entering dual mode:** As soon as the **right zone temperature** is adjusted via the UI (`on_temp(zone=1)`), `clim.dual` is set to 1 and the next `0x1E3` byte 0 transitions to `0x1D` (auto=1, dual=1).  After that, left and right zones are independently tracked.
 
 ---
 

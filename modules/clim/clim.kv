@@ -2,38 +2,197 @@
   BoxLayout:
     orientation: 'vertical'
 
-    # Options
+    # Top row: power/mode buttons
     BoxLayout:
       orientation: 'horizontal'
       ToggleButton:
-        id: auto
-        text: 'auto'
-        on_state: root.on_option('auto', self.state)
+        id: clim_on
+        text: 'ON'
+        state: 'down'
+        on_state: root.on_clim_on(self.state)
+      ToggleButton:
+        id: ac_on
+        text: 'A/C'
+        state: 'down'
+        on_state: root.on_ac(self.state)
       ToggleButton:
         id: dual
         text: 'dual'
         on_state: root.on_option('dual', self.state)
       ToggleButton:
-        id: unfrost_front
-        text: 'unfrost front'
-        on_state: root.on_option('unfrost_front', self.state)
-      ToggleButton:
-        id: intake_fresh
-        text: 'Fresh'
-        group: 'intake'
-        state: 'down'
-        allow_no_selection: False
-        on_state: root.on_intake(False, self.state)
-      ToggleButton:
-        id: intake_recycle
-        text: 'Recirc'
-        group: 'intake'
-        allow_no_selection: False
-        on_state: root.on_intake(True, self.state)
-      ToggleButton:
         id: unfrost_rear
         text: 'unfrost rear'
         on_state: root.on_option('unfrost_rear', self.state)
+      # Mutually exclusive airflow-mode group
+      ToggleButton:
+        id: mode_auto
+        text: 'AUTO'
+        group: 'airflow_mode'
+        state: 'down'
+        allow_no_selection: False
+        on_state: root.on_airflow_mode('auto', self.state)
+      ToggleButton:
+        id: mode_unfrost_front
+        text: 'Unfrost Frt'
+        group: 'airflow_mode'
+        allow_no_selection: False
+        on_state: root.on_airflow_mode('unfrost_front', self.state)
+      ToggleButton:
+        id: mode_recirc
+        text: 'Recirc'
+        group: 'airflow_mode'
+        allow_no_selection: False
+        on_state: root.on_airflow_mode('recirc', self.state)
+      ToggleButton:
+        id: mode_fresh
+        text: 'Fresh'
+        group: 'airflow_mode'
+        allow_no_selection: False
+        on_state: root.on_airflow_mode('fresh', self.state)
+
+    BoxLayout:
+      orientation: 'horizontal'
+      BoxLayout:
+        orientation: 'vertical'
+        Button:
+          text: '+'
+          on_press: root.on_temp(0, +1)
+        Label:
+          id: cur_temp0
+          text: 'LOc'
+        Button:
+          text: '-'
+          on_press: root.on_temp(0, -1)
+      GridLayout:
+        cols: 2
+        # Auto (dir=0x00) is the real climate panel's power-on default — workbench
+        # 0x1E3 frames open with dir_left=0, dir_right=0.
+        ToggleButton:
+          id: left_auto
+          text: 'Auto'
+          group: 'left_dir'
+          state: 'down'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x00, self.state)
+        ToggleButton:
+          id: left_fr
+          text: 'Frt'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x03, self.state)
+        ToggleButton:
+          id: left_up
+          text: 'Up'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x04, self.state)
+        ToggleButton:
+          id: left_ud
+          text: 'U+D'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x06, self.state)
+        ToggleButton:
+          id: left_down
+          text: 'Dwn'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x02, self.state)
+        ToggleButton:
+          id: left_fd
+          text: 'F+D'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x05, self.state)
+        ToggleButton:
+          id: left_all
+          text: 'All'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x07, self.state)
+        ToggleButton:
+          id: left_fast
+          text: 'Fst'
+          group: 'left_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(0, 0x08, self.state)
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_fan
+          text: 'Fan: 0'
+        Slider:
+          id: slider_fan
+          min: 0
+          max: 8
+          step: 1
+          value: 0
+          on_value: root.on_fan(args[1])
+      GridLayout:
+        cols: 2
+        # Auto (dir=0x00) is the real climate panel's power-on default — workbench
+        # 0x1E3 frames open with dir_left=0, dir_right=0.
+        ToggleButton:
+          id: right_auto
+          text: 'Auto'
+          group: 'right_dir'
+          state: 'down'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x00, self.state)
+        ToggleButton:
+          id: right_fr
+          text: 'Frt'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x03, self.state)
+        ToggleButton:
+          id: right_up
+          text: 'Up'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x04, self.state)
+        ToggleButton:
+          id: right_ud
+          text: 'U+D'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x06, self.state)
+        ToggleButton:
+          id: right_down
+          text: 'Dwn'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x02, self.state)
+        ToggleButton:
+          id: right_fd
+          text: 'F+D'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x05, self.state)
+        ToggleButton:
+          id: right_all
+          text: 'All'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x07, self.state)
+        ToggleButton:
+          id: right_fast
+          text: 'Fst'
+          group: 'right_dir'
+          allow_no_selection: False
+          on_state: root.on_dir(1, 0x08, self.state)
+      BoxLayout:
+        orientation: 'vertical'
+        Button:
+          text: '+'
+          on_press: root.on_temp(1, +1)
+        Label:
+          id: cur_temp1
+          text: 'LOc'
+        Button:
+          text: '-'
+          on_press: root.on_temp(1, -1)
+
 
     BoxLayout:
       orientation: 'horizontal'

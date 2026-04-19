@@ -41,7 +41,8 @@ class Clim(TabbedPanelItem):
         clim.unfrost_front = 0
         clim.unfrost_rear = 0
         clim.recycle = 0
-        clim.auto = 0
+        clim.auto = 1   # default: AUTO airflow mode on startup
+        clim.ac = 1     # default: A/C compressor on
         clim.dual = 0
         clim.bits = 0
 
@@ -87,7 +88,8 @@ class Clim(TabbedPanelItem):
         clim.unfrost_front = 0
         clim.unfrost_rear = 0
         clim.recycle = 0
-        clim.auto = 0
+        clim.auto = 1   # return to AUTO mode on next power-on
+        clim.ac = 1     # keep A/C on by default
         clim.dual = 0
         clim.temp_left = 0
         clim.temp_right = 0
@@ -99,10 +101,58 @@ class Clim(TabbedPanelItem):
     def on_dir(self, seat, dir, state='down'):
         if state != 'down' or not self._is_ignition_on():
             return
+        clim = self._clim
+        # Pressing a non-auto direction button while AUTO mode is active
+        # automatically exits AUTO mode (switches to FRESH: no recycle, no defrost).
+        if clim.auto and dir != 0x00:
+            clim.auto = 0
+            self._update_options()
         if seat == 0:
-            self._clim.dir_left = dir
+            clim.dir_left = dir
         else:
-            self._clim.dir_right = dir
+            clim.dir_right = dir
+
+    def on_clim_on(self, state):
+        clim = self._clim
+        clim.enabled = (state == 'down')
+        logger.info('Climate panel %s', 'ON' if state == 'down' else 'OFF')
+        if not clim.enabled:
+            # Reset climate state so the BSI idle frames are sent.
+            self._set_off_state()
+            clim.enabled = False  # _set_off_state does not touch enabled
+        self._update_options()
+
+    def on_ac(self, state):
+        if not self._is_ignition_on():
+            self._update_options()
+            return
+        self._clim.ac = 1 if state == 'down' else 0
+        logger.info('A/C %s', 'ON' if state == 'down' else 'OFF')
+        self._update_options()
+
+    def on_airflow_mode(self, mode, state='down'):
+        """Handle the mutually exclusive airflow-mode button group.
+
+        Modes:
+        - 'auto'          : A/C AUTO — resets both direction zones to 0x00
+        - 'unfrost_front' : Front windscreen demist
+        - 'recirc'        : Cabin recirculation
+        - 'fresh'         : Outside fresh air (no auto, no defrost, no recirculation)
+        """
+        if state != 'down' or not self._is_ignition_on():
+            self._update_options()
+            return
+        clim = self._clim
+        clim.auto = 1 if mode == 'auto' else 0
+        clim.unfrost_front = 1 if mode == 'unfrost_front' else 0
+        clim.recycle = 1 if mode == 'recirc' else 0
+        if mode == 'auto':
+            # In AUTO mode the climate controller manages direction; reset to auto.
+            clim.dir_left = 0x00
+            clim.dir_right = 0x00
+            self._update_dir_buttons()
+        logger.info('Climate airflow mode: %s', mode)
+        self._update_options()
 
     def on_temp(self, zone, dir):
         if not self._is_ignition_on():
@@ -117,6 +167,11 @@ class Clim(TabbedPanelItem):
             temp += dir
             if zone == 0:
                 clim.temp_left = temp
+                if not clim.dual:
+                    # Mono mode: keep both zones in sync.
+                    clim.temp_right = temp
+                    if 'cur_temp1' in self.ids:
+                        self.ids['cur_temp1'].text = f'{self._temp_label(temp)}c'
             else:
                 clim.temp_right = temp
             zone_name = 'left' if zone == 0 else 'right'
@@ -204,9 +259,13 @@ class Clim(TabbedPanelItem):
             0x08: 'fast',
         }
         for seat, prefix in [(0, 'left'), (1, 'right')]:
-            dir_val = self._normalize_dir(clim.dir_left if seat == 0 else clim.dir_right)
-            target_suffix = dir_to_suffix.get(dir_val)
-            target_id = f'{prefix}_{target_suffix}' if target_suffix else None
+            if clim.auto:
+                # In AUTO mode both direction grids always show 'auto' selected.
+                target_id = f'{prefix}_auto'
+            else:
+                dir_val = self._normalize_dir(clim.dir_left if seat == 0 else clim.dir_right)
+                target_suffix = dir_to_suffix.get(dir_val)
+                target_id = f'{prefix}_{target_suffix}' if target_suffix else None
             for state_id in [f'{prefix}_auto', f'{prefix}_fr', f'{prefix}_up', f'{prefix}_ud',
                              f'{prefix}_down', f'{prefix}_fd', f'{prefix}_all', f'{prefix}_fast']:
                 if state_id not in self.ids:
@@ -224,21 +283,47 @@ class Clim(TabbedPanelItem):
 
     def _update_options(self):
         clim = self._clim
+        # ON / A/C power buttons
+        if 'clim_on' in self.ids:
+            self.ids['clim_on'].state = 'down' if clim.enabled else 'normal'
+        if 'ac_on' in self.ids:
+            self.ids['ac_on'].state = 'down' if clim.ac else 'normal'
+        if 'dual' in self.ids:
+            self.ids['dual'].state = 'down' if clim.dual else 'normal'
+        if 'unfrost_rear' in self.ids:
+            self.ids['unfrost_rear'].state = 'down' if clim.unfrost_rear else 'normal'
+        # Mutually exclusive airflow-mode group
+        mode = self._get_airflow_mode()
+        for m_id, m_key in [
+            ('mode_auto', 'auto'),
+            ('mode_unfrost_front', 'unfrost_front'),
+            ('mode_recirc', 'recirc'),
+            ('mode_fresh', 'fresh'),
+        ]:
+            if m_id in self.ids:
+                self.ids[m_id].state = 'down' if mode == m_key else 'normal'
+        # Backward compat: old ids used by monitor mode and legacy tests
+        if 'auto' in self.ids:
+            self.ids['auto'].state = 'down' if clim.auto else 'normal'
         if 'intake_fresh' in self.ids:
             self.ids['intake_fresh'].state = 'normal' if clim.recycle else 'down'
         if 'intake_recycle' in self.ids:
             self.ids['intake_recycle'].state = 'down' if clim.recycle else 'normal'
-        # Legacy single-toggle support (monitor mode / tests that still use 'recycle' id)
         if 'recycle' in self.ids:
             self.ids['recycle'].state = 'down' if clim.recycle else 'normal'
         if 'unfrost_front' in self.ids:
             self.ids['unfrost_front'].state = 'down' if clim.unfrost_front else 'normal'
-        if 'unfrost_rear' in self.ids:
-            self.ids['unfrost_rear'].state = 'down' if clim.unfrost_rear else 'normal'
-        if 'auto' in self.ids:
-            self.ids['auto'].state = 'down' if clim.auto else 'normal'
-        if 'dual' in self.ids:
-            self.ids['dual'].state = 'down' if clim.dual else 'normal'
+
+    def _get_airflow_mode(self):
+        """Return the active airflow mode key for the mutex button group."""
+        clim = self._clim
+        if clim.auto:
+            return 'auto'
+        if clim.unfrost_front:
+            return 'unfrost_front'
+        if clim.recycle:
+            return 'recirc'
+        return 'fresh'
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x036 and len(msg.data) >= 5:
@@ -262,6 +347,7 @@ class Clim(TabbedPanelItem):
             self._update_fan(self._decode_can_fan(msg.data[6]))
             self._clim.dir_left = msg.data[4] >> 4
             self._clim.dir_right = msg.data[5] >> 4
+            self._clim.ac = (msg.data[0] >> 4) & 1
             self._clim.auto = (msg.data[0] >> 3) & 1
             self._clim.dual = msg.data[0] & 1
             self._clim.unfrost_front = (msg.data[1] >> 7) & 1

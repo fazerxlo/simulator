@@ -771,7 +771,7 @@ class Msg1E3(CanMessage):
             d2 = 0x30 if car.bsi.ignition_on else 0x40
             return [0x1C, d2, 0x0B, 0x0B, 0x00, 0x00, 0x00, 0x00]
         clim = car.clim
-        b1 = 0x14 | (clim.auto << 3) | clim.dual
+        b1 = 0x04 | (clim.ac << 4) | (clim.auto << 3) | clim.dual
         b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right
@@ -786,6 +786,7 @@ class Msg1E3(CanMessage):
         car.clim.fan = _decode_clim_fan(data[6])
         car.clim.dir_left = data[4] >> 4
         car.clim.dir_right = data[5] >> 4
+        car.clim.ac = (data[0] >> 4) & 1
         car.clim.auto = (data[0] >> 3) & 1
         car.clim.dual = data[0] & 1
         car.clim.unfrost_front = (data[1] >> 7) & 1

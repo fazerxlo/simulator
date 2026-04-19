@@ -85,6 +85,7 @@ class TestVirtualCarDefaults:
         assert car.clim.fan == 0
         assert car.clim.auto == 0
         assert car.clim.dual == 0
+        assert car.clim.ac == 1
         assert car.clim.enabled is False
 
     def test_dashboard_defaults(self):
@@ -284,6 +285,13 @@ class TestClimUiHelpers:
             'intake_recycle': DummyWidget(),
             'unfrost_front': DummyWidget(),
             'unfrost_rear': DummyWidget(),
+            # New mode buttons
+            'clim_on': DummyWidget(state='down'),
+            'ac_on': DummyWidget(state='down'),
+            'mode_auto': DummyWidget(),
+            'mode_unfrost_front': DummyWidget(),
+            'mode_recirc': DummyWidget(),
+            'mode_fresh': DummyWidget(),
         }
         return widget
 
@@ -481,8 +489,165 @@ class TestClimUiHelpers:
         widget.on_intake(False, 'normal')
         assert widget.runner.car.clim.recycle == 1
 
+    # --- Mono mode (dual=0): left temp change syncs right ---
 
-class TestDoorsUiHelpers:
+    def test_on_temp_left_zone_in_mono_mode_syncs_right_temp(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.temp_left = 11
+        widget.runner.car.clim.temp_right = 11
+        widget.ids.update({'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text='')})
+        widget.on_temp(0, +1)
+        assert widget.runner.car.clim.dual == 0
+        assert widget.runner.car.clim.temp_left == 12
+        assert widget.runner.car.clim.temp_right == 12  # synced in mono mode
+        assert widget.ids['cur_temp0'].text == '21.5c'
+        assert widget.ids['cur_temp1'].text == '21.5c'
+
+    def test_on_temp_left_zone_mono_sync_stops_when_dual_is_on(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 1
+        widget.runner.car.clim.temp_left = 11
+        widget.runner.car.clim.temp_right = 8
+        widget.ids.update({'cur_temp0': DummyWidget(text=''), 'cur_temp1': DummyWidget(text='')})
+        widget.on_temp(0, +1)
+        assert widget.runner.car.clim.temp_left == 12
+        assert widget.runner.car.clim.temp_right == 8  # NOT synced in dual mode
+
+    # --- AUTO mode: direction buttons show auto; manual press exits auto ---
+
+    def _make_dir_ids(self):
+        """Return a dict of all direction button DummyWidgets for both zones."""
+        ids = {}
+        for prefix in ('left', 'right'):
+            for suffix in ('auto', 'fr', 'up', 'ud', 'down', 'fd', 'all', 'fast'):
+                ids[f'{prefix}_{suffix}'] = DummyWidget()
+        return ids
+
+    def test_update_dir_buttons_shows_auto_for_both_zones_when_auto_mode_on(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.dir_left = 0x04
+        widget.runner.car.clim.dir_right = 0x02
+        widget.runner.car.clim.auto = 1
+        widget._update_dir_buttons()
+        assert widget.ids['left_auto'].state == 'down'
+        assert widget.ids['right_auto'].state == 'down'
+        assert widget.ids['left_up'].state == 'normal'
+        assert widget.ids['right_down'].state == 'normal'
+
+    def test_update_dir_buttons_uses_dir_values_when_auto_mode_off(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.dir_left = 0x04
+        widget.runner.car.clim.dir_right = 0x02
+        widget.runner.car.clim.auto = 0
+        widget._update_dir_buttons()
+        assert widget.ids['left_up'].state == 'down'
+        assert widget.ids['right_down'].state == 'down'
+        assert widget.ids['left_auto'].state == 'normal'
+
+    def test_on_dir_manual_press_exits_auto_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.auto = 1
+        widget.on_dir(0, 0x04, 'down')  # press Up direction
+        assert widget.runner.car.clim.auto == 0  # auto mode exited
+        assert widget.runner.car.clim.dir_left == 0x04
+
+    def test_on_dir_pressing_auto_dir_does_not_exit_auto_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.auto = 1
+        widget.on_dir(0, 0x00, 'down')  # press Auto direction
+        assert widget.runner.car.clim.auto == 1  # stays in auto mode
+
+    # --- on_airflow_mode: mutex group ---
+
+    def test_on_airflow_mode_auto_sets_both_dirs_to_zero(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.dir_left = 0x04
+        widget.runner.car.clim.dir_right = 0x02
+        widget.on_airflow_mode('auto', 'down')
+        assert widget.runner.car.clim.auto == 1
+        assert widget.runner.car.clim.unfrost_front == 0
+        assert widget.runner.car.clim.recycle == 0
+        assert widget.runner.car.clim.dir_left == 0x00
+        assert widget.runner.car.clim.dir_right == 0x00
+        assert widget.ids['left_auto'].state == 'down'
+        assert widget.ids['right_auto'].state == 'down'
+
+    def test_on_airflow_mode_unfrost_front(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.auto = 1
+        widget.on_airflow_mode('unfrost_front', 'down')
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.unfrost_front == 1
+        assert widget.runner.car.clim.recycle == 0
+        assert widget.ids['unfrost_front'].state == 'down'
+        assert widget.ids['mode_unfrost_front'].state == 'down'
+        assert widget.ids['mode_auto'].state == 'normal'
+
+    def test_on_airflow_mode_recirc(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.on_airflow_mode('recirc', 'down')
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.unfrost_front == 0
+        assert widget.runner.car.clim.recycle == 1
+        assert widget.ids['intake_recycle'].state == 'down'
+        assert widget.ids['mode_recirc'].state == 'down'
+
+    def test_on_airflow_mode_fresh(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.recycle = 1
+        widget.on_airflow_mode('fresh', 'down')
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.unfrost_front == 0
+        assert widget.runner.car.clim.recycle == 0
+        assert widget.ids['mode_fresh'].state == 'down'
+        assert widget.ids['mode_recirc'].state == 'normal'
+
+    def test_on_airflow_mode_ignored_when_ignition_off(self):
+        widget = self._make_clim_widget(ignition_on=False)
+        widget.runner.car.clim.auto = 0
+        widget.on_airflow_mode('auto', 'down')
+        assert widget.runner.car.clim.auto == 0  # not changed
+
+    # --- on_clim_on / on_ac ---
+
+    def test_on_clim_on_off_disables_clim_enabled(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.enabled = True
+        widget.on_clim_on('normal')
+        assert widget.runner.car.clim.enabled is False
+
+    def test_on_clim_on_on_enables_clim_enabled(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.enabled = False
+        widget.on_clim_on('down')
+        assert widget.runner.car.clim.enabled is True
+
+    def test_on_ac_sets_ac_on(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 0
+        widget.on_ac('down')
+        assert widget.runner.car.clim.ac == 1
+        assert widget.ids['ac_on'].state == 'down'
+
+    def test_on_ac_sets_ac_off(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1
+        widget.on_ac('normal')
+        assert widget.runner.car.clim.ac == 0
+
+    def test_on_ac_ignored_when_ignition_off(self):
+        widget = self._make_clim_widget(ignition_on=False)
+        widget.runner.car.clim.ac = 1
+        widget.on_ac('normal')
+        assert widget.runner.car.clim.ac == 1  # not changed
+
+
+
     def _make_doors_widget(self):
         sent = []
 
@@ -860,6 +1025,19 @@ class TestMsg1E3DecodeBenchAlignment:
         assert car.clim.dir_left == 0x00
         assert car.clim.dir_right == 0x04
 
+    def test_ac_bit_decoded_when_on(self):
+        car = VirtualCar()
+        Msg1E3().decode(car, [0x1C, 0x30, 0x0B, 0x0B, 0x00, 0x00, 0x02, 0x00])
+        assert car.clim.ac == 1   # bit 4 of byte 0
+        assert car.clim.auto == 1
+        assert car.clim.dual == 0
+
+    def test_ac_bit_decoded_when_off(self):
+        car = VirtualCar()
+        Msg1E3().decode(car, [0x0C, 0x30, 0x0B, 0x0B, 0x00, 0x00, 0x02, 0x00])
+        assert car.clim.ac == 0   # bit 4 of byte 0 is 0
+        assert car.clim.auto == 1
+
 
 class TestMsg1E3EncodeBenchAlignment:
     """Verify 0x1E3 active-climate encoding matches workbench captures."""
@@ -924,6 +1102,28 @@ class TestMsg1E3EncodeBenchAlignment:
         car.clim.fan = 3
         data = Msg1E3().encode(car)
         assert data == [0x1C, 0x30, 0x0B, 0x0B, 0x00, 0x00, 0x02, 0x00]
+
+    def test_byte0_ac_off_with_auto_gives_0x0c(self):
+        """When A/C compressor is off, byte 0 bit 4 is 0: 0x04|(0<<4)|(1<<3)=0x0C."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 1
+        car.clim.dual = 0
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x0C  # 0x04 | 0 | 0x08 | 0
+
+    def test_byte0_ac_off_manual_gives_0x04(self):
+        """A/C off, manual mode: 0x04|(0<<4)|(0<<3)|0=0x04."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 0
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x04
 
 
 class TestMsg12DEncode:

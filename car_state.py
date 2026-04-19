@@ -53,6 +53,10 @@ class Clim:
         self.auto = 0
         self.dual = 0
         self.bits = 0
+        # A/C compressor enable flag. Encoded in 0x1E3 byte 0 bit 4.
+        # Default 1 (on) so that the existing workbench constant 0x14/0x1C is
+        # produced without any extra module initialisation.
+        self.ac = 1
         # Set to True by the clim module so that Msg1D0/Msg1E3 switch from the
         # BSI idle encoding to the full climate encoding.
         self.enabled = False
