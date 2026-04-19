@@ -222,6 +222,59 @@ class Radio(TabbedPanelItem):
             self._radio.mem = int(value)
 
     # ------------------------------------------------------------------
+    # UI toggle helpers (called from on_can_message to reflect bus state)
+    # ------------------------------------------------------------------
+
+    def _update_source_toggle(self):
+        """Set the source toggle to match car.radio.input."""
+        src_map = {
+            'TUN': 'toggle_src_tun', 'CD': 'toggle_src_cd',
+            'CDC': 'toggle_src_cdc', 'AUX1': 'toggle_src_aux1',
+            'AUX2': 'toggle_src_aux2', 'USB': 'toggle_src_usb',
+            'BT': 'toggle_src_bt',
+        }
+        btn_id = src_map.get(self._radio.input)
+        if btn_id and btn_id in self.ids:
+            self.ids[btn_id].state = 'down'
+
+    def _update_band_toggle(self):
+        """Set the band toggle to match car.radio.band."""
+        band_map = {
+            0x00: 'toggle_band_none',
+            0x10: 'toggle_band_fm1',
+            0x20: 'toggle_band_fm2',
+            0x40: 'toggle_band_fmast',
+            0x50: 'toggle_band_am',
+        }
+        btn_id = band_map.get(self._radio.band)
+        if btn_id and btn_id in self.ids:
+            self.ids[btn_id].state = 'down'
+
+    def _update_mem_toggle(self):
+        """Set the memory preset toggle to match car.radio.mem."""
+        mem_map = {
+            0x00: 'toggle_mem_no', 0x10: 'toggle_mem_1',
+            0x20: 'toggle_mem_2', 0x30: 'toggle_mem_3',
+            0x40: 'toggle_mem_4', 0x50: 'toggle_mem_5',
+            0x60: 'toggle_mem_6', 0x70: 'toggle_mem_dash',
+        }
+        btn_id = mem_map.get(self._radio.mem)
+        if btn_id and btn_id in self.ids:
+            self.ids[btn_id].state = 'down'
+
+    def _update_flag_toggles(self):
+        """Sync RDS/PTY/scan/tun/list toggle states from car.radio."""
+        r = self._radio
+        flags = {
+            'toggle_rds': r.rds, 'toggle_pty': r.pty,
+            'toggle_list': r.list_flag, 'toggle_scan': r.scan,
+            'toggle_tun': r.tun,
+        }
+        for btn_id, value in flags.items():
+            if btn_id in self.ids:
+                self.ids[btn_id].state = 'down' if value else 'normal'
+
+    # ------------------------------------------------------------------
     # Incoming CAN message handler (monitor + loopback)
     # ------------------------------------------------------------------
 
@@ -234,14 +287,17 @@ class Radio(TabbedPanelItem):
             self.on_volume(self._radio.volume)
 
         elif aid == 0x165 and len(data) >= 3:
-            # Msg165.decode() updated car.radio.input; nothing more needed.
-            pass
+            # Msg165.decode() updated car.radio.input; sync source toggles.
+            self._update_source_toggle()
 
         elif aid == 0x225 and len(data) >= 5:
             # Msg225.decode() updated car.radio freq/band/flags; update display.
             self.on_freq(self._radio.freq)
             if 'cur_station' in self.ids:
                 self.ids['cur_station'].text = self._radio.station_name
+            self._update_band_toggle()
+            self._update_mem_toggle()
+            self._update_flag_toggles()
 
         elif aid == 0x2A5 and len(data) >= 1:
             # Msg2A5.decode() updated car.radio.station_name.

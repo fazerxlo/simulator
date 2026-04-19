@@ -624,10 +624,9 @@ class Msg1A5(CanMessage):
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 1:
             volume = data[0] & 0x1F
+            car.radio.volume = volume  # always update for radio display
             if car.buttons.active:
                 car.buttons.volume = volume
-            else:
-                car.radio.volume = volume
 
 
 # ---------------------------------------------------------------------------
@@ -921,31 +920,36 @@ class Msg1E5(CanMessage):
         if len(data) < 7:
             return
         a = car.radio.audio
+        # Always update every field unconditionally so the display reflects the
+        # live head-unit state even when no menu is open.
+        a['lr-bal'] = data[0] & 0x7F
+        a['rf-bal'] = data[1] & 0x7F
+        a['bass'] = data[2] & 0x7F
+        a['treble'] = data[4] & 0x7F
+        a['loudness'] = (data[5] >> 6) & 1        # bit6 = loudness on/off
+        a['volume'] = data[5] & 0x07              # bits2:0 = auto-vol threshold
+        ambiance_code = data[6] & 0x3F
+        for name, code in self._AMBIANCE_CODES.items():
+            if code == ambiance_code:
+                a['ambiance'] = name
+                break
+        # Determine which menu is currently open (bit7 of each byte).
         if data[0] & 0x80:
             a['menu'] = 'lr-bal'
-            a['lr-bal'] = data[0] & 0x7F
         elif data[1] & 0x80:
             a['menu'] = 'rf-bal'
-            a['rf-bal'] = data[1] & 0x7F
         elif data[2] & 0x80:
             a['menu'] = 'bass'
-            a['bass'] = data[2] & 0x7F
         elif data[4] & 0x80:
             a['menu'] = 'treble'
-            a['treble'] = data[4] & 0x7F
-        elif data[5] & 0x10:
-            a['menu'] = 'volume'
-            a['volume'] = data[5] & 0x0F
-        elif data[5] & 0x40:
+        elif data[5] & 0x80:                      # bit7 = loudness menu open
             a['menu'] = 'loudness'
-            a['loudness'] = (data[5] >> 6) & 1
-        elif data[6] & 0x40:
+        elif data[5] & 0x10:                      # bit4 = auto-vol menu open
+            a['menu'] = 'volume'
+        elif data[6] & 0x40:                      # bit6 = ambiance menu open
             a['menu'] = 'ambiance'
-            target = data[6] & 0x3F
-            for name, code in self._AMBIANCE_CODES.items():
-                if code == target:
-                    a['ambiance'] = name
-                    break
+        else:
+            a['menu'] = 'none'
 
 
 # ---------------------------------------------------------------------------
@@ -1260,6 +1264,22 @@ class Msg225(CanMessage):
 
     Frequency encoding: display_MHz = raw * 0.05 + 50.
     Cross-referenced with ios-car-dashboard Arduino serial protocol.
+
+    Byte 0 bit layout (verified from real bench capture):
+      bit7  : LIST   – station list active
+      bit6  : SCAN   – scan mode active
+      bit5  : RDS    – RDS data available
+      bit4  : PTY    – PTY search / data available
+      bit3  : TUN    – currently tuning
+      bit2  : TA     – traffic announcement flag
+      bit1:0: TUNDIR – tuning direction (0=none, 1=up, 2=down)
+
+    Band codes (byte 2, verified from real bench capture):
+      0x00 = no band / unset
+      0x10 = FM Band 1
+      0x20 = FM Band 2
+      0x40 = FM Auto-store (AST)
+      0x50 = AM / medium wave
     """
 
     can_id = 0x225
@@ -1269,8 +1289,8 @@ class Msg225(CanMessage):
 
     def encode(self, car) -> list:
         r = car.radio
-        b0 = (r.list_flag << 7 | r.tundir << 5 | r.scan << 3 |
-              r.rds << 2 | r.tun << 1 | r.pty)
+        b0 = (r.list_flag << 7 | r.scan << 6 | r.rds << 5 | r.pty << 4 |
+              r.tun << 3 | r.ta << 2 | (r.tundir & 3))
         return [b0, r.mem, r.band, r.freq >> 8, r.freq & 0xFF]
 
     def decode(self, car, data: bytes) -> None:
@@ -1278,11 +1298,12 @@ class Msg225(CanMessage):
             return
         r = car.radio
         r.list_flag = (data[0] >> 7) & 1
-        r.tundir = (data[0] >> 5) & 3
-        r.scan = (data[0] >> 3) & 1
-        r.rds = (data[0] >> 2) & 1
-        r.tun = (data[0] >> 1) & 1
-        r.pty = data[0] & 1
+        r.scan = (data[0] >> 6) & 1
+        r.rds = (data[0] >> 5) & 1
+        r.pty = (data[0] >> 4) & 1
+        r.tun = (data[0] >> 3) & 1
+        r.ta = (data[0] >> 2) & 1
+        r.tundir = data[0] & 3
         r.mem = data[1]
         r.band = data[2]
         r.freq = (data[3] << 8) | data[4]
@@ -1338,7 +1359,7 @@ class Msg2A5(CanMessage):
         try:
             car.radio.station_name = bytes(data).rstrip(b'\x00').decode(
                 'ascii', errors='replace'
-            )
+            ).strip()
         except Exception:
             pass
 

@@ -202,10 +202,11 @@ class Radio:
         # FM tuner state (used by the unified radio module and Msg225/Msg265/Msg2A5)
         # raw CAN freq value; display_MHz = freq * 0.05 + 50 (default 96.0 MHz)
         self.freq = 920
-        self.band = 0x00      # 0x00 = FM band 1; 0x50 = AM
+        self.band = 0x00      # 0x00=none; 0x10=FM1; 0x20=FM2; 0x40=FMAST; 0x50=AM
         self.mem = 0          # preset memory number (0 = none)
         self.rds = 0
         self.pty = 0
+        self.ta = 0
         self.tun = 0
         self.scan = 0
         self.list_flag = 0

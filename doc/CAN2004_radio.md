@@ -221,20 +221,21 @@ ambiance        = AMBIANCE_NAMES.get(ambiance_code, 'unknown')
 **PSA name:** `ETAT_TUNER` (inferred)  
 **Period:** 100 ms  
 **Module:** `radio`  
-**Confidence:** Inferred/Observed — consistent with ios-car-dashboard frequency encoding
+**Confidence:** Verified from real bench capture (Peugeot 407, FM2 band at 96.0 MHz)
 
 ### Byte layout
 
 | Byte | Bits | Signal | Notes |
 |---|---|---|---|
 | 0 | 7 | LIST | station list active |
-| 0 | 6:5 | TUNDIR | tuning direction (0=none, 1=up, 2=down) |
-| 0 | 3 | SCAN | scan mode active |
-| 0 | 2 | RDS | RDS data available |
-| 0 | 1 | TUN | currently tuning |
-| 0 | 0 | PTY | PTY search active |
+| 0 | 6 | SCAN | scan mode active |
+| 0 | 5 | RDS | RDS data available |
+| 0 | 4 | PTY | PTY search / data available |
+| 0 | 3 | TUN | currently tuning |
+| 0 | 2 | TA | traffic announcement flag |
+| 0 | 1:0 | TUNDIR | tuning direction (0=none, 1=up, 2=down) |
 | 1 | 7:0 | MEMORY | memory preset number (0 = no preset) |
-| 2 | 7:0 | BAND | band code: `0x50` = AM/MW; other = FM |
+| 2 | 7:0 | BAND | band code (see table below) |
 | 3–4 | 15:0 | FREQUENCY | uint16; `display_MHz = raw × 0.05 + 50` |
 
 ### Frequency encoding
@@ -255,17 +256,21 @@ encodings are consistent.
 
 | BAND byte | Meaning |
 |---|---|
+| `0x00` | No band / unset |
+| `0x10` | FM Band 1 |
+| `0x20` | FM Band 2 (confirmed from bench capture) |
+| `0x40` | FM Auto-store (AST) |
 | `0x50` | AM / medium wave (frequency displayed as kHz) |
-| `0x00` | FM Band 1 |
-| `0x01` | FM Band 2 |
-| `0x04` | FM Auto-store (AST) |
+
+**Note:** The ios-car-dashboard Arduino serial protocol sends band as `CAN_byte >> 4`
+(1=FM1, 2=FM2, 4=AST, 5=AM), which is consistent with the above encoding.
 
 ### Test vectors
 
 | Payload | Decoded |
 |---|---|
-| `00 00 00 03 98` | FM, 96.0 MHz (raw=920=0x0398) |
-| `04 00 00 02 EE` | FM scanning, 87.5 MHz (raw=750=0x02EE) |
+| `30 10 20 03 98` | FM2, mem=1, RDS+PTY on, TA off, 96.0 MHz (bench verified) |
+| `40 00 10 02 EE` | FM1, scanning, 87.5 MHz (raw=750=0x02EE) |
 | `00 03 50 03 A8` | AM, preset 3, 936 kHz (raw=936=0x03A8) |
 
 ---

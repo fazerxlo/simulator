@@ -1876,7 +1876,7 @@ class TestMsg1A5Buttons:
         car.buttons.active = True
         Msg1A5().decode(car, [0x00 | 22])
         assert car.buttons.volume == 22
-        assert car.radio.volume == 15  # unchanged
+        assert car.radio.volume == 22  # also updated so radio display reflects bus
 
     def test_decode_updates_radio_volume_when_buttons_inactive(self):
         car = VirtualCar()
@@ -3188,10 +3188,27 @@ class TestMsg1E5AudioSettings:
         assert car.radio.audio['bass'] == 0x42
 
     def test_decode_loudness_enabled(self):
-        """bit 6 of byte 5 = loudness on."""
+        """bit 6 of byte 5 = loudness on (menu is NOT open — bit 7 = 0)."""
         car = VirtualCar()
         Msg1E5().decode(car, [0x3F, 0x3F, 0x3F, 0x00, 0x3F, 0x40, 0x03])
         assert car.radio.audio['loudness'] == 1
+        assert car.radio.audio['menu'] == 'none'  # bit7=0 → menu not open
+
+    def test_decode_loudness_menu_open(self):
+        """bit 7 of byte 5 = loudness menu is currently open."""
+        car = VirtualCar()
+        # byte 5 = 0xC0: bit7 = loudness menu open, bit6 = loudness enabled
+        Msg1E5().decode(car, [0x3F, 0x3F, 0x3F, 0x00, 0x3F, 0xC0, 0x03])
+        assert car.radio.audio['loudness'] == 1
+        assert car.radio.audio['menu'] == 'loudness'
+
+    def test_decode_ambiance_without_menu_open(self):
+        """Ambiance value is always decoded, even when menu is not open."""
+        car = VirtualCar()
+        # byte 6 = 0x17: bit6 = 0 (menu closed), bits5:0 = 0x17 (techno)
+        Msg1E5().decode(car, [0x3F, 0x3F, 0x3F, 0x00, 0x3F, 0x40, 0x17])
+        assert car.radio.audio['ambiance'] == 'techno'
+        assert car.radio.audio['menu'] == 'none'  # loudness menu not open (bit7=0)
 
     def test_decode_ambiance_classical(self):
         """byte 6 bit 6 = ambiance menu active; bits 5:0 = 0x07 → classical.
@@ -3242,10 +3259,147 @@ class TestMsg1E5AudioSettings:
         data = Msg1E5().encode(car)
         assert data[3] == 0x00
 
+    def test_workbench_frame_decode(self):
+        """Validate decode against real bench capture.
+
+        Workbench state: volume=9, FM2@96.0MHz, mem=1, RDS+PTY on, TA off,
+        loudness on, ambiance=techno, autovol disabled.
+        0x1E5 payload: 3F 3F 42 3F 44 40 17
+        """
+        car = VirtualCar()
+        Msg1E5().decode(car, bytes([0x3F, 0x3F, 0x42, 0x3F, 0x44, 0x40, 0x17]))
+        a = car.radio.audio
+        assert a['lr-bal'] == 0x3F
+        assert a['rf-bal'] == 0x3F
+        assert a['bass'] == 0x42    # +3 from flat
+        assert a['treble'] == 0x44  # +5 from flat
+        assert a['loudness'] == 1   # enabled
+        assert a['ambiance'] == 'techno'
+        assert a['menu'] == 'none'  # no menu open
+
 
 # ---------------------------------------------------------------------------
-# listen_only flag tests
+# Msg225 FM tuner decode tests (verified against real bench capture)
 # ---------------------------------------------------------------------------
+
+class TestMsg225Decode:
+    """0x225 FM tuner status — bit layout verified from real bench capture."""
+
+    def test_workbench_frame_decode(self):
+        """Real bench frame: FM2, 96.0 MHz, mem=1, RDS on, PTY on, TA off.
+
+        Payload: 30 10 20 03 98
+          byte0=0x30 → scan=0, rds=1 (bit5), pty=1 (bit4), tun=0, ta=0, tundir=0
+          byte1=0x10 → mem=0x10 (preset 1)
+          byte2=0x20 → band=FM Band 2
+          bytes3-4=0x0398 → freq=920 → 96.0 MHz
+        """
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x30, 0x10, 0x20, 0x03, 0x98]))
+        r = car.radio
+        assert r.rds == 1
+        assert r.pty == 1
+        assert r.ta == 0
+        assert r.scan == 0
+        assert r.tun == 0
+        assert r.tundir == 0
+        assert r.mem == 0x10        # preset 1
+        assert r.band == 0x20       # FM Band 2
+        assert r.freq == 920        # 96.0 MHz
+
+    def test_rds_decoded_from_bit5(self):
+        """RDS available flag is bit5 of byte0."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x20, 0x00, 0x00, 0x00, 0x00]))
+        assert car.radio.rds == 1
+        assert car.radio.pty == 0
+
+    def test_pty_decoded_from_bit4(self):
+        """PTY flag is bit4 of byte0."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x10, 0x00, 0x00, 0x00, 0x00]))
+        assert car.radio.pty == 1
+        assert car.radio.rds == 0
+
+    def test_ta_decoded_from_bit2(self):
+        """TA flag is bit2 of byte0."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x04, 0x00, 0x00, 0x00, 0x00]))
+        assert car.radio.ta == 1
+
+    def test_scan_decoded_from_bit6(self):
+        """SCAN flag is bit6 of byte0."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x40, 0x00, 0x00, 0x00, 0x00]))
+        assert car.radio.scan == 1
+
+    def test_band_fm2_code(self):
+        """Band code 0x20 = FM Band 2 (verified from bench)."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x00, 0x00, 0x20, 0x00, 0x00]))
+        assert car.radio.band == 0x20
+
+    def test_band_am_code(self):
+        """Band code 0x50 = AM."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x00, 0x00, 0x50, 0x00, 0x00]))
+        assert car.radio.band == 0x50
+
+    def test_frequency_96mhz(self):
+        """Freq raw=920 = 96.0 MHz."""
+        car = VirtualCar()
+        Msg225().decode(car, bytes([0x00, 0x00, 0x00, 0x03, 0x98]))
+        assert car.radio.freq == 920
+        assert abs(car.radio.freq * 0.05 + 50 - 96.0) < 0.01
+
+    def test_encode_decode_roundtrip(self):
+        """Encode→decode roundtrip preserves all fields."""
+        car_a = VirtualCar()
+        r = car_a.radio
+        r.rds = 1
+        r.pty = 1
+        r.scan = 0
+        r.ta = 0
+        r.mem = 0x10
+        r.band = 0x20
+        r.freq = 920
+        payload = Msg225().encode(car_a)
+        car_b = VirtualCar()
+        Msg225().decode(car_b, bytes(payload))
+        assert car_b.radio.rds == 1
+        assert car_b.radio.pty == 1
+        assert car_b.radio.mem == 0x10
+        assert car_b.radio.band == 0x20
+        assert car_b.radio.freq == 920
+
+
+# ---------------------------------------------------------------------------
+# Msg2A5 station name decode tests
+# ---------------------------------------------------------------------------
+
+class TestMsg2A5StationName:
+    """0x2A5 — station name / RDS PS decode."""
+
+    def test_workbench_station_name(self):
+        """Real bench payload decodes to 'RMF FM' (whitespace stripped)."""
+        car = VirtualCar()
+        Msg2A5().decode(car, bytes([0x20, 0x52, 0x4D, 0x46, 0x20, 0x46, 0x4D, 0x20]))
+        assert car.radio.station_name == 'RMF FM'
+
+    def test_no_leading_trailing_spaces(self):
+        """Leading and trailing whitespace is stripped from station names."""
+        car = VirtualCar()
+        Msg2A5().decode(car, bytes([0x20, 0x20, 0x52, 0x44, 0x53, 0x20, 0x20, 0x00]))
+        assert car.radio.station_name == 'RDS'
+
+    def test_null_terminated_name(self):
+        """Null bytes at end are stripped (existing behaviour preserved)."""
+        car = VirtualCar()
+        Msg2A5().decode(car, bytes([0x46, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        assert car.radio.station_name == 'FM'
+
+
+
 
 class TestListenOnlyRadioMessages:
     """Radio CAN messages must be listen-only (never transmitted by simulator)."""
