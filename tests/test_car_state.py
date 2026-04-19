@@ -1,7 +1,7 @@
 """Tests for car_state.VirtualCar defaults, mutation, and isolation."""
 import pytest
 
-from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
+from car_state import (BSI, Buttons, Clim, CDChanger, Dashboard, Doors, MFDPopup,
                        Parktronic, Tyres, VirtualCar, Radio, Trip,
                        KMLState, BTEState, SpeedControl)
 
