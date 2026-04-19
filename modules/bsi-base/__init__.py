@@ -369,9 +369,9 @@ class BSI_base(TabbedPanelItem):
 
     def can_fast(self):
         bsi = self._bsi
-        rpm = int(bsi.rpm * 10)
+        rpm = max(0, int(bsi.rpm)) << 3
         speed = int(bsi.speed * 100)
-        return 0x0B6, [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF, 0x00, 0x00, 0x00, 0x00]
+        return 0x0B6, [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF, 0x00, 0x00, 0x00, 0xD0]
 
     def can_vin_vis(self):
         #32 31 37 31 35 33 38 33

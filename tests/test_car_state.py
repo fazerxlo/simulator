@@ -2700,23 +2700,21 @@ class TestMsg161OilLevel:
 # ---------------------------------------------------------------------------
 
 class TestMsg0B6AwpCompare:
-    """0x0B6 — autowp cross-reference for RPM/Speed encoding.
+    """0x0B6 — workbench-verified RPM/Speed encoding.
 
-    Tests verify the simulator's RPM×10 and speed×100 encoding against
-    autowp's alternative 13-bit RPM encoding.  The ×10 encoding is derived
-    from observed bench captures and is kept as authoritative.  These tests
-    lock down the simulator's actual encoding so any future change is
-    immediately visible.
+    The workbench combine expects RPM as a 13-bit raw value packed into bits
+    15..3 of bytes 0-1, i.e. displayed RPM shifted left by 3. Speed remains a
+    16-bit integer scaled by 100.
     """
 
-    def test_encode_rpm_uses_times_ten_scaling(self):
-        """RPM is encoded as integer(rpm × 10) in a 16-bit big-endian word."""
+    def test_encode_rpm_uses_shifted_raw_scaling(self):
+        """Workbench combine expects RPM encoded as rpm << 3."""
         car = VirtualCar()
         car.bsi.ignition_on = True
         car.bsi.rpm = 800
         data = Msg0B6().encode(car)
         raw_rpm = (data[0] << 8) | data[1]
-        assert raw_rpm == 8000  # 800 × 10
+        assert raw_rpm == (800 << 3)
 
     def test_encode_speed_uses_times_hundred_scaling(self):
         """Speed is encoded as integer(speed × 100) in a 16-bit big-endian word.
@@ -2756,6 +2754,13 @@ class TestMsg0B6AwpCompare:
         Msg0B6().decode(car2, data)
         assert car2.bsi.rpm == 1500
         assert car2.bsi.speed == 90
+
+    def test_decode_accepts_workbench_shifted_rpm_payload(self):
+        """A raw workbench payload with rpm << 3 decodes to the displayed RPM."""
+        car = VirtualCar()
+        Msg0B6().decode(car, [0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xD0])
+        assert car.bsi.rpm == 800
+        assert car.bsi.engine_running == 1
 
     def test_decode_sets_engine_running_when_rpm_nonzero(self):
         """engine_running flag should be set from RPM field."""

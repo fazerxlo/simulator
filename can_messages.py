@@ -118,13 +118,18 @@ class Msg036(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg0B6(CanMessage):
-    """Fast dynamic data: engine RPM and vehicle speed."""
+    """Fast dynamic data: engine RPM and vehicle speed.
+
+    Workbench combine verification shows that bytes 0-1 carry RPM as a 13-bit
+    raw value in bits 15..3, which is equivalent to displayed RPM shifted left
+    by 3. Vehicle speed remains a uint16 scaled by 100.
+    """
 
     can_id = 0x0B6
     period_ms = 50
 
     def encode(self, car) -> list:
-        rpm = int(car.bsi.rpm * 10)
+        rpm = max(0, int(car.bsi.rpm)) << 3
         speed = int(car.bsi.speed * 100)
         if not car.bsi.ignition_on:
             return [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xD0]
@@ -142,7 +147,7 @@ class Msg0B6(CanMessage):
         # Real bench idle / engine-off traces use 0xFFFF placeholders rather
         # than literal sensor values. Treat those as invalid zeros so monitor
         # mode does not show absurd RPM or speed readings.
-        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else int(raw_rpm / 10)
+        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else int(raw_rpm / 8)
         car.bsi.speed = 0 if raw_speed == 0xFFFF else int(raw_speed / 100)
         car.bsi.engine_running = 1 if raw_rpm not in (0x0000, 0xFFFF) else 0
 
