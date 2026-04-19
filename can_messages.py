@@ -559,7 +559,7 @@ class Msg1A1(CanMessage):
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00
         msg_id = p.msg_id if p.msg_id not in (None, 0x00) else self.IDLE_MESSAGE_ID
-        return [flag, msg_id, self.DISPLAY_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+        return [flag, msg_id, p.display_flags, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 2:
@@ -732,8 +732,8 @@ class Msg1D0(CanMessage):
         dir_byte = (dir_left << 4) | dir_right
         if clim.unfrost_front:
             b0 = 0x19  # 0x08 | 0x11
-        elif clim.auto:
-            b0 = 0x08  # AUTO mode — no manual-distribution bit
+        elif clim.auto or clim.intake_explicit:
+            b0 = 0x08  # AUTO mode or explicit intake (recirc/fresh) — no manual-distribution bit
         else:
             b0 = 0x28  # 0x08 | 0x20 — manual fan/direction mode
         # Byte 4 bit layout (workbench-verified from clima_auto_inside_outside_auto.csv):
@@ -808,7 +808,22 @@ class Msg1E3(CanMessage):
         else:
             mode_bits = 0x00
         recirc_bit = 0x80 if clim.recycle else 0x00
-        b1 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
+        # Bit1 (0x02) is the one-shot MFD notification trigger: the real BSI
+        # sets it for exactly one frame when switching to Recirc (→ popup
+        # "Cabin air recycling activated") or Fresh (→ "Forced intake of
+        # outside air").  Workbench: 0x87 = 0x85|0x02 on recirc entry,
+        # 0x07 = 0x05|0x02 on fresh entry.
+        notify_bit = 0x02 if clim.intake_notify else 0x00
+        clim.intake_notify = False  # one-shot: consume after first use
+        # Workbench: recirc and explicit-fresh always encode ac=0 in byte0
+        # (verified from workbench captures: 0x85 for recirc, 0x05 for fresh).
+        # AUTO mode and unfrost_front preserve the user's A/C setting (clim.ac).
+        # This keeps the simulator A/C button state independent of airflow mode.
+        if clim.auto or clim.unfrost_front or not clim.intake_explicit:
+            ac_enc = clim.ac
+        else:
+            ac_enc = 0
+        b1 = recirc_bit | (ac_enc << 4) | mode_bits | notify_bit | clim.dual
         b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right

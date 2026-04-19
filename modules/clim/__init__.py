@@ -66,6 +66,11 @@ class Clim(TabbedPanelItem):
             'HI'
         ]
 
+        # Guard flag: prevents Kivy widget state updates from re-entering
+        # UI-callback handlers (on_airflow_mode, on_ac, etc.) while
+        # _update_options() is running its programmatic state sync.
+        self._updating_ui = False
+
         self._update_fan(clim.fan)
         self._update_temps()
         self._update_options()
@@ -118,6 +123,8 @@ class Clim(TabbedPanelItem):
         self._update_dir_buttons()
 
     def on_clim_on(self, state):
+        if getattr(self, '_updating_ui', False):
+            return
         clim = self._clim
         clim.enabled = (state == 'down')
         logger.info('Climate panel %s', 'ON' if state == 'down' else 'OFF')
@@ -128,6 +135,8 @@ class Clim(TabbedPanelItem):
         self._update_options()
 
     def on_ac(self, state):
+        if getattr(self, '_updating_ui', False):
+            return
         if not self._is_ignition_on():
             self._update_options()
             return
@@ -148,10 +157,17 @@ class Clim(TabbedPanelItem):
         - 'recirc'        : Cabin recirculation
         - 'fresh'         : Outside fresh air (no auto, no defrost, no recirculation)
         """
+        if getattr(self, '_updating_ui', False):
+            return
         if state != 'down' or not self._is_ignition_on():
             self._update_options()
             return
         clim = self._clim
+        # Capture prior state BEFORE modifying clim.auto / clim.enabled below —
+        # these flags govern popup and re-enable logic and must reflect the
+        # state the user was in when the button was pressed.
+        was_active_non_auto = clim.enabled and not clim.auto
+        was_standby = not clim.enabled
         clim.auto = 1 if mode == 'auto' else 0
         clim.unfrost_front = 1 if mode == 'unfrost_front' else 0
         clim.recycle = 1 if mode == 'recirc' else 0
@@ -160,12 +176,35 @@ class Clim(TabbedPanelItem):
         # This gates the bit2 (0x04) mode indicator in 0x1E3 byte0 and the
         # bit5 (0x20) non-auto flag in 0x1D0 byte4 (workbench-verified).
         clim.intake_explicit = (mode != 'auto')
+        # Workbench: recirc and fresh modes encode ac=0 in the 0x1E3 byte0 frame
+        # (handled in Msg1E3.encode), but the user's A/C preference (clim.ac) is
+        # preserved — the physical A/C button state is not changed on the real bench.
+        if mode in ('recirc', 'fresh'):
+            # Set the one-shot notification flag so that the next 0x1E3 frame
+            # includes bit1 (0x02) — the real BSI does this for exactly one
+            # frame to trigger the MFD popup ("Cabin air recycling activated"
+            # for recirc, "Forced intake of outside air" for fresh).
+            # Workbench: 0x87 = 0x85|0x02 on recirc entry; 0x07 = 0x05|0x02
+            # on fresh entry.  See workbench_airflow.csv analysis.
+            clim.intake_notify = True
         if mode == 'auto':
             # In AUTO mode the climate controller manages direction; reset to auto.
             clim.dir_left = 0x00
             clim.dir_right = 0x00
             clim.ac = 1  # AUTO mode always has A/C on
             self._update_dir_buttons()
+            if was_standby:
+                # Pressing AUTO while in standby (fan=0) re-enables climate at
+                # minimum fan speed — workbench-verified: fan=1 after AUTO from standby.
+                clim.enabled = True
+                self._update_fan(1)
+            elif was_active_non_auto:
+                # Transition from an active non-AUTO mode (recirc/fresh/unfrost) to AUTO:
+                # show MFD popup — workbench: flag=0x80, msg_id=0x08, display=0x41.
+                mfd = self.runner.car.mfd_popup
+                mfd.msg_id = 0x08
+                mfd.flag = 0x80
+                mfd.display_flags = 0x41
         logger.info('Climate airflow mode: %s', mode)
         self._update_options()
 
@@ -194,6 +233,8 @@ class Clim(TabbedPanelItem):
             self.ids[f'cur_temp{zone}'].text = f'{self._temp_label(temp)}c'
 
     def on_option(self, option, value):
+        if getattr(self, '_updating_ui', False):
+            return
         if not self._is_ignition_on():
             self._update_options()
             return
@@ -237,6 +278,12 @@ class Clim(TabbedPanelItem):
             # direction, temps) so they can be restored when fan is raised again.
             self._clim.enabled = False
             self._update_fan(0)
+            # Workbench: at fan=0 (standby) 0x1A1 transitions to flag=0x00,
+            # msg_id=0x65, display=0x41.
+            mfd = self.runner.car.mfd_popup
+            mfd.flag = 0x00
+            mfd.msg_id = 0x65
+            mfd.display_flags = 0x41
             self._update_options()
             return
         clim = self._clim
@@ -327,6 +374,15 @@ class Clim(TabbedPanelItem):
             self.ids['cur_temp1'].text = f'{self._temp_label(clim.temp_right)}c'
 
     def _update_options(self):
+        # Set the guard so that Kivy on_state callbacks triggered by programmatic
+        # widget state changes below do not re-enter the mode handlers.
+        self._updating_ui = True
+        try:
+            self._update_options_inner()
+        finally:
+            self._updating_ui = False
+
+    def _update_options_inner(self):
         clim = self._clim
         # ON / A/C power buttons
         if 'clim_on' in self.ids:

@@ -131,6 +131,7 @@ class TestVirtualCarDefaults:
         car = VirtualCar()
         assert car.mfd_popup.flag == 0xFF
         assert car.mfd_popup.msg_id == 0x00
+        assert car.mfd_popup.display_flags == 0xC6
 
     def test_bsi_new_fields_defaults(self):
         """New PSA-RE fields: blinkers and oil_level should have correct defaults."""
@@ -430,6 +431,36 @@ class TestClimUiHelpers:
         assert widget.runner.car.clim.dir_left == 0x07
         assert widget.runner.car.clim.dir_right == 0x07
 
+    def test_updating_ui_guard_suppresses_airflow_mode_callback(self):
+        """_update_options sets _updating_ui=True so programmatic widget state
+        changes (e.g. when exiting AUTO via a direction button) do not re-enter
+        on_airflow_mode and incorrectly trigger intake_notify or reset clim.ac."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget._updating_ui = True
+        widget.runner.car.clim.recycle = 0
+        widget.runner.car.clim.intake_notify = False
+        widget.runner.car.clim.ac = 1
+        widget.on_airflow_mode('recirc', 'down')
+        # Guard active → none of the state should have changed
+        assert widget.runner.car.clim.recycle == 0
+        assert widget.runner.car.clim.intake_notify is False
+        assert widget.runner.car.clim.ac == 1
+
+    def test_on_dir_from_auto_in_mono_does_not_set_intake_notify(self):
+        """Pressing a direction button while in AUTO (mono mode) exits AUTO but
+        must NOT set intake_notify — no MFD popup should appear for direction changes.
+        DummyWidget does not fire on_state callbacks, so this directly verifies that
+        on_dir itself does not set intake_notify."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.auto = 1
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.intake_notify = False
+        widget.on_dir(0, 0x04, 'down')
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.dir_left == 0x04
+        assert widget.runner.car.clim.intake_notify is False
+
     def test_idle_1d0_monitor_update_does_not_clear_left_button(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
@@ -666,28 +697,115 @@ class TestClimUiHelpers:
 
     def test_on_airflow_mode_recirc(self):
         widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1  # start with A/C on
         widget.on_airflow_mode('recirc', 'down')
         assert widget.runner.car.clim.auto == 0
         assert widget.runner.car.clim.unfrost_front == 0
         assert widget.runner.car.clim.recycle == 1
+        # A/C user preference is preserved; ac=0 is only encoded in the CAN frame
+        # by Msg1E3 (workbench-verified: 0x1E3 byte0 ac bit = 0 for recirc).
+        assert widget.runner.car.clim.ac == 1
         assert widget.ids['intake_recycle'].state == 'down'
         assert widget.ids['mode_recirc'].state == 'down'
+        # Workbench: one-shot notification bit triggers MFD popup.
+        assert widget.runner.car.clim.intake_notify is True
 
     def test_on_airflow_mode_fresh(self):
         widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1  # start with A/C on
         widget.runner.car.clim.recycle = 1
         widget.on_airflow_mode('fresh', 'down')
         assert widget.runner.car.clim.auto == 0
         assert widget.runner.car.clim.unfrost_front == 0
         assert widget.runner.car.clim.recycle == 0
+        # A/C user preference is preserved; ac=0 is only encoded in the CAN frame
+        # by Msg1E3 (workbench-verified: 0x1E3 byte0 ac bit = 0 for explicit fresh).
+        assert widget.runner.car.clim.ac == 1
         assert widget.ids['mode_fresh'].state == 'down'
         assert widget.ids['mode_recirc'].state == 'normal'
+        # Workbench: one-shot notification bit triggers MFD popup.
+        assert widget.runner.car.clim.intake_notify is True
+
+    def test_on_airflow_mode_unfrost_front_preserves_ac(self):
+        """Workbench-verified: unfrost_front does NOT turn A/C off (0x1E3 byte0 ac bit stays)."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1
+        widget.on_airflow_mode('unfrost_front', 'down')
+        assert widget.runner.car.clim.ac == 1  # A/C preserved
 
     def test_on_airflow_mode_ignored_when_ignition_off(self):
         widget = self._make_clim_widget(ignition_on=False)
         widget.runner.car.clim.auto = 0
         widget.on_airflow_mode('auto', 'down')
         assert widget.runner.car.clim.auto == 0  # not changed
+
+    def test_on_airflow_mode_auto_from_standby_reenables_climate_at_fan1(self):
+        """Pressing AUTO while climate is in standby (fan=0) re-enables it at fan=1.
+        Workbench-verified: after fan→0 standby then AUTO pressed, climate is
+        immediately active with auto mode and fan level 1.
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = False  # standby
+        widget.runner.car.clim.fan = 0
+        widget.on_airflow_mode('auto', 'down')
+        assert widget.runner.car.clim.enabled is True
+        assert widget.runner.car.clim.fan == 1
+        assert widget.runner.car.clim.auto == 1
+
+    def test_on_airflow_mode_auto_from_standby_does_not_trigger_popup(self):
+        """Pressing AUTO from standby must NOT trigger a 0x1A1 popup (workbench shows
+        the 0x1A1 frame stays at 00 65 41 rather than switching to 80 08 41).
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = False  # standby
+        widget.runner.car.clim.fan = 0
+        widget.runner.car.mfd_popup.flag = 0x00
+        widget.runner.car.mfd_popup.msg_id = 0x65
+        widget.on_airflow_mode('auto', 'down')
+        # popup must NOT have changed to active state
+        assert widget.runner.car.mfd_popup.flag != 0x80
+
+    def test_on_airflow_mode_auto_from_recirc_triggers_mfd_popup(self):
+        """Pressing AUTO from an active non-auto state triggers MFD popup
+        with msg_id=0x08 and display_flags=0x41 (workbench: 80 08 41).
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.auto = 0
+        widget.runner.car.clim.recycle = 1
+        widget.runner.car.clim.intake_explicit = True
+        widget.on_airflow_mode('auto', 'down')
+        mfd = widget.runner.car.mfd_popup
+        assert mfd.flag == 0x80
+        assert mfd.msg_id == 0x08
+        assert mfd.display_flags == 0x41
+
+    def test_on_airflow_mode_auto_from_auto_does_not_change_popup(self):
+        """Pressing AUTO when already in AUTO must NOT trigger a popup."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.auto = 1
+        widget.runner.car.mfd_popup.flag = 0xFF
+        widget.runner.car.mfd_popup.msg_id = 0x00
+        widget.on_airflow_mode('auto', 'down')
+        assert widget.runner.car.mfd_popup.flag == 0xFF  # unchanged
+
+    def test_on_fan_zero_sets_mfd_standby_state(self):
+        """Fan=0 (standby) must update 0x1A1 to workbench-observed flag=0x00,
+        msg_id=0x65, display_flags=0x41.
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.fan = 3
+        widget.on_fan(0)
+        mfd = widget.runner.car.mfd_popup
+        assert mfd.flag == 0x00
+        assert mfd.msg_id == 0x65
+        assert mfd.display_flags == 0x41
 
     def test_disabling_dual_mirrors_right_zone_to_left(self):
         widget = self._make_clim_widget(ignition_on=True)
@@ -1246,44 +1364,52 @@ class TestMsg1E3EncodeBenchAlignment:
         data = Msg1E3().encode(car)
         assert data[0] == 0x00
 
-    def test_byte0_explicit_fresh_ac_off_dual_gives_0x05(self):
-        """Workbench: explicit Fresh after AUTO, ac=0, dual=1 → byte0=0x05."""
+    def test_byte0_explicit_fresh_ac_preserved_dual_gives_0x05(self):
+        """Workbench: explicit Fresh → byte0=0x05 regardless of clim.ac state.
+
+        The user's A/C preference (clim.ac) is preserved in state; Msg1E3 encodes
+        ac=0 in byte0 when recirc/fresh is explicitly active (workbench-verified).
+        """
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
-        car.clim.ac = 0
+        car.clim.ac = 1   # A/C preference stays on in state
         car.clim.auto = 0
         car.clim.dual = 1
         car.clim.recycle = 0
         car.clim.intake_explicit = True   # Fresh explicitly selected
         data = Msg1E3().encode(car)
-        assert data[0] == 0x05  # 0x00 (no recirc) | 0x00 (ac=0) | 0x04 (explicit) | 0x01 (dual)
+        assert data[0] == 0x05  # 0x00 (no recirc) | 0x00 (ac forced to 0) | 0x04 (explicit) | 0x01 (dual)
 
-    def test_byte0_explicit_recirc_ac_off_dual_gives_0x85(self):
-        """Workbench: explicit Recirc, ac=0, dual=1 → byte0=0x85."""
+    def test_byte0_explicit_recirc_ac_preserved_dual_gives_0x85(self):
+        """Workbench: explicit Recirc → byte0=0x85 regardless of clim.ac state.
+
+        The user's A/C preference (clim.ac) is preserved in state; Msg1E3 encodes
+        ac=0 in byte0 when recirc/fresh is explicitly active (workbench-verified).
+        """
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
-        car.clim.ac = 0
+        car.clim.ac = 1   # A/C preference stays on in state
         car.clim.auto = 0
         car.clim.dual = 1
         car.clim.recycle = 1
         car.clim.intake_explicit = True   # Recirc explicitly selected
         data = Msg1E3().encode(car)
-        assert data[0] == 0x85  # 0x80 (recirc) | 0x00 (ac=0) | 0x04 (explicit) | 0x01 (dual)
+        assert data[0] == 0x85  # 0x80 (recirc) | 0x00 (ac forced to 0) | 0x04 (explicit) | 0x01 (dual)
 
-    def test_byte0_explicit_fresh_ac_on_dual_gives_0x15(self):
-        """Explicit Fresh with A/C still on, dual=1 → byte0=0x15."""
+    def test_byte0_unfrost_front_preserves_ac_in_frame(self):
+        """unfrost_front preserves clim.ac in the byte0 encoding (workbench: A/C unchanged)."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.ac = 1
         car.clim.auto = 0
         car.clim.dual = 1
-        car.clim.recycle = 0
+        car.clim.unfrost_front = 1
         car.clim.intake_explicit = True
         data = Msg1E3().encode(car)
-        assert data[0] == 0x15  # 0x00 | 0x10 (ac) | 0x04 (explicit) | 0x01 (dual)
+        assert data[0] & 0x10  # ac bit still set (0x10) — unfrost preserves A/C
 
     def test_standby_byte0_encodes_ac_and_dual_with_0x20(self):
         """Workbench fan=0 standby: byte0=(ac<<4)|0x20|dual; fan=0x0F; temps preserved."""
@@ -1321,6 +1447,71 @@ class TestMsg1E3EncodeBenchAlignment:
         data = Msg1E3().encode(car)
         assert data[2] == 14
         assert data[3] == 9
+
+    def test_recirc_notify_sets_bit1_on_first_frame(self):
+        """Workbench: 0x1E3 byte0=0x87 (0x85|0x02) on first frame after recirc entry.
+
+        clim.ac is preserved as 1 in state; Msg1E3 encodes ac=0 in the frame.
+        """
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 1   # A/C preference preserved in state
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = True   # set by on_airflow_mode('recirc')
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x87  # 0x85 | 0x02 — matches workbench recirc entry frame
+
+    def test_recirc_notify_cleared_after_first_frame(self):
+        """intake_notify is one-shot: Msg1E3.encode consumes it and clears the flag."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 1   # A/C preference preserved in state
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = True
+        Msg1E3().encode(car)
+        assert car.clim.intake_notify is False
+        # Second frame: no notify bit → back to 0x85
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x85
+
+    def test_fresh_notify_sets_bit1_on_first_frame(self):
+        """Workbench: 0x1E3 byte0=0x07 (0x05|0x02) on first frame after fresh entry.
+
+        clim.ac is preserved as 1 in state; Msg1E3 encodes ac=0 in the frame.
+        """
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 1   # A/C preference preserved in state
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = True   # set by on_airflow_mode('fresh')
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x07  # 0x05 | 0x02 — matches workbench fresh entry frame
+
+    def test_no_notify_bit_without_flag(self):
+        """Without intake_notify, stable recirc byte0 stays at 0x85 (no bit1)."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 1   # A/C preference preserved in state
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        car.clim.intake_notify = False
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x85  # stable recirc, no popup bit
 
 
 class TestMsg12DEncode:
@@ -1376,6 +1567,17 @@ class TestMsg12DEncode:
         car.mfd_popup.msg_id = 0xDE
         assert Msg1A1().encode(car) == [0x00, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+    def test_uses_mfd_popup_display_flags_when_set(self):
+        """Msg1A1 byte2 must use mfd_popup.display_flags (not a fixed constant).
+        Workbench: climate AUTO popup uses 0x41 as the display/priority byte.
+        """
+        car = VirtualCar()
+        car.mfd_popup.flag = 0x80
+        car.mfd_popup.msg_id = 0x08
+        car.mfd_popup.display_flags = 0x41
+        data = Msg1A1().encode(car)
+        assert data == [0x80, 0x08, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00]
+
     def test_decode_updates_car(self):
         car = VirtualCar()
         Msg1A1().decode(car, [0x80, 0x42, 0xC6, 0, 0, 0, 0, 0])
@@ -1415,12 +1617,39 @@ class TestMsg1D0Encode:
         data = Msg1D0().encode(car)
         assert data[0] == 0x08  # workbench: AUTO mode, no manual-distribution bit
 
-    def test_byte0_manual_mode_has_0x20_bit(self):
-        """Workbench fan-speed test: manual mode adds 0x20 → byte0=0x28."""
+    def test_byte0_recirc_mode_uses_0x08_not_0x28(self):
+        """Workbench: recirc mode → byte0=0x08 (same as AUTO), NOT 0x28.
+        From workbench_airflow.csv: 08 00 00 00 30 0B 0B 00 when recirc is active.
+        """
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 0
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x08
+
+    def test_byte0_fresh_explicit_mode_uses_0x08_not_0x28(self):
+        """Workbench: explicit fresh mode → byte0=0x08 (same as AUTO), NOT 0x28.
+        From workbench_airflow.csv: 08 00 00 00 20 0B 0B 00 when fresh is active.
+        """
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x08
+
+    def test_byte0_manual_mode_has_0x20_bit(self):
+        """Workbench fan-speed test: manual mode (no auto, no explicit intake) adds 0x20 → byte0=0x28."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        car.clim.intake_explicit = False
         data = Msg1D0().encode(car)
         assert data[0] == 0x28  # 0x08 | 0x20
 
