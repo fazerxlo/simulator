@@ -8,14 +8,43 @@ from kivy.lang.builder import Builder
 _modname = 'Combine'
 _version = '0.0.1'
 
+
+class _DashboardOptionsProxy:
+    """Proxy used by the KV bindings to mutate shared dashboard state."""
+
+    FIELD_ALIASES = {
+        'coolant': 'coolant_warn',
+        'oil': 'oil_warn',
+    }
+
+    def __init__(self, dashboard):
+        self._dashboard = dashboard
+
+    def _field_name(self, key):
+        return self.FIELD_ALIASES.get(key, key)
+
+    def __getitem__(self, key):
+        return getattr(self._dashboard, self._field_name(key), 0)
+
+    def __setitem__(self, key, value):
+        setattr(self._dashboard, self._field_name(key), int(bool(value)))
+
+
 class Combine(TabbedPanelItem):
     _ignition_on = 0x01
+    _ui_to_dash = {
+        'coolant': 'coolant_warn',
+        'oil': 'oil_warn',
+    }
 
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
-        super(TabbedPanelItem, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.text = 'Combine'
         self.runner = runner
+
+        # Backward-compatible options mapping expected by the KV file.
+        self.options = _DashboardOptionsProxy(runner.car.dashboard)
 
         # Mark dashboard as active so that Msg128 and Msg168 (registered by
         # bsi-base) switch to the full combine encoding.  No CAN TX callbacks
@@ -43,7 +72,7 @@ class Combine(TabbedPanelItem):
         dash.esp_blink = 0
         dash.tyre = 0
         dash.backlight = 0
-        dash.on = 0
+        dash.on = 1 if (runner.car.bsi.ignition_on or int(runner.car.bsi.power_mode) == self._ignition_on) else 0
         dash.low_beam = 0
         dash.high_beam = 0
         dash.fog_front = 0
@@ -73,21 +102,25 @@ class Combine(TabbedPanelItem):
         """Convenience accessor for the shared dashboard car state."""
         return self.runner.car.dashboard
 
+    def _dash_field(self, key):
+        return self._ui_to_dash.get(key, key)
+
     def _sync_ui_from_options(self):
         """Update all UI elements to match current dashboard state."""
         dash = self._dash
+        ids = getattr(self, 'ids', {})
         for key in ('airbag_pass', 'seatbelt', 'brakes', 'low_fuel', 'preheat',
                     'warn', 'stop', 'doors', 'esp', 'esp_blink', 'tyre',
                     'backlight', 'on', 'low_beam', 'high_beam', 'fog_front',
-                    'fog_rear', 'clig_r', 'clig_l', 'coolant_warn', 'oil_blink',
-                    'coolant_blink', 'oil_warn', 'abs', 'obd', 'gas_water',
+                    'fog_rear', 'clig_r', 'clig_l', 'coolant', 'oil_blink',
+                    'coolant_blink', 'oil', 'abs', 'obd', 'gas_water',
                     'airbag', 'battery', 'dae', 'eco_blink', 'eco',
                     'battery_blink', 'obd_blink'):
-            if key in self.ids:
-                self.ids[key].state = 'down' if getattr(dash, key) else 'normal'
+            if key in ids:
+                ids[key].state = 'down' if getattr(dash, self._dash_field(key), 0) else 'normal'
 
     def on_option(self, option, value):
-        setattr(self._dash, option, 1 if value == 'down' else 0)
+        setattr(self._dash, self._dash_field(option), 1 if value == 'down' else 0)
 
     def on_can_message(self, msg):
         if msg.arbitration_id == 0x036 and len(msg.data) >= 5:

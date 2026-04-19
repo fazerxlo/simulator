@@ -102,6 +102,8 @@ A test is considered **PASS** only when all of the following are true:
 
 Use these target periods when comparing against the bench:
 
+> The simulator now targets the workbench cadence with a small scheduling lead of up to about 5% to compensate for thread jitter. Slightly earlier simulator frames within that margin are acceptable.
+
 | Frame | Typical period |
 |---|---:|
 | 0x0B6 | 50 ms |

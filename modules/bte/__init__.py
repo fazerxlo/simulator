@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.app import App
@@ -10,6 +11,8 @@ from can_messages import Msg12B
 
 _modname = 'BTE'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class BTE(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
@@ -23,7 +26,7 @@ class BTE(TabbedPanelItem):
         Builder.apply(self)
 
         # Register per-CAN-ID message object.
-        print('registering BSI calls')
+        logger.debug('registering BTE module')
         runner.register_message(Msg12B())
 
         # Initialise BTE state on the shared VirtualCar.
