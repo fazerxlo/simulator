@@ -398,8 +398,28 @@ class TestClimUiHelpers:
 
     def test_on_dir_accepts_down_state_transition(self):
         widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.dir_left = 0x04
         widget.on_dir(1, 0x05, 'down')
+        assert widget.runner.car.clim.dual == 1
         assert widget.runner.car.clim.dir_right == 0x05
+
+    def test_on_dir_right_same_as_left_keeps_mono_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.auto = 0
+        widget.runner.car.clim.dir_left = 0x04
+        widget.runner.car.clim.dir_right = 0x04
+
+        widget.on_dir(1, 0x04, 'down')
+
+        assert widget.runner.car.clim.dual == 0
+        assert widget.runner.car.clim.dir_left == 0x04
+        assert widget.runner.car.clim.dir_right == 0x04
+        assert widget.ids['left_up'].state == 'down'
+        assert widget.ids['right_up'].state == 'down'
+        assert widget.ids['dual'].state == 'normal'
 
     def test_on_dir_left_mirrors_right_in_mono_mode(self):
         widget = self._make_clim_widget(ignition_on=True)
