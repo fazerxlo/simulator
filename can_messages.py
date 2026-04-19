@@ -559,7 +559,8 @@ class Msg1A1(CanMessage):
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00
         msg_id = p.msg_id if p.msg_id not in (None, 0x00) else self.IDLE_MESSAGE_ID
-        return [flag, msg_id, self.DISPLAY_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+        display_flags = getattr(p, 'display_flags', self.DISPLAY_FLAGS)
+        return [flag, msg_id, display_flags, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 2:
@@ -732,8 +733,8 @@ class Msg1D0(CanMessage):
         dir_byte = (dir_left << 4) | dir_right
         if clim.unfrost_front:
             b0 = 0x19  # 0x08 | 0x11
-        elif clim.auto:
-            b0 = 0x08  # AUTO mode — no manual-distribution bit
+        elif clim.auto or clim.intake_explicit:
+            b0 = 0x08  # AUTO mode or explicit intake (recirc/fresh) — no manual-distribution bit
         else:
             b0 = 0x28  # 0x08 | 0x20 — manual fan/direction mode
         # Byte 4 bit layout (workbench-verified from clima_auto_inside_outside_auto.csv):

@@ -131,6 +131,7 @@ class TestVirtualCarDefaults:
         car = VirtualCar()
         assert car.mfd_popup.flag == 0xFF
         assert car.mfd_popup.msg_id == 0x00
+        assert car.mfd_popup.display_flags == 0xC6
 
     def test_bsi_new_fields_defaults(self):
         """New PSA-RE fields: blinkers and oil_level should have correct defaults."""
@@ -688,6 +689,74 @@ class TestClimUiHelpers:
         widget.runner.car.clim.auto = 0
         widget.on_airflow_mode('auto', 'down')
         assert widget.runner.car.clim.auto == 0  # not changed
+
+    def test_on_airflow_mode_auto_from_standby_reenables_climate_at_fan1(self):
+        """Pressing AUTO while climate is in standby (fan=0) re-enables it at fan=1.
+        Workbench-verified: after fan→0 standby then AUTO pressed, 0x1E3 immediately
+        shows auto mode active and fan byte = raw 0x00 (fan level 1).
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = False  # standby
+        widget.runner.car.clim.fan = 0
+        widget.on_airflow_mode('auto', 'down')
+        assert widget.runner.car.clim.enabled is True
+        assert widget.runner.car.clim.fan == 1
+        assert widget.runner.car.clim.auto == 1
+
+    def test_on_airflow_mode_auto_from_standby_does_not_trigger_popup(self):
+        """Pressing AUTO from standby must NOT trigger a 0x1A1 popup (workbench shows
+        the 0x1A1 frame stays at 00 65 41 rather than switching to 80 08 41).
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = False  # standby
+        widget.runner.car.clim.fan = 0
+        widget.runner.car.mfd_popup.flag = 0x00
+        widget.runner.car.mfd_popup.msg_id = 0x65
+        widget.on_airflow_mode('auto', 'down')
+        # popup must NOT have changed to active state
+        assert widget.runner.car.mfd_popup.flag != 0x80
+
+    def test_on_airflow_mode_auto_from_recirc_triggers_mfd_popup(self):
+        """Pressing AUTO from an active non-auto state triggers MFD popup
+        with msg_id=0x08 and display_flags=0x41 (workbench: 80 08 41).
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.auto = 0
+        widget.runner.car.clim.recycle = 1
+        widget.runner.car.clim.intake_explicit = True
+        widget.on_airflow_mode('auto', 'down')
+        mfd = widget.runner.car.mfd_popup
+        assert mfd.flag == 0x80
+        assert mfd.msg_id == 0x08
+        assert mfd.display_flags == 0x41
+
+    def test_on_airflow_mode_auto_from_auto_does_not_change_popup(self):
+        """Pressing AUTO when already in AUTO must NOT trigger a popup."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.auto = 1
+        widget.runner.car.mfd_popup.flag = 0xFF
+        widget.runner.car.mfd_popup.msg_id = 0x00
+        widget.on_airflow_mode('auto', 'down')
+        assert widget.runner.car.mfd_popup.flag == 0xFF  # unchanged
+
+    def test_on_fan_zero_sets_mfd_standby_state(self):
+        """Fan=0 (standby) must update 0x1A1 to workbench-observed flag=0x00,
+        msg_id=0x65, display_flags=0x41.
+        """
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.fan = 3
+        widget.on_fan(0)
+        mfd = widget.runner.car.mfd_popup
+        assert mfd.flag == 0x00
+        assert mfd.msg_id == 0x65
+        assert mfd.display_flags == 0x41
 
     def test_disabling_dual_mirrors_right_zone_to_left(self):
         widget = self._make_clim_widget(ignition_on=True)
@@ -1376,6 +1445,17 @@ class TestMsg12DEncode:
         car.mfd_popup.msg_id = 0xDE
         assert Msg1A1().encode(car) == [0x00, 0xDE, 0xC6, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+    def test_uses_mfd_popup_display_flags_when_set(self):
+        """Msg1A1 byte2 must use mfd_popup.display_flags (not a fixed constant).
+        Workbench: climate AUTO popup uses 0x41 as the display/priority byte.
+        """
+        car = VirtualCar()
+        car.mfd_popup.flag = 0x80
+        car.mfd_popup.msg_id = 0x08
+        car.mfd_popup.display_flags = 0x41
+        data = Msg1A1().encode(car)
+        assert data == [0x80, 0x08, 0x41, 0x00, 0x00, 0x00, 0x00, 0x00]
+
     def test_decode_updates_car(self):
         car = VirtualCar()
         Msg1A1().decode(car, [0x80, 0x42, 0xC6, 0, 0, 0, 0, 0])
@@ -1415,12 +1495,39 @@ class TestMsg1D0Encode:
         data = Msg1D0().encode(car)
         assert data[0] == 0x08  # workbench: AUTO mode, no manual-distribution bit
 
-    def test_byte0_manual_mode_has_0x20_bit(self):
-        """Workbench fan-speed test: manual mode adds 0x20 → byte0=0x28."""
+    def test_byte0_recirc_mode_uses_0x08_not_0x28(self):
+        """Workbench: recirc mode → byte0=0x08 (same as AUTO), NOT 0x28.
+        From workbench_airflow.csv: 08 00 00 00 30 0B 0B 00 when recirc is active.
+        """
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 0
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x08
+
+    def test_byte0_fresh_explicit_mode_uses_0x08_not_0x28(self):
+        """Workbench: explicit fresh mode → byte0=0x08 (same as AUTO), NOT 0x28.
+        From workbench_airflow.csv: 08 00 00 00 20 0B 0B 00 when fresh is active.
+        """
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True
+        data = Msg1D0().encode(car)
+        assert data[0] == 0x08
+
+    def test_byte0_manual_mode_has_0x20_bit(self):
+        """Workbench fan-speed test: manual mode (no auto, no explicit intake) adds 0x20 → byte0=0x28."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 0
+        car.clim.intake_explicit = False
         data = Msg1D0().encode(car)
         assert data[0] == 0x28  # 0x08 | 0x20
 

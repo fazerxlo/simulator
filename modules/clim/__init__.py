@@ -152,6 +152,9 @@ class Clim(TabbedPanelItem):
             self._update_options()
             return
         clim = self._clim
+        # Track prior state to decide whether a popup is warranted.
+        was_active_non_auto = clim.enabled and not clim.auto
+        was_standby = not clim.enabled
         clim.auto = 1 if mode == 'auto' else 0
         clim.unfrost_front = 1 if mode == 'unfrost_front' else 0
         clim.recycle = 1 if mode == 'recirc' else 0
@@ -166,6 +169,18 @@ class Clim(TabbedPanelItem):
             clim.dir_right = 0x00
             clim.ac = 1  # AUTO mode always has A/C on
             self._update_dir_buttons()
+            if was_standby:
+                # Pressing AUTO while in standby (fan=0) re-enables climate at
+                # minimum fan speed — workbench-verified: fan=1 after AUTO from standby.
+                clim.enabled = True
+                self._update_fan(1)
+            elif was_active_non_auto:
+                # Transition from an active non-AUTO mode (recirc/fresh/unfrost) to AUTO:
+                # show MFD popup — workbench: flag=0x80, msg_id=0x08, display=0x41.
+                mfd = self.runner.car.mfd_popup
+                mfd.msg_id = 0x08
+                mfd.flag = 0x80
+                mfd.display_flags = 0x41
         logger.info('Climate airflow mode: %s', mode)
         self._update_options()
 
@@ -237,6 +252,12 @@ class Clim(TabbedPanelItem):
             # direction, temps) so they can be restored when fan is raised again.
             self._clim.enabled = False
             self._update_fan(0)
+            # Workbench: at fan=0 (standby) 0x1A1 transitions to flag=0x00,
+            # msg_id=0x65, display=0x41.
+            mfd = self.runner.car.mfd_popup
+            mfd.flag = 0x00
+            mfd.msg_id = 0x65
+            mfd.display_flags = 0x41
             self._update_options()
             return
         clim = self._clim

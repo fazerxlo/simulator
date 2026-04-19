@@ -317,6 +317,7 @@ class MFDPopup:
     def __init__(self):
         self.flag = 0xFF   # 0xFF = inactive / no message pending
         self.msg_id = 0x00
+        self.display_flags = 0xC6  # default display/priority flags for 0x1A1 byte2
 
 
 class SpeedControl:
