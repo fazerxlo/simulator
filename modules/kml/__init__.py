@@ -7,7 +7,7 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg1A3, Msg223, Msg323
+from generated.kml_messages import Msg1A3, Msg223, Msg323
 
 _modname = 'KML'
 _modversion = '0.0.1'

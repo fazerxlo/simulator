@@ -4,7 +4,7 @@ from kivy.app import App
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import Msg0E1
+from generated.parktronic_messages import Msg0E1
 
 _modname = 'Parktronic'
 _modversion = '0.0.1'

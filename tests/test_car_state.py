@@ -954,7 +954,7 @@ class TestCombineUiHelpers:
 # can_messages tests
 # ---------------------------------------------------------------------------
 
-from can_messages import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
+from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
@@ -2998,7 +2998,7 @@ class TestMsg1D0AwpCompare:
 # See doc/CAN2004_radio.md for full signal documentation.
 # ---------------------------------------------------------------------------
 
-from can_messages import Msg165, Msg1E5, Msg1E0, Msg225, Msg265, Msg2A5
+from generated import Msg165, Msg1E5, Msg1E0, Msg225, Msg265, Msg2A5
 
 
 class TestMsg165RadioSource:
@@ -3487,7 +3487,7 @@ class TestRadioToggleGroupHelper:
 # Msg0A4 – RDS RadioText (ISO 15765-2) decode
 # ---------------------------------------------------------------------------
 
-from can_messages import Msg0A4
+from generated import Msg0A4
 
 
 class TestMsg0A4RadioText:
