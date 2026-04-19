@@ -62,7 +62,7 @@ Three operating conditions:
 | 1    | Constant `0x00`                                                         |
 | 2    | Fan speed raw value (see [Fan encoding](#fan-encoding))                 |
 | 3    | High nibble = left zone air distribution, low nibble = right zone       |
-| 4    | Bit 5 = recirculation (`recycle`), Bit 4 = front demist (`unfrost_front`) |
+| 4    | Bit 5 = explicit non-auto intake mode (`intake_explicit`), Bit 4 = recirculation (`recycle`) |
 | 5    | Left zone temperature index (see [Temperature index](#temperature-index)) |
 | 6    | Right zone temperature index                                            |
 | 7    | Constant `0x00`                                                         |
@@ -82,7 +82,9 @@ Three operating conditions:
 |-----------------------------------|------------------------------------------------------|
 | `08 00 02 00 00 0B 0B 00`         | AUTO mode, fan 3, both zones 21°C, both dir=auto     |
 | `28 00 02 42 00 08 0A 00`         | Manual mode, left dir=up(4), right dir=down(2)       |
-| `19 00 02 11 10 08 0A 00`         | Front demist active, recirculation on                |
+| `28 00 02 42 20 08 0A 00`         | Explicit Fresh, manual, left dir=up(4)               |
+| `28 00 02 42 30 08 0A 00`         | Explicit Recirc, manual, left dir=up(4)              |
+| `19 00 02 11 20 08 0A 00`         | Front demist active                                  |
 | `A8 00 0F 00 00 0B 0B 00`         | Standby (fan=0), both zone temps preserved at 21°C   |
 
 ---
@@ -116,20 +118,37 @@ Three operating conditions:
 
 ### Byte 0 — mode flags
 
-`mode_bits = 0x0C` when `auto=1` (bits 2 and 3 both set); `mode_bits = 0x00` when `auto=0`.
+`mode_bits` depends on auto and explicit intake state:
+- `0x0C` when `auto=1` (bits 2 and 3 both set — AUTO indicator)
+- `0x04` when `auto=0` and an explicit intake mode was selected by the user (bit 2 = explicit non-AUTO intake)
+- `0x00` when `auto=0` and intake mode was not explicitly set (e.g. after raising fan from standby)
+
+Bit 7 (`0x80`) is the recirculation indicator — set when `recycle=1`.
 
 ```python
-mode_bits = 0x0C if clim.auto else 0x00
-byte0 = (clim.ac << 4) | mode_bits | clim.dual
+if clim.auto:
+    mode_bits = 0x0C
+elif clim.intake_explicit:
+    mode_bits = 0x04
+else:
+    mode_bits = 0x00
+recirc_bit = 0x80 if clim.recycle else 0x00
+byte0 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
 ```
 
-| Value  | ac | auto | dual | Condition              |
-|--------|----|------|------|------------------------|
-| `0x1C` | 1  | 1    | 0    | Auto mode, single zone |
-| `0x1D` | 1  | 1    | 1    | Auto mode, dual zone   |
-| `0x10` | 1  | 0    | 0    | Manual, single zone    |
-| `0x11` | 1  | 0    | 1    | Manual, dual zone      |
-| `0x0C` | 0  | 1    | 0    | A/C off, auto mode     |
+| Value  | ac | auto | intake_explicit | recycle | dual | Condition                        |
+|--------|----|------|-----------------|---------|------|----------------------------------|
+| `0x1C` | 1  | 1    | —               | 0       | 0    | Auto mode, single zone           |
+| `0x1D` | 1  | 1    | —               | 0       | 1    | Auto mode, dual zone             |
+| `0x10` | 1  | 0    | 0               | 0       | 0    | Implicit manual, single zone     |
+| `0x11` | 1  | 0    | 0               | 0       | 1    | Implicit manual, dual zone       |
+| `0x05` | 0  | 0    | 1               | 0       | 1    | Explicit Fresh, ac=off, dual     |
+| `0x85` | 0  | 0    | 1               | 1       | 1    | Explicit Recirc, ac=off, dual    |
+| `0x0C` | 0  | 1    | —               | 0       | 0    | A/C off, auto mode               |
+
+> **Note**: `intake_explicit` is set when the user presses Fresh, Recirc, or UnfrostFront explicitly.
+> It is cleared when AUTO mode is selected or climate is fully reset (ON button off).
+> Raising the fan from standby does **not** set `intake_explicit`.
 
 ---
 

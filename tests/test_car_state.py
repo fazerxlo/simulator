@@ -1169,24 +1169,26 @@ class TestMsg1E3EncodeBenchAlignment:
         assert data[0] == 0x1D  # (1<<4) | 0x0C | 1
 
     def test_byte0_manual_ac_no_dual_gives_0x10(self):
-        """Manual mode (auto=0), A/C on, no dual: byte0=0x10 (no mode-bits constant)."""
+        """Manual mode (implicit fresh, auto=0, intake_explicit=False), A/C on, no dual: byte0=0x10."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 0
         car.clim.ac = 1
         car.clim.dual = 0
+        # intake_explicit=False (default) → mode_bits=0x00; matches fanoff workbench 0x10
         data = Msg1E3().encode(car)
         assert data[0] == 0x10  # (1<<4) | 0 | 0
 
     def test_byte0_manual_ac_dual_gives_0x11(self):
-        """Workbench fan-speed test: manual, A/C on, dual=1 → byte0=0x11."""
+        """Workbench fan-speed test (fanoff): implicit manual, A/C on, dual=1 → byte0=0x11."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.auto = 0
         car.clim.ac = 1
         car.clim.dual = 1
+        # intake_explicit=False (default) → mode_bits=0x00; matches fanoff workbench 0x11
         data = Msg1E3().encode(car)
         assert data[0] == 0x11  # (1<<4) | 0 | 1
 
@@ -1233,15 +1235,55 @@ class TestMsg1E3EncodeBenchAlignment:
         assert data[0] == 0x0C  # 0x04 | 0 | 0x08 | 0
 
     def test_byte0_ac_off_manual_gives_0x00(self):
-        """A/C off, manual mode: (0<<4)|0|0 = 0x00 — no mode-bits in manual."""
+        """A/C off, implicit manual mode (intake_explicit=False): (0<<4)|0|0 = 0x00."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.ac = 0
         car.clim.auto = 0
         car.clim.dual = 0
+        # intake_explicit=False → mode_bits=0x00
         data = Msg1E3().encode(car)
         assert data[0] == 0x00
+
+    def test_byte0_explicit_fresh_ac_off_dual_gives_0x05(self):
+        """Workbench: explicit Fresh after AUTO, ac=0, dual=1 → byte0=0x05."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True   # Fresh explicitly selected
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x05  # 0x00 (no recirc) | 0x00 (ac=0) | 0x04 (explicit) | 0x01 (dual)
+
+    def test_byte0_explicit_recirc_ac_off_dual_gives_0x85(self):
+        """Workbench: explicit Recirc, ac=0, dual=1 → byte0=0x85."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 0
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True   # Recirc explicitly selected
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x85  # 0x80 (recirc) | 0x00 (ac=0) | 0x04 (explicit) | 0x01 (dual)
+
+    def test_byte0_explicit_fresh_ac_on_dual_gives_0x15(self):
+        """Explicit Fresh with A/C still on, dual=1 → byte0=0x15."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.ac = 1
+        car.clim.auto = 0
+        car.clim.dual = 1
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True
+        data = Msg1E3().encode(car)
+        assert data[0] == 0x15  # 0x00 | 0x10 (ac) | 0x04 (explicit) | 0x01 (dual)
 
     def test_standby_byte0_encodes_ac_and_dual_with_0x20(self):
         """Workbench fan=0 standby: byte0=(ac<<4)|0x20|dual; fan=0x0F; temps preserved."""
@@ -2578,23 +2620,55 @@ class TestMsg1D0AwpCompare:
         data = Msg1D0().encode(car)
         assert data[2] == 0x02
 
-    def test_recycle_at_byte4_bit5(self):
-        """autowp: 'A = Air recycling enabled' — verify position."""
+    def test_recirc_byte4_is_0x30_when_intake_explicit(self):
+        """Workbench: recirc mode → byte4=0x30 (bit5=non-auto, bit4=recirc)."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.recycle = 1
+        car.clim.intake_explicit = True
         data = Msg1D0().encode(car)
-        assert (data[4] >> 5) & 1 == 1
+        assert data[4] == 0x30  # 0x20 (non-auto intake) | 0x10 (recirc)
 
-    def test_windshield_blowing_at_byte4_bit4(self):
-        """autowp: 'W = Windshield blowing enabled' — verify position."""
+    def test_fresh_explicit_byte4_is_0x20(self):
+        """Workbench: explicitly pressing Fresh → byte4=0x20 (non-auto flag, no recirc)."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.recycle = 0
+        car.clim.intake_explicit = True
+        data = Msg1D0().encode(car)
+        assert data[4] == 0x20  # 0x20 (non-auto intake) | 0x00 (no recirc)
+
+    def test_auto_mode_byte4_is_0x00(self):
+        """Workbench: AUTO mode → byte4=0x00 (no explicit intake flags)."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.auto = 1
+        car.clim.intake_explicit = False
+        data = Msg1D0().encode(car)
+        assert data[4] == 0x00
+
+    def test_recirc_bit4_is_recirc_indicator(self):
+        """Bit4 of byte4 = recirculation flag (not windshield blowing per earlier autowp docs)."""
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.recycle = 1
+        car.clim.intake_explicit = True
+        data = Msg1D0().encode(car)
+        assert (data[4] >> 4) & 1 == 1   # bit4 = recirc
+
+    def test_unfrost_front_does_not_set_byte4_bit4(self):
+        """Unfrost front is encoded in byte0 (0x19), not in byte4 bit4."""
         car = VirtualCar()
         car.clim.enabled = True
         car.bsi.ignition_on = True
         car.clim.unfrost_front = 1
+        car.clim.intake_explicit = False  # not explicitly set
         data = Msg1D0().encode(car)
-        assert (data[4] >> 4) & 1 == 1
+        assert (data[4] >> 4) & 1 == 0  # bit4 = recirc; unfrost_front is NOT recirc
 
     def test_direction_up_left_encodes_in_high_nibble(self):
         """For dir_left=4 ('Up'), byte 3 high nibble = 4; low nibble = dir_right."""

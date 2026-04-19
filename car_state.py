@@ -57,6 +57,10 @@ class Clim:
         # Default 1 (on) so that the existing workbench constant 0x14/0x1C is
         # produced without any extra module initialisation.
         self.ac = 1
+        # True when an explicit intake mode (Fresh, Recirc, or UnfrostFront) was
+        # activated by the user.  Clears on AUTO or full OFF reset.  Controls
+        # bit5 of 0x1D0 byte4 and bit2 of 0x1E3 byte0 per workbench analysis.
+        self.intake_explicit = False
         # Set to True by the clim module so that Msg1D0/Msg1E3 switch from the
         # BSI idle encoding to the full climate encoding.
         self.enabled = False

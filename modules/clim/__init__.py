@@ -89,6 +89,7 @@ class Clim(TabbedPanelItem):
         clim.unfrost_rear = 0
         clim.recycle = 0
         clim.auto = 0
+        clim.intake_explicit = False
         self._update_fan(clim.fan)
         self._update_temps()
         self._update_options()
@@ -154,6 +155,11 @@ class Clim(TabbedPanelItem):
         clim.auto = 1 if mode == 'auto' else 0
         clim.unfrost_front = 1 if mode == 'unfrost_front' else 0
         clim.recycle = 1 if mode == 'recirc' else 0
+        # AUTO clears the explicit-intake flag; any other mode sets it to
+        # mark that the user has deliberately selected a non-AUTO intake mode.
+        # This gates the bit2 (0x04) mode indicator in 0x1E3 byte0 and the
+        # bit5 (0x20) non-auto flag in 0x1D0 byte4 (workbench-verified).
+        clim.intake_explicit = (mode != 'auto')
         if mode == 'auto':
             # In AUTO mode the climate controller manages direction; reset to auto.
             clim.dir_left = 0x00
@@ -210,6 +216,7 @@ class Clim(TabbedPanelItem):
             self._update_options()
             return
         self._clim.recycle = 1 if recirculate else 0
+        self._clim.intake_explicit = True  # explicit intake mode selection
         logger.info('Climate intake %s', 'recirculate' if recirculate else 'fresh/outside')
         self._update_options()
 
@@ -374,8 +381,8 @@ class Clim(TabbedPanelItem):
             low = raw_dir & 0x0F
             if high and high == low:
                 self._clim.dir_left = high
-            self._clim.recycle = (msg.data[4] >> 5) & 1
-            self._clim.unfrost_front = (msg.data[4] >> 4) & 1
+            self._clim.recycle = (msg.data[4] >> 4) & 1
+            # Note: bit5 of byte4 = "non-auto intake" flag; unfrost_front decoded from 0x1E3
             self._clim.temp_left = msg.data[5]
             self._clim.temp_right = msg.data[6]
             self._update_temps()
@@ -388,6 +395,8 @@ class Clim(TabbedPanelItem):
             self._clim.ac = (msg.data[0] >> 4) & 1
             self._clim.auto = (msg.data[0] >> 3) & 1
             self._clim.dual = msg.data[0] & 1
+            # bit7 of byte0 = recirculation indicator (workbench-verified).
+            self._clim.recycle = (msg.data[0] >> 7) & 1
             self._clim.unfrost_front = (msg.data[1] >> 7) & 1
             self._clim.temp_left = msg.data[2] & 0x1F
             self._clim.temp_right = msg.data[3]

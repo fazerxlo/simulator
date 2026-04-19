@@ -736,7 +736,12 @@ class Msg1D0(CanMessage):
             b0 = 0x08  # AUTO mode — no manual-distribution bit
         else:
             b0 = 0x28  # 0x08 | 0x20 — manual fan/direction mode
-        b4 = clim.recycle << 5 | clim.unfrost_front << 4
+        # Byte 4 bit layout (workbench-verified from clima_auto_inside_outside_auto.csv):
+        #   bit5 (0x20): "explicit non-auto intake mode" — set when Fresh, Recirc, or
+        #                UnfrostFront was actively selected by the user.
+        #   bit4 (0x10): "recirculation" — set only when recirc is active.
+        # AUTO mode: byte4=0x00; Fresh explicit: 0x20; Recirc explicit: 0x30.
+        b4 = (0x20 if clim.intake_explicit else 0x00) | (0x10 if clim.recycle else 0x00)
         fan_raw = _encode_clim_fan(clim.fan)
         return [b0, 0x00, fan_raw, dir_byte, b4,
                 clim.temp_left, clim.temp_right, 0x00]
@@ -754,8 +759,8 @@ class Msg1D0(CanMessage):
         # per-side airflow state to 0x1E3 which carries both zones explicitly.
         if high and high == low:
             car.clim.dir_left = high
-        car.clim.recycle = (data[4] >> 5) & 1
-        car.clim.unfrost_front = (data[4] >> 4) & 1
+        # bit4 = recirculation (workbench-verified); bit5 = non-auto intake flag.
+        car.clim.recycle = (data[4] >> 4) & 1
         car.clim.temp_left = data[5]
         car.clim.temp_right = data[6]
 
@@ -785,12 +790,25 @@ class Msg1E3(CanMessage):
             b1 = (clim.ac << 4) | 0x20 | clim.dual
             b2 = 0x30 | (clim.unfrost_front << 7)
             return [b1, b2, clim.temp_left, clim.temp_right, 0x00, 0x00, 0x0F, 0x00]
-        # In AUTO mode bits 2+3 (0x0C) are set together; in manual mode they
-        # are both clear and only the dual bit at position 0 applies.
-        # Bit 3 = AUTO active, bit 2 = paired with AUTO (both set/clear together).
-        # Verified against workbench: auto=1,ac=1,dual=0 → 0x1C; auto=0,ac=1,dual=1 → 0x11
-        mode_bits = 0x0C if clim.auto else 0x00
-        b1 = (clim.ac << 4) | mode_bits | clim.dual
+        # In AUTO mode bits 2+3 (0x0C) are set together; when an explicit
+        # non-auto intake mode is active (Fresh/Recirc/UnfrostFront selected by
+        # the user) bit2 (0x04) alone is set; in implicit manual mode both are
+        # clear.  Bit 7 (0x80) is the recirculation indicator, set when
+        # clim.recycle=1.
+        # Verified against workbench:
+        #   auto=1, ac=1, dual=0        → 0x1C
+        #   auto=1, ac=1, dual=1        → 0x1D
+        #   auto=0, ac=1, dual=1 (implicit fresh, from standby raise) → 0x11
+        #   explicit fresh, ac=0, dual=1 → 0x05
+        #   explicit recirc, ac=0, dual=1 → 0x85
+        if clim.auto:
+            mode_bits = 0x0C
+        elif clim.intake_explicit:
+            mode_bits = 0x04
+        else:
+            mode_bits = 0x00
+        recirc_bit = 0x80 if clim.recycle else 0x00
+        b1 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
         b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right
@@ -808,6 +826,8 @@ class Msg1E3(CanMessage):
         car.clim.ac = (data[0] >> 4) & 1
         car.clim.auto = (data[0] >> 3) & 1
         car.clim.dual = data[0] & 1
+        # bit7 of byte0 = recirculation indicator (workbench-verified).
+        car.clim.recycle = (data[0] >> 7) & 1
         car.clim.unfrost_front = (data[1] >> 7) & 1
         car.clim.temp_left = data[2] & 0x1F
         car.clim.temp_right = data[3]
