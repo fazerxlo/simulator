@@ -38,7 +38,7 @@ The real CAN bus (and this simulator) uses `raw = (MHz − 50) / 0.05`:
 - 96 MHz → CAN raw = 920 → display = `920 × 0.05 + 50 = 96.0 MHz` ✓  
 The Arduino converts `CAN_raw / 2 + 500 = serial_raw`, so the encodings are consistent.
 
-**Confidence:** Verified — the audio-settings layout from `0x1E5` (Msg1E5 in `can_messages.py`)
+**Confidence:** Verified — the audio-settings layout from `0x1E5` (Msg1E5 in `generated/radio_messages.py`)
 exactly matches the ios-car-dashboard `AudioSettings.swift` / frame-0x10 parser.
 
 ---

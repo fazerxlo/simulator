@@ -259,7 +259,7 @@ The simulator now encodes/decodes this in `car.bsi.oil_level`.
 
 > ⚠️ **Correction:** Earlier workspace notes (from `peugeot407can.yaml` and `psa_pf2_comfort.md`)
 > described 0x168 as carrying ambient temperature and battery voltage. This was incorrect. PSA-RE
-> confirms that 0x168 is the **dashboard alert/fault indicator** frame. The `can_messages.py`
+> confirms that 0x168 is the **dashboard alert/fault indicator** frame. The `generated/bsi_messages.py`
 > `Msg168` implementation was already correct; only the documentation in `CAN_messages.md` was wrong.
 
 | Byte (1-idx) | Idx | Bits | Signal | Alt name |
@@ -324,7 +324,7 @@ mapping of `dash.coolant_warn` → byte 0 bit 7, `dash.abs` → byte 3 bit 5, an
 | **2-3** | **1-2** | **15-0** | **SET_SPEED** | VIT_CONS_LVV_RVV | **uint16 × 0.01 km/h, invalid 0xFFFF** |
 | **6-8** | **5-7** | **23-0** | **ODOMETER_PARTIAL** | ODO_PARTIEL | **uint24 × 0.001 km, invalid 0xFFFFFF** |
 
-The simulator now implements `Msg1A8` (see `can_messages.py`). State is held in
+The simulator now implements `Msg1A8` (see `generated/bsi_messages.py`). State is held in
 `car.speed_control` (`SpeedControl` in `car_state.py`).
 
 ```python

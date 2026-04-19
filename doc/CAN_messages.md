@@ -322,7 +322,7 @@ PSA-RE canonical name: `COMBINE_ALERTS_INDICATORS` / `CDE_COMBINE_TEMOINS`. Peri
 > `psa_pf2_comfort.md`) described 0x168 as carrying **ambient temperature** (byte 0) and
 > **battery voltage** (byte 1). **This was incorrect.** PSA-RE confirms that 0x168 is the
 > dashboard alert/fault indicator frame, not a temperature or voltage frame. The
-> `can_messages.py Msg168` implementation was already correct; only this documentation was wrong.
+> `generated/bsi_messages.py Msg168` implementation was already correct; only this documentation was wrong.
 
 The frame carries one indicator flag per bit across all 8 bytes. Selected signals:
 

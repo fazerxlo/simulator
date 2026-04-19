@@ -8,11 +8,12 @@ from kivy.clock import Clock
 from kivy.uix.tabbedpanel import TabbedPanelItem
 from kivy.lang.builder import Builder
 
-from can_messages import (
-    Msg036, Msg0B6, Msg0F6, Msg110, Msg12D, Msg128, Msg161, Msg168,
-    Msg190, Msg1A1, Msg1D0, Msg1E3, Msg217, Msg2B6, Msg336, Msg3B6, Msg52D,
+from generated.bsi_messages import (
+    Msg036, Msg0B6, Msg0F6, Msg110, Msg128, Msg161, Msg168,
+    Msg190, Msg1A1, Msg217, Msg2B6, Msg336, Msg3B6, Msg52D,
     STARTUP_WAKEUP_BURST,
 )
+from generated.clim_messages import Msg12D, Msg1D0, Msg1E3
 
 _modname = 'BSI_base'
 _modversion = '0.0.1'

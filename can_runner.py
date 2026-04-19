@@ -221,7 +221,7 @@ class CanRunner():
         self.messages.append(new_module)
 
     def register_message(self, msg):
-        """Register a :class:`~can_messages.CanMessage` object as the periodic
+        """Register a :class:`~generated.base.CanMessage` object as the periodic
         sender for its CAN arbitration ID.
 
         Only one object may own each ID.  A second registration for the same
