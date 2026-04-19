@@ -403,7 +403,7 @@ class Msg165(CanMessage):
 
     can_id = 0x165
     period_ms = 50
-    required_modules = frozenset({'radio-gen'})
+    required_modules = frozenset({'radio-gen', 'radio'})
 
     def encode(self, car) -> list:
         b2 = car.radio.INPUT_CODES.get(car.radio.input, 0x01) << 4
@@ -606,7 +606,7 @@ class Msg1A5(CanMessage):
 
     can_id = 0x1A5
     period_ms = 100
-    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd'})
+    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd', 'radio'})
 
     def encode(self, car) -> list:
         if car.buttons.active:
@@ -888,7 +888,7 @@ class Msg1E5(CanMessage):
 
     can_id = 0x1E5
     period_ms = 100
-    required_modules = frozenset({'radio-gen'})
+    required_modules = frozenset({'radio-gen', 'radio'})
 
     _AMBIANCE_CODES = {
         'none': 0x03, 'classical': 0x07, 'jazz-blues': 0x0B,
@@ -1169,7 +1169,7 @@ class Msg3E5(CanMessage):
 
     can_id = 0x3E5
     period_ms = 50
-    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd'})
+    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd', 'radio'})
 
     def encode(self, car) -> list:
         if car.buttons.active:
@@ -1223,6 +1223,118 @@ class Msg3E5(CanMessage):
         car.radio.panel['left'] = b5 & 1
 
 
+
+# ---------------------------------------------------------------------------
+# 0x1E0 – Radio internal status
+# ---------------------------------------------------------------------------
+
+class Msg1E0(CanMessage):
+    """Radio internal status frame (0x1E0).
+
+    Observed constant payload from the head unit; re-emitted by the radio
+    module so that the MFD and other listeners see an active head unit.
+    """
+
+    can_id = 0x1E0
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+
+    def encode(self, car) -> list:
+        return [0x24, 0x00, 0x00, 0x00, 0x20]
+
+    def decode(self, car, data: bytes) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# 0x225 – FM tuner status
+# ---------------------------------------------------------------------------
+
+class Msg225(CanMessage):
+    """FM tuner status: frequency, band, memory preset, RDS flags (0x225).
+
+    Frequency encoding: display_MHz = raw * 0.05 + 50.
+    Cross-referenced with ios-car-dashboard Arduino serial protocol.
+    """
+
+    can_id = 0x225
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+
+    def encode(self, car) -> list:
+        r = car.radio
+        b0 = (r.list_flag << 7 | r.tundir << 5 | r.scan << 3 |
+              r.rds << 2 | r.tun << 1 | r.pty)
+        return [b0, r.mem, r.band, r.freq >> 8, r.freq & 0xFF]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 5:
+            return
+        r = car.radio
+        r.list_flag = (data[0] >> 7) & 1
+        r.tundir = (data[0] >> 5) & 3
+        r.scan = (data[0] >> 3) & 1
+        r.rds = (data[0] >> 2) & 1
+        r.tun = (data[0] >> 1) & 1
+        r.pty = data[0] & 1
+        r.mem = data[1]
+        r.band = data[2]
+        r.freq = (data[3] << 8) | data[4]
+
+
+# ---------------------------------------------------------------------------
+# 0x265 – RDS / station info flags
+# ---------------------------------------------------------------------------
+
+class Msg265(CanMessage):
+    """RDS / station info flags (0x265).
+
+    Byte 0: status flags (TA, TP, RDS valid, etc.).
+    Byte 3: 0x00 = FM/tuner active, 0x01 = CD/CDC active.
+    """
+
+    can_id = 0x265
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+
+    def encode(self, car) -> list:
+        b0 = (1 << 5) | (1 << 4)   # TA (bit5) and TP (bit4) flags
+        b1 = (1 << 7) | (1 << 6) | (2 << 4)
+        b3 = 0x00 if car.radio.input == 'TUN' else 0x01
+        return [b0, b1, 0x01, b3]
+
+    def decode(self, car, data: bytes) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# 0x2A5 – Radio station name / RDS PS
+# ---------------------------------------------------------------------------
+
+class Msg2A5(CanMessage):
+    """Radio station name / RDS Programme Service name (0x2A5).
+
+    Payload is a raw ASCII string, left-justified, up to 8 bytes.
+    Cross-referenced with ios-car-dashboard serial frame 0x04.
+    """
+
+    can_id = 0x2A5
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+
+    def encode(self, car) -> list:
+        name = (car.radio.station_name or '')[:8]
+        return list(name.encode('ascii', errors='replace'))
+
+    def decode(self, car, data: bytes) -> None:
+        try:
+            car.radio.station_name = bytes(data).rstrip(b'\x00').decode(
+                'ascii', errors='replace'
+            )
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # 0x52D – BSI wake/sleep frame
 # ---------------------------------------------------------------------------
@@ -1249,8 +1361,8 @@ ALL_MESSAGES: dict[int, type] = {
     for cls in (
         Msg036, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
         Msg128, Msg161, Msg165, Msg168, Msg190, Msg1A1, Msg1A3,
-        Msg1A5, Msg1A8, Msg1D0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
-        Msg223, Msg2A1, Msg261, Msg2B6, Msg323, Msg336, Msg3B6,
-        Msg3E5, Msg52D,
+        Msg1A5, Msg1A8, Msg1D0, Msg1E0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
+        Msg223, Msg225, Msg265, Msg2A1, Msg261, Msg2A5, Msg2B6, Msg323, Msg336,
+        Msg3B6, Msg3E5, Msg52D,
     )
 }

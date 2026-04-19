@@ -199,6 +199,18 @@ class Radio:
             'rf-bal': 0x3F, 'lr-bal': 0x3F,
             'loudness': 0, 'volume': 0, 'ambiance': 'none', 'menu': 'none',
         }
+        # FM tuner state (used by the unified radio module and Msg225/Msg265/Msg2A5)
+        # raw CAN freq value; display_MHz = freq * 0.05 + 50 (default 96.0 MHz)
+        self.freq = 920
+        self.band = 0x00      # 0x00 = FM band 1; 0x50 = AM
+        self.mem = 0          # preset memory number (0 = none)
+        self.rds = 0
+        self.pty = 0
+        self.tun = 0
+        self.scan = 0
+        self.list_flag = 0
+        self.tundir = 0
+        self.station_name = 'test'
 
 
 class Trip:
