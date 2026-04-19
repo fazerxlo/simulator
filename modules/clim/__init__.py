@@ -105,11 +105,16 @@ class Clim(TabbedPanelItem):
             self._update_options()
         if seat == 0:
             clim.dir_left = dir
-        else:
             if not clim.dual:
+                # In mono mode the right zone is not independently adjustable,
+                # so mirror the selected airflow direction immediately.
+                clim.dir_right = dir
+        else:
+            if not clim.dual and clim.dir_left != dir:
                 clim.dual = 1
                 self._update_options()
             clim.dir_right = dir
+        self._update_dir_buttons()
 
     def on_clim_on(self, state):
         clim = self._clim
@@ -126,6 +131,10 @@ class Clim(TabbedPanelItem):
             self._update_options()
             return
         self._clim.ac = 1 if state == 'down' else 0
+        if self._clim.ac == 0 and self._clim.auto:
+            # Generic AUTO relies on A/C being active on this bench. Turning A/C
+            # off exits AUTO mode and falls back to manual airflow management.
+            self._clim.auto = 0
         logger.info('A/C %s', 'ON' if state == 'down' else 'OFF')
         self._update_options()
 

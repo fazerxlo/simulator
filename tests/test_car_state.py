@@ -401,6 +401,15 @@ class TestClimUiHelpers:
         widget.on_dir(1, 0x05, 'down')
         assert widget.runner.car.clim.dir_right == 0x05
 
+    def test_on_dir_left_mirrors_right_in_mono_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.dir_left = 0x04
+        widget.runner.car.clim.dir_right = 0x02
+        widget.on_dir(0, 0x07, 'down')
+        assert widget.runner.car.clim.dir_left == 0x07
+        assert widget.runner.car.clim.dir_right == 0x07
+
     def test_idle_1d0_monitor_update_does_not_clear_left_button(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
@@ -592,6 +601,16 @@ class TestClimUiHelpers:
         assert widget.runner.car.clim.auto == 0  # auto mode exited
         assert widget.runner.car.clim.dir_left == 0x04
 
+    def test_on_dir_left_updates_right_ui_in_mono_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.dual = 0
+        widget.runner.car.clim.auto = 0
+        widget.on_dir(0, 0x04, 'down')
+        assert widget.ids['left_up'].state == 'down'
+        assert widget.ids['right_up'].state == 'down'
+        assert widget.ids['right_auto'].state == 'normal'
+
     def test_on_dir_pressing_auto_dir_does_not_exit_auto_mode(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.runner.car.clim.auto = 1
@@ -697,6 +716,15 @@ class TestClimUiHelpers:
         widget.runner.car.clim.ac = 1
         widget.on_ac('normal')
         assert widget.runner.car.clim.ac == 0
+
+    def test_on_ac_off_disables_generic_auto(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.ac = 1
+        widget.runner.car.clim.auto = 1
+        widget.on_ac('normal')
+        assert widget.runner.car.clim.ac == 0
+        assert widget.runner.car.clim.auto == 0
+        assert widget.ids['mode_auto'].state == 'normal'
 
     def test_on_ac_ignored_when_ignition_off(self):
         widget = self._make_clim_widget(ignition_on=False)
