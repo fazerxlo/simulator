@@ -403,7 +403,7 @@ class Msg165(CanMessage):
 
     can_id = 0x165
     period_ms = 50
-    required_modules = frozenset({'radio-gen', 'radio'})
+    required_modules = frozenset({'radio'})
 
     def encode(self, car) -> list:
         b2 = car.radio.INPUT_CODES.get(car.radio.input, 0x01) << 4
@@ -606,7 +606,7 @@ class Msg1A5(CanMessage):
 
     can_id = 0x1A5
     period_ms = 100
-    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd', 'radio'})
+    required_modules = frozenset({'buttons', 'radio'})
 
     def encode(self, car) -> list:
         if car.buttons.active:
@@ -888,7 +888,7 @@ class Msg1E5(CanMessage):
 
     can_id = 0x1E5
     period_ms = 100
-    required_modules = frozenset({'radio-gen', 'radio'})
+    required_modules = frozenset({'radio'})
 
     _AMBIANCE_CODES = {
         'none': 0x03, 'classical': 0x07, 'jazz-blues': 0x0B,
@@ -1164,12 +1164,12 @@ class Msg3E5(CanMessage):
 
     Encodes from ``car.buttons`` when the ``buttons`` module is active
     (different bit layout and key set); otherwise encodes from
-    ``car.radio.panel`` for ``radio-gen`` / ``radio-cd``.
+    ``car.radio.panel`` for the ``radio`` module.
     """
 
     can_id = 0x3E5
     period_ms = 50
-    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd', 'radio'})
+    required_modules = frozenset({'buttons', 'radio'})
 
     def encode(self, car) -> list:
         if car.buttons.active:

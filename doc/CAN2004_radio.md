@@ -47,7 +47,7 @@ exactly matches the ios-car-dashboard `AudioSettings.swift` / frame-0x10 parser.
 
 **PSA name:** `ETAT_AUTORADIO` (inferred)  
 **Period:** 50 ms  
-**Module:** `radio-gen`  
+**Module:** `radio`  
 **Confidence:** Verified (simulator + ios-car-dashboard cross-reference)
 
 ### Byte layout
@@ -96,7 +96,7 @@ radio_source = INPUT_NAMES.get(input_nibble, 'UNKNOWN')
 
 **PSA name:** `VOLUME_RADIO` (inferred)  
 **Period:** 100 ms  
-**Module:** `radio-gen`, `radio-cd`, `buttons`  
+**Module:** `radio`, `buttons`  
 **Confidence:** Verified (simulator + ios-car-dashboard cross-reference)
 
 ### Byte layout
@@ -137,7 +137,7 @@ volume  = data[0] & 0x1F   # 0–30
 
 **PSA name:** `REGLAGES_SON` (inferred)  
 **Period:** 100 ms  
-**Module:** `radio-gen`  
+**Module:** `radio`  
 **Confidence:** Verified — byte layout confirmed against `AudioSettings.swift` in
 [ios-car-dashboard](https://github.com/alexandreblin/ios-car-dashboard/blob/master/CarDash/AudioSettings.swift)
 and the `CarInfo+SerialParserDelegate.swift` frame-`0x10` parser.
@@ -220,7 +220,7 @@ ambiance        = AMBIANCE_NAMES.get(ambiance_code, 'unknown')
 
 **PSA name:** `ETAT_TUNER` (inferred)  
 **Period:** 100 ms  
-**Module:** `radio-gen`, `radio-cd`, `radio-fm`  
+**Module:** `radio`  
 **Confidence:** Inferred/Observed — consistent with ios-car-dashboard frequency encoding
 
 ### Byte layout
@@ -274,7 +274,7 @@ encodings are consistent.
 
 **PSA name:** `INFO_TUNER` (inferred)  
 **Period:** 100 ms  
-**Module:** `radio-cd`, `radio-fm`  
+**Module:** `radio`  
 **Confidence:** Inferred (simulator implementation; not independently confirmed from ios-car-dashboard)
 
 ### Byte layout (observed from simulator)
@@ -303,7 +303,7 @@ encodings are consistent.
 
 **PSA name:** `NOM_STATION` (inferred)  
 **Period:** 100 ms  
-**Module:** `radio-cd`, `radio-fm`  
+**Module:** `radio`  
 **Confidence:** Inferred (simulator + ios-car-dashboard cross-reference)
 
 ### Byte layout
@@ -325,13 +325,13 @@ description (serial frame `0x07`), both stripped of leading/trailing whitespace.
 
 **PSA name:** `CDE_CLAVIER_VOLANT` / `COMMANDES_CLAVIER` (inferred)  
 **Period:** 50 ms  
-**Module:** `radio-gen`, `radio-cd`, `buttons`  
+**Module:** `radio`, `buttons`  
 **Confidence:** Verified (simulator implementation)
 
 This frame carries momentary button states from the steering wheel controls.  Two layouts
-are used depending on whether the `buttons` module or `radio-gen`/`radio-cd` is active.
+are used depending on whether the `buttons` module or `radio`/`radio` is active.
 
-### `radio-gen` / `radio-cd` layout
+### `radio` / `radio` layout
 
 | Byte | Bits | Button | Notes |
 |---|---|---|---|
@@ -386,7 +386,7 @@ positions are expected to be identical for infotainment-related frames.
   is needed to confirm each bit.
 - `0x3E5` bytes 3–4 are always `0x00` in the simulator; real-bus captures may reveal
   additional signals in those bytes.
-- The `radio-cd` module sends both `0x165` and `0x225`; on a real bench with the MFD
+- The `radio` module sends both `0x165` and `0x225`; on a real bench with the MFD
   (multifunctional display) present, capturing the MFD's responses to those frames would
   help confirm decoding.
 - ios-car-dashboard serial frame `0x42` ("secret button") has no obvious counterpart in

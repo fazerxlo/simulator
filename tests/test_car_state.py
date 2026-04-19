@@ -1888,7 +1888,7 @@ class TestMsg3E5Buttons:
         car = VirtualCar()
         car.radio.panel['tel'] = 1
         data = Msg3E5().encode(car)
-        # radio-gen layout: tel is in b0 bits [5:4]
+        # radio module layout: tel is in b0 bits [5:4]
         assert (data[0] >> 4) & 1 == 1
 
     def test_buttons_encoding_when_active(self):
@@ -1929,7 +1929,7 @@ class TestMsg3E5Buttons:
 
     def test_decode_updates_radio_panel_when_buttons_inactive(self):
         car = VirtualCar()
-        # radio-gen layout: ok is b2[7:6]
+        # radio module layout: ok is b2[7:6]
         frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
         Msg3E5().decode(car, frame)
         assert car.radio.panel['ok'] == 1
@@ -2034,7 +2034,7 @@ class TestCanRunnerVirtualCar:
         runner.set_enabled_modules(['bsi-base'])
         assert runner.message_enabled(Msg1D0()) is False
         assert runner.message_enabled(Msg12D()) is False
-        # Msg1A5 / Msg3E5 require at least one of radio-gen, buttons, radio-cd
+        # Msg1A5 / Msg3E5 require at least one of radio, buttons
         assert runner.message_enabled(Msg1A5()) is False
         assert runner.message_enabled(Msg3E5()) is False
 

@@ -33,7 +33,7 @@ lists every ID and its status relative to this simulator.
 | 0x128 | Dashboard lights | Implemented — agreement confirmed |
 | 0x131 | CD changer command | Not implemented |
 | 0x162 | Yatour current disk | Not implemented (Yatour-specific) |
-| 0x165 | Radio source/input status | Implemented (radio-gen module) |
+| 0x165 | Radio source/input status | Implemented (radio module) |
 | 0x167 | Display status | Not implemented |
 | 0x1A0 | CD changer / Yatour status | Not implemented |
 | 0x1A1 | BSI informational message (MFD popup) | Implemented |

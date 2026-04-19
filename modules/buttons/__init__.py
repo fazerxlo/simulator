@@ -17,7 +17,7 @@ class Buttons(TabbedPanelItem):
         Builder.apply(self)
 
         # Mark the buttons subsystem as active so Msg1A5 / Msg3E5 use the
-        # buttons encoding path rather than the radio-gen path.
+        # buttons encoding path rather than the radio path.
         runner.car.buttons.active = True
 
         # No register_message() call here — bsi-base already registered Msg1A5

@@ -255,7 +255,7 @@ class Buttons:
     The ``active`` flag is set by the ``buttons`` module when it loads.
     When active, ``Msg1A5`` and ``Msg3E5`` encode from this object instead
     of ``car.radio``, allowing the lightweight buttons module to run
-    independently of the full ``radio-gen`` head-unit module.
+    independently of the full ``radio`` head-unit module.
 
     Pulse-tick tracking keeps button press assertions alive for a few
     CAN frames (``_pulse_window`` encodes), matching the physical behaviour

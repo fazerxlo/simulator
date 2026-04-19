@@ -65,7 +65,7 @@ project (Peugeot 207 RD4 head unit), see [CAN2004_radio.md](CAN2004_radio.md).
 | 0x225 | FM tuner status (frequency, band, memory, scan, RDS) | Inferred | freq = `raw × 0.05 + 50` MHz; see [CAN2004_radio.md §5](CAN2004_radio.md) |
 | 0x265 | RDS / station info flags | Inferred | see [CAN2004_radio.md §6](CAN2004_radio.md) |
 | 0x2A5 | radio station name / RDS PS text | Inferred | raw ASCII bytes; see [CAN2004_radio.md §7](CAN2004_radio.md) |
-| 0x3E5 | steering wheel panel buttons | Verified | two layouts (radio-gen vs buttons module); see [CAN2004_radio.md §8](CAN2004_radio.md) |
+| 0x3E5 | steering wheel panel buttons | Verified | two layouts (radio vs buttons module); see [CAN2004_radio.md §8](CAN2004_radio.md) |
 | 0x162 / 0x1A0 / 0x1A2 / 0x1E0 / 0x1E2 | radio changer / source status | Inferred | audio-source integration only |
 | 0x1A1 | BSI informational display message | Observed | useful for text warnings, not raw vehicle-state decoding |
 | 0x325 / 0x365 / 0x3A5 / 0x5E0 / 0x5E5 | disk, RDS, and device metadata | Inferred | infotainment-specific |

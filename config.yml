@@ -4,9 +4,6 @@ modules:
   - parktronic
   - bsi-trip
   #- bsi-log
-  #- radio-gen
-  #- radio-fm
-  #- radio-cd
   - radio
   - clim
   - combine
