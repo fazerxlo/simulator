@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.clock import Clock
@@ -7,6 +8,8 @@ from kivy.lang.builder import Builder
 
 _modname = 'Radio_fm'
 _version = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class Radio_fm(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
@@ -19,7 +22,7 @@ class Radio_fm(TabbedPanelItem):
         Builder.apply(self, 'Radio_fm')
 
         # Register CAN callbacks
-        print('registering radio calls')
+        logger.debug('registering radio-fm module')
         runner.register(100, self.can_freq)
         runner.register(100, self.can_rds)
         runner.register(100, self.can_name)

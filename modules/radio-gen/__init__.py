@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.app import App
@@ -12,6 +13,8 @@ from can_messages import Msg165, Msg1A5, Msg1E5, Msg3E5
 _modname = 'Radio_gen'
 _modversion = '0.0.1'
 
+logger = logging.getLogger(__name__)
+
 class Radio_gen(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
         # Base init (super and name)
@@ -24,7 +27,7 @@ class Radio_gen(TabbedPanelItem):
         Builder.apply(self, 'Radio')
 
         # Register per-CAN-ID message objects.
-        print('registering radio calls')
+        logger.debug('registering radio-gen module')
         runner.register_message(Msg165())
         runner.register_message(Msg1A5())
         runner.register_message(Msg3E5())

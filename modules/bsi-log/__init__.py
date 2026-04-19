@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 
 from kivy.app import App
@@ -10,6 +11,8 @@ from modules.messages_1a1 import messages
 
 _modname = 'BSI_log'
 _modversion = '0.0.1'
+
+logger = logging.getLogger(__name__)
 
 class BSI_log(TabbedPanelItem):
     def __init__(self, runner, **kwargs):
@@ -23,7 +26,7 @@ class BSI_log(TabbedPanelItem):
         Builder.apply(self)
 
         # Register CAN callbacks
-        print('registering BSI calls')
+        logger.debug('registering BSI log module')
         # Note: Msg1A1 is registered by bsi-base.  This module drives the
         # mfd_popup state; show_msg() writes car.mfd_popup.flag / .msg_id.
 
@@ -44,20 +47,22 @@ class BSI_log(TabbedPanelItem):
             self.ids['send'].text = 'send (inconnu)'
 
     def show_msg(self, id=None):
-        print(f'called with id={id} and flag={self.runner.car.mfd_popup.flag}')
+        logger.debug('show_msg called with id=%s flag=%s', id, self.runner.car.mfd_popup.flag)
         mfd = self.runner.car.mfd_popup
         if id is not None and mfd.flag in (0xFF, 0x00):
             mfd.msg_id = int(id)
             mfd.flag = 0x80
+            if id in messages:
+                logger.info('MFD popup: %s', messages[int(id)])
             Clock.schedule_once(self.show_msg, 2)
         elif id == mfd.msg_id and mfd.flag == 0x80:
-            print('double call')
+            logger.debug('show_msg: double call')
         elif mfd.flag == 0x80:
-            print('reset flag')
+            logger.debug('show_msg: reset flag')
             mfd.flag = 0x00
             Clock.schedule_once(self.show_msg, 0.2)
         elif mfd.flag == 0x00:
-            print('reset msg')
+            logger.debug('show_msg: reset msg')
             mfd.flag = 0xFF
             mfd.msg_id = 0x00
 
