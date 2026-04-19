@@ -650,6 +650,19 @@ class TestClimUiHelpers:
         widget.on_airflow_mode('auto', 'down')
         assert widget.runner.car.clim.auto == 0  # not changed
 
+    def test_disabling_dual_mirrors_right_zone_to_left(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.dual = 1
+        widget.runner.car.clim.temp_left = 14
+        widget.runner.car.clim.temp_right = 7
+        widget.runner.car.clim.dir_left = 0x06
+        widget.runner.car.clim.dir_right = 0x03
+        widget.on_option('dual', 'normal')
+
+        assert widget.runner.car.clim.dual == 0
+        assert widget.runner.car.clim.temp_right == 14
+        assert widget.runner.car.clim.dir_right == 0x06
+
     # --- on_clim_on / on_ac ---
 
     def test_on_clim_on_off_disables_clim_enabled(self):

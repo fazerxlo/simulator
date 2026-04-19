@@ -182,7 +182,16 @@ class Clim(TabbedPanelItem):
         if not self._is_ignition_on():
             self._update_options()
             return
-        setattr(self._clim, option, 1 if value == 'down' else 0)
+        clim = self._clim
+        new_value = 1 if value == 'down' else 0
+        setattr(clim, option, new_value)
+        if option == 'dual' and not new_value:
+            # In mono mode the right zone is no longer independently adjustable,
+            # so mirror the left-side settings immediately.
+            clim.temp_right = clim.temp_left
+            clim.dir_right = clim.dir_left
+            self._update_temps()
+            self._update_dir_buttons()
         state_str = 'on' if value == 'down' else 'off'
         logger.info('Climate %s %s', option.replace('_', ' '), state_str)
         self._update_options()
