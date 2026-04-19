@@ -143,23 +143,12 @@ python -m tools.can_sniff_ai_agent compare logs/YYYYMMDD_doors_baseline.log \
 
 ---
 
-### 2.2  0x131 — door state vs CD-changer traffic
+### 2.2  0x131 — CD-changer traffic
 
-**Current state:** older workspace notes treat `0x131` as a door-state frame.
-The canbox source and autowp treat it as CD-changer command traffic.  The
-observed dump shows mostly byte 0 activity with byte 1 staying zero, which
-does not fit the door mapping.
-
-**Bench action:** open and close individual doors while monitoring `0x131`.
-
-```bash
-python -m tools.can_sniff_ai_agent identify "open front left door" \
-    --duration 5 --interface can0
-```
-
-If `0x131` byte 1 changes when a door opens → door interpretation is partially
-correct.  If `0x131` does not change at all → it is infotainment-only traffic
-on this vehicle.  Prefer `0x220` if it is already changing correctly (see 2.1).
+**✅ RESOLVED** — Bench-verified: `0x131` is exclusively CD-changer command
+traffic on this vehicle.  It carries no door-state information.  Any legacy
+notes treating it as a door frame are incorrect for the Peugeot 407.  Use
+`0x220` for all door / body-opening state (see 2.1).
 
 **Reference:** `CAN_messages.md` §0x131
 
@@ -652,11 +641,10 @@ Items already marked ✅ RESOLVED above do not need bench time.
 
 1. **0x0F6 coolant offset** (1.4) — one warm-engine capture with cluster readout
 2. **0x220 hood / fuel flap** (2.1) — physically open each and watch 0x220
-3. **0x131 door vs changer** (2.2) — open a door and watch 0x131
-4. **0x0F6 wiper bit** (2.3) — turn wipers on, watch byte 7 bit 6
-5. **0x0F6 status byte** (3.1) — cold-start capture to map 0x86/0x8E toggling
-6. **0x128 byte 6 bit 4** (3.4) — low-fuel scenario
-7. **0x168 byte 4 bit 1** (3.5) — charging system state during capture
-8. **Period measurements** (Category 3 table) — passive, no action needed
-9. **0x036 power sequence** (5.1) — power-on without key, 30 s log
-10. **0x228 static frame** (4.1) — passive read, check for variation
+3. **0x0F6 wiper bit** (2.3) — turn wipers on, watch byte 7 bit 6
+4. **0x0F6 status byte** (3.1) — cold-start capture to map 0x86/0x8E toggling
+5. **0x128 byte 6 bit 4** (3.4) — low-fuel scenario
+6. **0x168 byte 4 bit 1** (3.5) — charging system state during capture
+7. **Period measurements** (Category 3 table) — passive, no action needed
+8. **0x036 power sequence** (5.1) — power-on without key, 30 s log
+9. **0x228 static frame** (4.1) — passive read, check for variation
