@@ -199,6 +199,23 @@ class Radio:
             'rf-bal': 0x3F, 'lr-bal': 0x3F,
             'loudness': 0, 'volume': 0, 'ambiance': 'none', 'menu': 'none',
         }
+        # FM tuner state (used by the unified radio module and Msg225/Msg265/Msg2A5)
+        # raw CAN freq value; display_MHz = freq * 0.05 + 50 (default 96.0 MHz)
+        self.freq = 920
+        self.band = 0x00      # 0x00=none; 0x10=FM1; 0x20=FM2; 0x40=FMAST; 0x50=AM
+        self.mem = 0          # preset memory number (0 = none)
+        self.rds = 0
+        self.pty = 0
+        self.ta = 0
+        self.tun = 0
+        self.scan = 0
+        self.list_flag = 0
+        self.tundir = 0
+        self.station_name = 'test'
+        self.rds_text = ''
+        # Accumulation buffer for multi-frame RDS RadioText (0x0A4)
+        # keyed by segment index → 7-char string
+        self._rt_buf: dict = {}
 
 
 class Trip:
@@ -243,7 +260,7 @@ class Buttons:
     The ``active`` flag is set by the ``buttons`` module when it loads.
     When active, ``Msg1A5`` and ``Msg3E5`` encode from this object instead
     of ``car.radio``, allowing the lightweight buttons module to run
-    independently of the full ``radio-gen`` head-unit module.
+    independently of the full ``radio`` head-unit module.
 
     Pulse-tick tracking keeps button press assertions alive for a few
     CAN frames (``_pulse_window`` encodes), matching the physical behaviour

@@ -1,0 +1,485 @@
+# Unified radio / infotainment panel KV
+# doc/CAN2004_radio.md — signal reference
+#
+# Monitor mode: all interactive widgets are disabled programmatically by
+# Radio._apply_monitor_lock() after the KV is loaded, so no special KV
+# branching is required here.
+
+<Radio>:
+  BoxLayout:
+    orientation: 'vertical'
+    spacing: 4
+    padding: [4, 4, 4, 4]
+
+    # ── Row 1: Volume + Source ──────────────────────────────────────────
+    BoxLayout:
+      orientation: 'horizontal'
+      spacing: 4
+
+      Label:
+        text: 'VOL'
+        size_hint_x: None
+        width: 32
+
+      Button:
+        id: btn_vol_down
+        text: '-'
+        size_hint_x: None
+        width: 36
+        on_press: root.on_volume(root._radio.volume - 1)
+
+      Slider:
+        id: slider_vol
+        min: 0
+        max: 30
+        value: 15
+        step: 1
+        on_value: root.on_volume(args[1])
+
+      Label:
+        id: cur_vol
+        text: '15'
+        size_hint_x: None
+        width: 28
+
+      Button:
+        id: btn_vol_up
+        text: '+'
+        size_hint_x: None
+        width: 36
+        on_press: root.on_volume(root._radio.volume + 1)
+
+      Label:
+        text: 'SRC'
+        size_hint_x: None
+        width: 32
+
+      GridLayout:
+        cols: 4
+        spacing: 2
+
+        ToggleButton:
+          id: toggle_src_tun
+          text: 'TUN'
+          group: 'input'
+          state: 'down'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        ToggleButton:
+          id: toggle_src_cd
+          text: 'CD'
+          group: 'input'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        ToggleButton:
+          id: toggle_src_cdc
+          text: 'CDC'
+          group: 'input'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        ToggleButton:
+          id: toggle_src_aux1
+          text: 'AUX1'
+          group: 'input'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        ToggleButton:
+          id: toggle_src_aux2
+          text: 'AUX2'
+          group: 'input'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        ToggleButton:
+          id: toggle_src_usb
+          text: 'USB'
+          group: 'input'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        ToggleButton:
+          id: toggle_src_bt
+          text: 'BT'
+          group: 'input'
+          allow_no_selection: False
+          on_state: root.on_input(self.text)
+
+        Label:
+          # spacer
+
+    # ── Row 2: FM Tuner ─────────────────────────────────────────────────
+    BoxLayout:
+      orientation: 'horizontal'
+      spacing: 4
+
+      # Band selector
+      GridLayout:
+        cols: 3
+        size_hint_x: None
+        width: 200
+        spacing: 2
+
+        ToggleButton:
+          id: toggle_band_none
+          text: '---'
+          group: 'band'
+          value: 0x00
+          state: 'down'
+          allow_no_selection: False
+          on_state: root.on_band(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_band_fm1
+          text: 'FM1'
+          group: 'band'
+          value: 0x90
+          allow_no_selection: False
+          on_state: root.on_band(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_band_fm2
+          text: 'FM2'
+          group: 'band'
+          value: 0xA0
+          allow_no_selection: False
+          on_state: root.on_band(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_band_fmast
+          text: 'FMAST'
+          group: 'band'
+          value: 0xC0
+          allow_no_selection: False
+          on_state: root.on_band(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_band_am
+          text: 'AM'
+          group: 'band'
+          value: 0xD0
+          allow_no_selection: False
+          on_state: root.on_band(self.state, self.value)
+
+        Label:
+          # spacer
+
+      # Memory preset selector
+      GridLayout:
+        cols: 2
+        size_hint_x: None
+        width: 100
+        spacing: 2
+
+        ToggleButton:
+          id: toggle_mem_no
+          text: 'no'
+          group: 'mem'
+          state: 'down'
+          value: 0x00
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_dash
+          text: '--'
+          group: 'mem'
+          value: 0x70
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_1
+          text: '1'
+          group: 'mem'
+          value: 0x10
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_2
+          text: '2'
+          group: 'mem'
+          value: 0x20
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_3
+          text: '3'
+          group: 'mem'
+          value: 0x30
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_4
+          text: '4'
+          group: 'mem'
+          value: 0x40
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_5
+          text: '5'
+          group: 'mem'
+          value: 0x50
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+        ToggleButton:
+          id: toggle_mem_6
+          text: '6'
+          group: 'mem'
+          value: 0x60
+          allow_no_selection: False
+          on_state: root.on_mem(self.state, self.value)
+
+      # RDS / tuner flags
+      GridLayout:
+        cols: 2
+        size_hint_x: None
+        width: 100
+        spacing: 2
+
+        ToggleButton:
+          id: toggle_rds
+          text: 'RDS'
+          on_state: root.on_toggle('rds', self.state)
+
+        ToggleButton:
+          id: toggle_pty
+          text: 'PTY'
+          on_state: root.on_toggle('pty', self.state)
+
+        ToggleButton:
+          id: toggle_list
+          text: 'list'
+          on_state: root.on_toggle('list_flag', self.state)
+
+        ToggleButton:
+          id: toggle_scan
+          text: 'scan'
+          on_state: root.on_toggle('scan', self.state)
+
+        ToggleButton:
+          id: toggle_tun
+          text: 'tun'
+          on_state: root.on_toggle('tun', self.state)
+
+        ToggleButton:
+          id: toggle_ta
+          text: 'TA'
+          on_state: root.on_toggle('ta', self.state)
+
+        # tuning direction
+        BoxLayout:
+          orientation: 'vertical'
+          ToggleButton:
+            text: 'up'
+            value: 0x01
+            group: 'tundir'
+            allow_no_selection: False
+            on_state: root.on_toggle('tundir', self.state, self.value)
+          ToggleButton:
+            text: 'dn'
+            value: 0x00
+            group: 'tundir'
+            state: 'down'
+            allow_no_selection: False
+            on_state: root.on_toggle('tundir', self.state, self.value)
+
+      # Frequency slider + display
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 2
+
+        BoxLayout:
+          orientation: 'horizontal'
+          Slider:
+            id: slider_freq
+            min: 0
+            max: 2046
+            step: 1
+            value: 920
+            on_value: root.on_freq(args[1])
+          Label:
+            id: cur_freq
+            text: '96.00 MHz'
+            size_hint_x: None
+            width: 90
+
+        Label:
+          text: 'Station'
+          size_hint_y: None
+          height: 18
+          halign: 'left'
+          text_size: self.size
+
+        Label:
+          id: cur_station
+          text: ''
+          halign: 'center'
+          valign: 'middle'
+          text_size: self.width, None
+          size_hint_y: None
+          height: 24
+
+    # ── RDS RadioText display ────────────────────────────────────────────
+    BoxLayout:
+      orientation: 'vertical'
+      size_hint_y: None
+      height: 64
+
+      Label:
+        text: 'RDS text'
+        size_hint_y: None
+        height: 18
+        halign: 'left'
+        text_size: self.size
+
+      Label:
+        id: cur_rds_text
+        text: ''
+        halign: 'center'
+        valign: 'middle'
+        text_size: self.width, None
+
+    # ── Row 3: Steering-wheel buttons ───────────────────────────────────
+    BoxLayout:
+      orientation: 'horizontal'
+      spacing: 4
+
+      Button:
+        id: btn_mode
+        text: 'mode'
+        on_press: root.on_panel(self.text, 'down')
+        on_release: root.on_panel(self.text, 'normal')
+
+      Button:
+        id: btn_menu
+        text: 'menu'
+        on_press: root.on_panel(self.text, 'down')
+        on_release: root.on_panel(self.text, 'normal')
+
+      Label:
+        size_hint_x: None
+        width: 8
+
+      Button:
+        id: btn_left
+        text: 'left'
+        on_press: root.on_panel(self.text, 'down')
+        on_release: root.on_panel(self.text, 'normal')
+        on_release: root.on_button(self.text)
+
+      BoxLayout:
+        orientation: 'vertical'
+        size_hint_x: None
+        width: 60
+        Button:
+          id: btn_up
+          text: 'up'
+          on_press: root.on_panel(self.text, 'down')
+          on_release: root.on_panel(self.text, 'normal')
+        Button:
+          id: btn_down
+          text: 'dn'
+          on_press: root.on_panel('down', 'down')
+          on_release: root.on_panel('down', 'normal')
+
+      Button:
+        id: btn_right
+        text: 'right'
+        on_press: root.on_panel(self.text, 'down')
+        on_release: root.on_panel(self.text, 'normal')
+        on_release: root.on_button(self.text)
+
+      Label:
+        size_hint_x: None
+        width: 8
+
+      Button:
+        id: btn_esc
+        text: 'esc'
+        on_press: root.on_panel(self.text, 'down')
+        on_release: root.on_panel(self.text, 'normal')
+        on_release: root.on_button(self.text)
+
+      Button:
+        id: btn_ok
+        text: 'ok'
+        on_press: root.on_panel(self.text, 'down')
+        on_release: root.on_panel(self.text, 'normal')
+
+      Label:
+        size_hint_x: None
+        width: 8
+
+      GridLayout:
+        cols: 2
+        size_hint_x: None
+        width: 120
+        spacing: 2
+        Button:
+          id: btn_audio
+          text: 'audio'
+          on_press: root.on_panel(self.text, 'down')
+          on_release: root.on_panel(self.text, 'normal')
+          on_release: root.on_button(self.text)
+        Button:
+          id: btn_trip
+          text: 'trip'
+          on_press: root.on_panel(self.text, 'down')
+          on_release: root.on_panel(self.text, 'normal')
+        Button:
+          id: btn_clim
+          text: 'clim'
+          on_press: root.on_panel(self.text, 'down')
+          on_release: root.on_panel(self.text, 'normal')
+        Button:
+          id: btn_tel
+          text: 'tel'
+          on_press: root.on_panel(self.text, 'down')
+          on_release: root.on_panel(self.text, 'normal')
+
+    # ── Row 4: Audio settings display ───────────────────────────────────
+    GridLayout:
+      cols: 4
+      spacing: 4
+
+      Label:
+        id: cur_menu
+        text: 'menu: none'
+
+      Label:
+        id: cur_param_ambiance
+        text: 'ambiance: none'
+
+      Label:
+        id: cur_param_volume
+        text: 'volume: disabled'
+
+      Label:
+        id: cur_param_lr-bal
+        text: 'lr-bal: 0'
+
+      Label:
+        id: cur_param_rf-bal
+        text: 'rf-bal: 0'
+
+      Label:
+        id: cur_param_loudness
+        text: 'loudness: disabled'
+
+      Label:
+        id: cur_param_treble
+        text: 'treble: 0'
+
+      Label:
+        id: cur_param_bass
+        text: 'bass: 0'

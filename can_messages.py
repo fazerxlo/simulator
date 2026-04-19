@@ -54,6 +54,12 @@ class CanMessage:
     #: Config-module names that must be enabled for this message to transmit.
     required_modules: frozenset[str] = frozenset()
 
+    #: When True the runner only calls decode() on this message and never
+    #: calls encode() / transmits it.  Set on CAN IDs that are owned by an
+    #: external node (e.g. the real workbench radio) so the simulator only
+    #: monitors and displays the traffic without injecting its own frames.
+    listen_only: bool = False
+
     def get_period_ms(self, car) -> int:
         """Return the active transmit period for the current car state."""
         return self.period_ms
@@ -403,7 +409,8 @@ class Msg165(CanMessage):
 
     can_id = 0x165
     period_ms = 50
-    required_modules = frozenset({'radio-gen'})
+    required_modules = frozenset({'radio'})
+    listen_only = True
 
     def encode(self, car) -> list:
         b2 = car.radio.INPUT_CODES.get(car.radio.input, 0x01) << 4
@@ -606,21 +613,20 @@ class Msg1A5(CanMessage):
 
     can_id = 0x1A5
     period_ms = 100
-    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd'})
+    required_modules = frozenset({'buttons', 'radio'})
 
-    def encode(self, car) -> list:
+    def encode(self, car) -> list | None:
         if car.buttons.active:
             car.buttons.step_volume()
             return [car.buttons.volflag | (car.buttons.volume & 0x1F)]
-        return [car.radio.volflag | (car.radio.volume & 0x1F)]
+        return None  # radio is listen-only; do not transmit on its behalf
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 1:
             volume = data[0] & 0x1F
+            car.radio.volume = volume  # always update for radio display
             if car.buttons.active:
                 car.buttons.volume = volume
-            else:
-                car.radio.volume = volume
 
 
 # ---------------------------------------------------------------------------
@@ -888,7 +894,8 @@ class Msg1E5(CanMessage):
 
     can_id = 0x1E5
     period_ms = 100
-    required_modules = frozenset({'radio-gen'})
+    required_modules = frozenset({'radio'})
+    listen_only = True
 
     _AMBIANCE_CODES = {
         'none': 0x03, 'classical': 0x07, 'jazz-blues': 0x0B,
@@ -913,31 +920,36 @@ class Msg1E5(CanMessage):
         if len(data) < 7:
             return
         a = car.radio.audio
+        # Always update every field unconditionally so the display reflects the
+        # live head-unit state even when no menu is open.
+        a['lr-bal'] = data[0] & 0x7F
+        a['rf-bal'] = data[1] & 0x7F
+        a['bass'] = data[2] & 0x7F
+        a['treble'] = data[4] & 0x7F
+        a['loudness'] = (data[5] >> 6) & 1        # bit6 = loudness on/off
+        a['volume'] = data[5] & 0x07              # bits2:0 = auto-vol threshold
+        ambiance_code = data[6] & 0x3F
+        for name, code in self._AMBIANCE_CODES.items():
+            if code == ambiance_code:
+                a['ambiance'] = name
+                break
+        # Determine which menu is currently open (bit7 of each byte).
         if data[0] & 0x80:
             a['menu'] = 'lr-bal'
-            a['lr-bal'] = data[0] & 0x7F
         elif data[1] & 0x80:
             a['menu'] = 'rf-bal'
-            a['rf-bal'] = data[1] & 0x7F
         elif data[2] & 0x80:
             a['menu'] = 'bass'
-            a['bass'] = data[2] & 0x7F
         elif data[4] & 0x80:
             a['menu'] = 'treble'
-            a['treble'] = data[4] & 0x7F
-        elif data[5] & 0x10:
-            a['menu'] = 'volume'
-            a['volume'] = data[5] & 0x0F
-        elif data[5] & 0x40:
+        elif data[5] & 0x80:                      # bit7 = loudness menu open
             a['menu'] = 'loudness'
-            a['loudness'] = (data[5] >> 6) & 1
-        elif data[6] & 0x40:
+        elif data[5] & 0x10:                      # bit4 = auto-vol menu open
+            a['menu'] = 'volume'
+        elif data[6] & 0x40:                      # bit6 = ambiance menu open
             a['menu'] = 'ambiance'
-            target = data[6] & 0x3F
-            for name, code in self._AMBIANCE_CODES.items():
-                if code == target:
-                    a['ambiance'] = name
-                    break
+        else:
+            a['menu'] = 'none'
 
 
 # ---------------------------------------------------------------------------
@@ -1163,15 +1175,16 @@ class Msg3E5(CanMessage):
     """Steering wheel control panel buttons.
 
     Encodes from ``car.buttons`` when the ``buttons`` module is active
-    (different bit layout and key set); otherwise encodes from
-    ``car.radio.panel`` for ``radio-gen`` / ``radio-cd``.
+    (different bit layout and key set).  When only the ``radio`` module is
+    active the real workbench radio owns this frame, so the simulator does
+    not transmit it (returns ``None``).
     """
 
     can_id = 0x3E5
     period_ms = 50
-    required_modules = frozenset({'radio-gen', 'buttons', 'radio-cd'})
+    required_modules = frozenset({'buttons', 'radio'})
 
-    def encode(self, car) -> list:
+    def encode(self, car) -> list | None:
         if car.buttons.active:
             p = car.buttons.panel
             car.buttons.step_pulses()
@@ -1180,12 +1193,7 @@ class Msg3E5(CanMessage):
             b2 = (p['ok'] << 6) | (p['esc'] << 4) | (p['next'] << 2) | p['prev']
             b5 = (p['up'] << 6) | (p['down'] << 4) | (p['right'] << 2) | p['left']
             return [b0, b1, b2, 0x00, 0x00, b5]
-        k = car.radio.panel
-        b0 = k['menu'] << 6 | k['tel'] << 4 | k['clim']
-        b1 = k['trip'] << 6 | k['mode'] << 4 | k['audio']
-        b2 = k['ok'] << 6 | k['esc'] << 4
-        b5 = k['up'] << 6 | k['down'] << 4 | k['right'] << 2 | k['left']
-        return [b0, b1, b2, 0x00, 0x00, b5]
+        return None  # radio is listen-only; do not transmit on its behalf
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 6:
@@ -1221,6 +1229,243 @@ class Msg3E5(CanMessage):
         car.radio.panel['down'] = (b5 >> 4) & 1
         car.radio.panel['right'] = (b5 >> 2) & 1
         car.radio.panel['left'] = b5 & 1
+
+
+
+# ---------------------------------------------------------------------------
+# 0x1E0 – Radio internal status
+# ---------------------------------------------------------------------------
+
+class Msg1E0(CanMessage):
+    """Radio internal status frame (0x1E0).
+
+    Observed constant payload from the head unit; decoded by the radio
+    module to detect an active head unit on the bench.
+    """
+
+    can_id = 0x1E0
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+    listen_only = True
+
+    def encode(self, car) -> list:
+        return [0x24, 0x00, 0x00, 0x00, 0x20]
+
+    def decode(self, car, data: bytes) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# 0x225 – FM tuner status
+# ---------------------------------------------------------------------------
+
+class Msg225(CanMessage):
+    """FM tuner status: frequency, band, memory preset, RDS flags (0x225).
+
+    Frequency encoding: display_MHz = raw * 0.05 + 50.
+    Cross-referenced with ios-car-dashboard Arduino serial protocol.
+
+    Byte 0 bit layout (verified from real bench capture):
+      bit7  : LIST   – station list active
+      bit6  : SCAN   – scan mode active
+      bit5  : RDS    – RDS data available
+      bit4  : PTY    – PTY search / data available
+      bit3  : TUN    – currently tuning
+      bit2  : TA     – traffic announcement flag
+      bit1:0: TUNDIR – tuning direction (0=none, 1=up, 2=down)
+
+    Band codes (byte 2, verified from real bench capture):
+      0x00 = no band / unset
+      0x90 = FM Band 1
+      0xA0 = FM Band 2
+      0xC0 = FM Auto-store (AST)
+      0xD0 = AM / medium wave
+    """
+
+    can_id = 0x225
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+    listen_only = True
+
+    def encode(self, car) -> list:
+        r = car.radio
+        b0 = (r.list_flag << 7 | r.scan << 6 | r.rds << 5 | r.pty << 4 |
+              r.tun << 3 | r.ta << 2 | (r.tundir & 3))
+        return [b0, r.mem, r.band, r.freq >> 8, r.freq & 0xFF]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 5:
+            return
+        r = car.radio
+        r.list_flag = (data[0] >> 7) & 1
+        r.scan = (data[0] >> 6) & 1
+        r.rds = (data[0] >> 5) & 1
+        r.pty = (data[0] >> 4) & 1
+        r.tun = (data[0] >> 3) & 1
+        r.ta = (data[0] >> 2) & 1
+        r.tundir = data[0] & 3
+        r.mem = data[1]
+        r.band = data[2]
+        r.freq = (data[3] << 8) | data[4]
+
+
+# ---------------------------------------------------------------------------
+# 0x265 – RDS / station info flags
+# ---------------------------------------------------------------------------
+
+class Msg265(CanMessage):
+    """RDS / station info flags (0x265).
+
+    Byte 0: status flags (TA, TP, RDS valid, etc.).
+    Byte 3: 0x00 = FM/tuner active, 0x01 = CD/CDC active.
+    """
+
+    can_id = 0x265
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+    listen_only = True
+
+    def encode(self, car) -> list:
+        b0 = (1 << 5) | (1 << 4)   # TA (bit5) and TP (bit4) flags
+        b1 = (1 << 7) | (1 << 6) | (2 << 4)
+        b3 = 0x00 if car.radio.input == 'TUN' else 0x01
+        return [b0, b1, 0x01, b3]
+
+    def decode(self, car, data: bytes) -> None:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# 0x2A5 – Radio station name / RDS PS
+# ---------------------------------------------------------------------------
+
+class Msg2A5(CanMessage):
+    """Radio station name / RDS Programme Service name (0x2A5).
+
+    Payload is a raw ASCII string, left-justified, up to 8 bytes.
+    Cross-referenced with ios-car-dashboard serial frame 0x04.
+    """
+
+    can_id = 0x2A5
+    period_ms = 100
+    required_modules = frozenset({'radio'})
+    listen_only = True
+
+    def encode(self, car) -> list:
+        name = (car.radio.station_name or '')[:8]
+        return list(name.encode('ascii', errors='replace'))
+
+    def decode(self, car, data: bytes) -> None:
+        try:
+            car.radio.station_name = bytes(data).rstrip(b'\x00').decode(
+                'ascii', errors='replace'
+            ).strip()
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# 0x0A4 – RDS RadioText (ISO 15765-2)
+# ---------------------------------------------------------------------------
+
+class Msg0A4(CanMessage):
+    """RDS RadioText (RT) multi-frame message (0x0A4).
+
+    The radio head-unit transmits the RDS RT string using ISO 15765-2
+    (ISO-TP) framing, which allows a text up to 64 characters to be split
+    across multiple 8-byte CAN frames:
+
+    * **Single Frame (SF)** — PCI byte ``0x0N``, N = data length (1–7).
+      The complete RT fits in one frame.
+    * **First Frame (FF)** — PCI bytes ``0x1H 0xLL``, total length
+      = ``(H<<8)|LL``.  Payload bytes 2–7 carry the first 6 RT chars.
+    * **Consecutive Frame (CF)** — PCI byte ``0x2N``, N = sequence number
+      (1–15, wrapping to 0 after 15).  Bytes 1–7 carry the next 7 chars.
+
+    Accumulation state is stored in ``car.radio._rt_buf``.  ``car.radio.rds_text``
+    is updated after every received frame so the UI shows text building up
+    progressively.  A new SF or FF resets the buffer and discards any
+    incomplete in-progress transfer.  An out-of-sequence CF also discards
+    the buffer.
+    """
+
+    can_id = 0x0A4
+    period_ms = 500
+    required_modules = frozenset({'radio'})
+    listen_only = True
+
+    @staticmethod
+    def _trim_rt(raw) -> str:
+        """Normalize an RT payload to a displayable ASCII string.
+
+        Real bench captures sometimes prepend an internal 4-byte control
+        prefix ``10 00 00 00`` before the 64-character RadioText body.
+        Strip that prefix when present, then stop at the first NUL and trim
+        outer whitespace used as display padding.
+        """
+        if isinstance(raw, str):
+            raw = raw.encode('ascii', errors='replace')
+        raw = bytes(raw)
+        if raw.startswith(b'\x10\x00\x00\x00'):
+            raw = raw[4:]
+        nul = raw.find(b'\x00')
+        if nul >= 0:
+            raw = raw[:nul]
+        return raw.decode('ascii', errors='replace').strip()
+
+    def encode(self, car) -> list:
+        return [0x00] * 8
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 2:
+            return
+        pci_type = (data[0] >> 4) & 0x0F
+
+        if pci_type == 0:
+            # Single Frame: complete RT text fits in one CAN frame.
+            length = data[0] & 0x0F
+            if length == 0 or length > 7 or len(data) < 1 + length:
+                return
+            payload = bytes(data[1:1 + length])
+            car.radio._rt_buf = {}
+            car.radio.rds_text = self._trim_rt(payload)
+
+        elif pci_type == 1:
+            # First Frame: start of a multi-frame transfer.
+            if len(data) < 3:
+                return
+            total_len = ((data[0] & 0x0F) << 8) | data[1]
+            chunk = bytearray(data[2:8])
+            car.radio._rt_buf = {
+                'total': total_len,
+                'next_sn': 1,
+                'data': chunk,
+            }
+            # Show the first bytes immediately so the UI updates progressively.
+            car.radio.rds_text = self._trim_rt(chunk)
+
+        elif pci_type == 2:
+            # Consecutive Frame: continuation of a multi-frame transfer.
+            buf = car.radio._rt_buf
+            if not buf or 'data' not in buf:
+                return
+            sn = data[0] & 0x0F
+            if sn != (buf.get('next_sn', 1) & 0x0F):
+                # Out-of-sequence CF — discard the in-progress transfer.
+                car.radio._rt_buf = {}
+                return
+            buf['data'].extend(data[1:8])
+            # Sequence numbers wrap: 15 → 0 → 1 → …
+            buf['next_sn'] = (sn + 1) & 0x0F
+            total = buf.get('total', 0)
+            accumulated = bytes(buf['data'])
+            if len(accumulated) >= total:
+                # Transfer complete — commit the final text.
+                car.radio.rds_text = self._trim_rt(accumulated[:total])
+                car.radio._rt_buf = {}
+            else:
+                # Show partial text as it builds up.
+                car.radio.rds_text = self._trim_rt(accumulated)
 
 
 # ---------------------------------------------------------------------------
@@ -1387,10 +1632,10 @@ class Msg1A0(CanMessage):
 ALL_MESSAGES: dict[int, type] = {
     cls.can_id: cls
     for cls in (
-        Msg036, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
-        Msg128, Msg131, Msg161, Msg165, Msg168, Msg190, Msg1A0, Msg1A1,
-        Msg1A3, Msg1A5, Msg1A8, Msg1D0, Msg1E3, Msg1E5, Msg217, Msg220,
-        Msg221, Msg223, Msg2A1, Msg261, Msg2B6, Msg323, Msg336, Msg3B6,
-        Msg3E5, Msg52D,
+        Msg036, Msg0A4, Msg0B6, Msg0E1, Msg0F6, Msg110, Msg12B, Msg12D,
+        Msg128, Msg131, Msg161, Msg165, Msg168, Msg190, Msg1A0, Msg1A1, Msg1A3,
+        Msg1A5, Msg1A8, Msg1D0, Msg1E0, Msg1E3, Msg1E5, Msg217, Msg220, Msg221,
+        Msg223, Msg225, Msg265, Msg2A1, Msg261, Msg2A5, Msg2B6, Msg323, Msg336,
+        Msg3B6, Msg3E5, Msg52D,
     )
 }
