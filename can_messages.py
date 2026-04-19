@@ -815,7 +815,15 @@ class Msg1E3(CanMessage):
         # 0x07 = 0x05|0x02 on fresh entry.
         notify_bit = 0x02 if clim.intake_notify else 0x00
         clim.intake_notify = False  # one-shot: consume after first use
-        b1 = recirc_bit | (clim.ac << 4) | mode_bits | notify_bit | clim.dual
+        # Workbench: recirc and explicit-fresh always encode ac=0 in byte0
+        # (verified from workbench captures: 0x85 for recirc, 0x05 for fresh).
+        # AUTO mode and unfrost_front preserve the user's A/C setting (clim.ac).
+        # This keeps the simulator A/C button state independent of airflow mode.
+        if clim.auto or clim.unfrost_front or not clim.intake_explicit:
+            ac_enc = clim.ac
+        else:
+            ac_enc = 0
+        b1 = recirc_bit | (ac_enc << 4) | mode_bits | notify_bit | clim.dual
         b2 = 0x30 | (clim.unfrost_front << 7)
         b3 = clim.bits | clim.temp_left
         b4 = clim.temp_right

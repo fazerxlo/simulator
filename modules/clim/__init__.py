@@ -66,6 +66,11 @@ class Clim(TabbedPanelItem):
             'HI'
         ]
 
+        # Guard flag: prevents Kivy widget state updates from re-entering
+        # UI-callback handlers (on_airflow_mode, on_ac, etc.) while
+        # _update_options() is running its programmatic state sync.
+        self._updating_ui = False
+
         self._update_fan(clim.fan)
         self._update_temps()
         self._update_options()
@@ -118,6 +123,8 @@ class Clim(TabbedPanelItem):
         self._update_dir_buttons()
 
     def on_clim_on(self, state):
+        if getattr(self, '_updating_ui', False):
+            return
         clim = self._clim
         clim.enabled = (state == 'down')
         logger.info('Climate panel %s', 'ON' if state == 'down' else 'OFF')
@@ -128,6 +135,8 @@ class Clim(TabbedPanelItem):
         self._update_options()
 
     def on_ac(self, state):
+        if getattr(self, '_updating_ui', False):
+            return
         if not self._is_ignition_on():
             self._update_options()
             return
@@ -148,6 +157,8 @@ class Clim(TabbedPanelItem):
         - 'recirc'        : Cabin recirculation
         - 'fresh'         : Outside fresh air (no auto, no defrost, no recirculation)
         """
+        if getattr(self, '_updating_ui', False):
+            return
         if state != 'down' or not self._is_ignition_on():
             self._update_options()
             return
@@ -165,10 +176,10 @@ class Clim(TabbedPanelItem):
         # This gates the bit2 (0x04) mode indicator in 0x1E3 byte0 and the
         # bit5 (0x20) non-auto flag in 0x1D0 byte4 (workbench-verified).
         clim.intake_explicit = (mode != 'auto')
-        # Workbench-verified: recirc and fresh modes turn the A/C compressor off;
-        # AUTO mode turns it back on.  unfrost_front leaves A/C unchanged.
+        # Workbench: recirc and fresh modes encode ac=0 in the 0x1E3 byte0 frame
+        # (handled in Msg1E3.encode), but the user's A/C preference (clim.ac) is
+        # preserved — the physical A/C button state is not changed on the real bench.
         if mode in ('recirc', 'fresh'):
-            clim.ac = 0
             # Set the one-shot notification flag so that the next 0x1E3 frame
             # includes bit1 (0x02) — the real BSI does this for exactly one
             # frame to trigger the MFD popup ("Cabin air recycling activated"
@@ -222,6 +233,8 @@ class Clim(TabbedPanelItem):
             self.ids[f'cur_temp{zone}'].text = f'{self._temp_label(temp)}c'
 
     def on_option(self, option, value):
+        if getattr(self, '_updating_ui', False):
+            return
         if not self._is_ignition_on():
             self._update_options()
             return
@@ -361,6 +374,15 @@ class Clim(TabbedPanelItem):
             self.ids['cur_temp1'].text = f'{self._temp_label(clim.temp_right)}c'
 
     def _update_options(self):
+        # Set the guard so that Kivy on_state callbacks triggered by programmatic
+        # widget state changes below do not re-enter the mode handlers.
+        self._updating_ui = True
+        try:
+            self._update_options_inner()
+        finally:
+            self._updating_ui = False
+
+    def _update_options_inner(self):
         clim = self._clim
         # ON / A/C power buttons
         if 'clim_on' in self.ids:

@@ -133,8 +133,24 @@ elif clim.intake_explicit:
 else:
     mode_bits = 0x00
 recirc_bit = 0x80 if clim.recycle else 0x00
-byte0 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
+# Recirc/explicit-fresh always encode ac=0 in frame (workbench-verified)
+if clim.auto or clim.unfrost_front or not clim.intake_explicit:
+    ac_enc = clim.ac
+else:
+    ac_enc = 0
+byte0 = recirc_bit | (ac_enc << 4) | mode_bits | clim.dual
 ```
+
+### Bit 1 — one-shot MFD notification (`intake_notify`)
+
+When the user presses **Recirc** or **Fresh**, the real BSI sends exactly **one** frame with bit 1 (`0x02`) set in byte 0. This single frame triggers the MFD popup message:
+- Recirc entry: `0x87 = 0x85 | 0x02` → popup "Cabin air recycling activated"
+- Fresh entry: `0x07 = 0x05 | 0x02` → popup "Forced intake of outside air"
+
+The simulator replicates this via a one-shot `clim.intake_notify` flag:
+1. `on_airflow_mode('recirc'/'fresh')` sets `clim.intake_notify = True`
+2. The next `Msg1E3.encode()` call includes `0x02` in byte 0 **and immediately clears** `intake_notify`
+3. Subsequent frames return to the stable value (`0x85` / `0x05`) without the notification bit
 
 | Value  | ac | auto | intake_explicit | recycle | dual | Condition                        |
 |--------|----|------|-----------------|---------|------|----------------------------------|
@@ -149,6 +165,8 @@ byte0 = recirc_bit | (clim.ac << 4) | mode_bits | clim.dual
 > **Note**: `intake_explicit` is set when the user presses Fresh, Recirc, or UnfrostFront explicitly.
 > It is cleared when AUTO mode is selected or climate is fully reset (ON button off).
 > Raising the fan from standby does **not** set `intake_explicit`.
+> Pressing a **direction button** while AUTO is active also does **not** set `intake_explicit` —
+> it exits AUTO silently (no popup) and enters implicit manual mode.
 
 ---
 
@@ -253,7 +271,20 @@ The four `mode_*` buttons form a Kivy `group='airflow_mode'` so only one can be 
 
 When **AUTO** is selected:
 - Both left and right direction button grids show the **Auto** button as active.
-- Pressing any other direction button (e.g. Up, Dwn) **automatically exits AUTO mode** (switches to **Fresh**) and applies the chosen direction. This mirrors the real climate panel behaviour.
+- Pressing any other direction button (e.g. Up, Dwn) **automatically exits AUTO mode** (enters implicit manual/fresh state) and applies the chosen direction. No circulation popup is shown — this mirrors real climate panel behaviour.
+- Exiting AUTO via a direction button does **not** set `intake_explicit` and does **not** trigger the MFD popup (no `intake_notify`).
+
+### A/C compressor and airflow mode
+
+`clim.ac` represents the user's A/C compressor preference and is **not** forced off when recirc or fresh is selected. The physical A/C button state is preserved independently of the airflow mode.
+
+However, `Msg1E3.encode` encodes **ac=0 in byte0** (bit 4 = 0) whenever recirc or explicit-fresh is active (workbench-verified: `0x85` for recirc, `0x05` for fresh). AUTO mode and front-unfrost use `clim.ac` as-is.
+
+```
+Effective ac encoding in 0x1E3 byte0:
+  AUTO or unfrost_front        → clim.ac  (user preference)
+  explicit recirc / fresh      → 0        (workbench-verified, regardless of clim.ac)
+```
 
 ### Temperature controls
 
