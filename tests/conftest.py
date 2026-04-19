@@ -77,3 +77,38 @@ def _make_kivy_stubs():
 # Install stubs before any test module is imported.
 for _name, _stub in _make_kivy_stubs().items():
     sys.modules.setdefault(_name, _stub)
+
+
+# ---------------------------------------------------------------------------
+# Shared test helpers
+# ---------------------------------------------------------------------------
+
+def make_can_mock():
+    """Return a minimal 'can' module stub so CanRunner can be imported."""
+    can_mock = types.ModuleType('can')
+
+    class MockBus:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+        def recv(self, timeout):
+            return None
+        def send(self, msg):
+            pass
+
+    class MockMessage:
+        def __init__(self, **kwargs):
+            self.arbitration_id = kwargs.get('arbitration_id', 0)
+            self.data = kwargs.get('data', [])
+            self.is_extended_id = kwargs.get('is_extended_id', False)
+
+    can_mock.Bus = MockBus
+    can_mock.Message = MockMessage
+    return can_mock
+
+
+class DummyWidget:
+    """Lightweight widget stub for UI tests."""
+    def __init__(self, state='normal', value=0, text=''):
+        self.state = state
+        self.value = value
+        self.text = text
