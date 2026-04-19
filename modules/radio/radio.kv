@@ -271,6 +271,11 @@
           text: 'tun'
           on_state: root.on_toggle('tun', self.state)
 
+        ToggleButton:
+          id: toggle_ta
+          text: 'TA'
+          on_state: root.on_toggle('ta', self.state)
+
         # tuning direction
         BoxLayout:
           orientation: 'vertical'
@@ -310,6 +315,11 @@
 
         Label:
           id: cur_station
+          text: ''
+          halign: 'center'
+
+        Label:
+          id: cur_rds_text
           text: ''
           halign: 'center'
 

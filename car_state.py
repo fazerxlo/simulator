@@ -212,6 +212,7 @@ class Radio:
         self.list_flag = 0
         self.tundir = 0
         self.station_name = 'test'
+        self.rds_text = ''
 
 
 class Trip:

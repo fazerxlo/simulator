@@ -225,6 +225,17 @@ class Radio(TabbedPanelItem):
     # UI toggle helpers (called from on_can_message to reflect bus state)
     # ------------------------------------------------------------------
 
+    def _set_toggle_group(self, group_map, target_id):
+        """Explicitly set every button in a group to 'down' or 'normal'.
+
+        Kivy's ToggleButton only calls _release_group() from _do_press()
+        (i.e. real user touch). Programmatic ``state = 'down'`` does NOT
+        release sibling buttons, so we must set every button explicitly.
+        """
+        for btn_id in group_map.values():
+            if btn_id in self.ids:
+                self.ids[btn_id].state = 'down' if btn_id == target_id else 'normal'
+
     def _update_source_toggle(self):
         """Set the source toggle to match car.radio.input."""
         src_map = {
@@ -233,22 +244,16 @@ class Radio(TabbedPanelItem):
             'AUX2': 'toggle_src_aux2', 'USB': 'toggle_src_usb',
             'BT': 'toggle_src_bt',
         }
-        btn_id = src_map.get(self._radio.input)
-        if btn_id and btn_id in self.ids:
-            self.ids[btn_id].state = 'down'
+        self._set_toggle_group(src_map, src_map.get(self._radio.input))
 
     def _update_band_toggle(self):
         """Set the band toggle to match car.radio.band."""
         band_map = {
-            0x00: 'toggle_band_none',
-            0x10: 'toggle_band_fm1',
-            0x20: 'toggle_band_fm2',
-            0x40: 'toggle_band_fmast',
+            0x00: 'toggle_band_none', 0x10: 'toggle_band_fm1',
+            0x20: 'toggle_band_fm2', 0x40: 'toggle_band_fmast',
             0x50: 'toggle_band_am',
         }
-        btn_id = band_map.get(self._radio.band)
-        if btn_id and btn_id in self.ids:
-            self.ids[btn_id].state = 'down'
+        self._set_toggle_group(band_map, band_map.get(self._radio.band, 'toggle_band_none'))
 
     def _update_mem_toggle(self):
         """Set the memory preset toggle to match car.radio.mem."""
@@ -258,17 +263,14 @@ class Radio(TabbedPanelItem):
             0x40: 'toggle_mem_4', 0x50: 'toggle_mem_5',
             0x60: 'toggle_mem_6', 0x70: 'toggle_mem_dash',
         }
-        btn_id = mem_map.get(self._radio.mem)
-        if btn_id and btn_id in self.ids:
-            self.ids[btn_id].state = 'down'
+        self._set_toggle_group(mem_map, mem_map.get(self._radio.mem, 'toggle_mem_no'))
 
     def _update_flag_toggles(self):
-        """Sync RDS/PTY/scan/tun/list toggle states from car.radio."""
+        """Sync RDS/PTY/TA/scan/tun/list toggle states from car.radio."""
         r = self._radio
         flags = {
-            'toggle_rds': r.rds, 'toggle_pty': r.pty,
-            'toggle_list': r.list_flag, 'toggle_scan': r.scan,
-            'toggle_tun': r.tun,
+            'toggle_rds': r.rds, 'toggle_pty': r.pty, 'toggle_ta': r.ta,
+            'toggle_list': r.list_flag, 'toggle_scan': r.scan, 'toggle_tun': r.tun,
         }
         for btn_id, value in flags.items():
             if btn_id in self.ids:
@@ -303,6 +305,11 @@ class Radio(TabbedPanelItem):
             # Msg2A5.decode() updated car.radio.station_name.
             if 'cur_station' in self.ids:
                 self.ids['cur_station'].text = self._radio.station_name
+
+        elif aid == 0x265 and len(data) >= 1:
+            # Msg265.decode() updated car.radio.rds_text (RadioText / RT).
+            if 'cur_rds_text' in self.ids:
+                self.ids['cur_rds_text'].text = self._radio.rds_text
 
         elif aid == 0x1E5 and len(data) >= 7:
             # Msg1E5.decode() updated car.radio.audio; refresh all labels.
