@@ -387,7 +387,7 @@ class BSI_base(TabbedPanelItem):
 
     def can_temp_level(self):
         bsi = self._bsi
-        oil = bsi.oil + 40
+        oil = max(0x00, min(0xFE, round((79 * int(bsi.oil) - 1360) / 50)))
         return 0x161, [0x00, 0x00, oil, bsi.fuel, 0xff, 0xff, 0xff, 0xff]
 
     def can_110(self):
@@ -450,8 +450,8 @@ class BSI_base(TabbedPanelItem):
             if 'engine' in self.ids:
                 self.ids['engine'].state = 'down' if self._bsi.engine_running else 'normal'
         elif msg.arbitration_id == 0x161 and len(msg.data) >= 4:
-            self.on_val('oil', int(msg.data[2]) - 40)
-            self.on_val('fuel', int(msg.data[3]))
+            self.on_val('oil', self._bsi.oil)
+            self.on_val('fuel', self._bsi.fuel)
         elif msg.arbitration_id == 0x0F6 and len(msg.data) >= 8:
             coolant = int(msg.data[1])
             temp = int(msg.data[5])

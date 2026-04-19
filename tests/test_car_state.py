@@ -2638,7 +2638,27 @@ class TestMsg1A8:
 
 
 class TestMsg161OilLevel:
-    """0x161 — BSI_GAUGES: oil level signal at byte 6 (PSA-RE confirmed)."""
+    """0x161 — BSI_GAUGES oil temperature and oil level behavior."""
+
+    def test_encode_oil_temp_uses_workbench_conversion_low(self):
+        """UI 75 °C should encode to the raw value that matches the workbench combine."""
+        car = VirtualCar()
+        car.bsi.oil = 75
+        data = Msg161().encode(car)
+        assert abs(data[2] - 91) <= 1
+
+    def test_encode_oil_temp_uses_workbench_conversion_high(self):
+        """UI 154 °C should encode to the raw value that matches the workbench combine."""
+        car = VirtualCar()
+        car.bsi.oil = 154
+        data = Msg161().encode(car)
+        assert abs(data[2] - 216) <= 1
+
+    def test_decode_oil_temp_uses_standard_raw_minus_40(self):
+        """Incoming 0x161 frames still decode with the documented raw - 40 formula."""
+        car = VirtualCar()
+        Msg161().decode(car, [0x00, 0x00, 0x62, 0x32, 0xFF, 0xFF, 0x4B])
+        assert car.bsi.oil == 58
 
     def test_encode_oil_level_at_byte6(self):
         """OIL_LEVEL encoded at byte 6 (0-indexed)."""
@@ -2673,18 +2693,13 @@ class TestMsg161OilLevel:
         Msg161().decode(car, [0x00, 0x00, 0x50, 0x32, 0xFF, 0xFF])
         assert car.bsi.oil_level == 50  # unchanged
 
-    def test_encode_decode_roundtrip_all_fields(self):
-        """Encode then decode should preserve oil_temp, fuel, and oil_level."""
+    def test_decode_raw_payload_all_fields(self):
+        """Decode should preserve the documented oil/fuel/oil-level semantics from a literal payload."""
         car = VirtualCar()
-        car.bsi.oil = 95        # oil temp 95 °C
-        car.bsi.fuel = 60       # 60 %
-        car.bsi.oil_level = 80  # 80 %
-        data = Msg161().encode(car)
-        car2 = VirtualCar()
-        Msg161().decode(car2, data)
-        assert car2.bsi.oil == 95
-        assert car2.bsi.fuel == 60
-        assert car2.bsi.oil_level == 80
+        Msg161().decode(car, [0x00, 0x00, 0x87, 0x3C, 0xFF, 0xFF, 0x50])
+        assert car.bsi.oil == 95
+        assert car.bsi.fuel == 60
+        assert car.bsi.oil_level == 80
 
     def test_frame_length_is_7_bytes(self):
         """PSA-RE defines 0x161 as 7 bytes; simulator encodes exactly 7."""

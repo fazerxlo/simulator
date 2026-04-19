@@ -372,28 +372,23 @@ class Msg128(CanMessage):
 class Msg161(CanMessage):
     """BSI gauges: oil temperature, fuel level, oil level.
 
-    PSA-RE canonical name: ``BSI_GAUGES`` / ``ETAT_BSI_TEMP_NIVEAU``.
-
-    Byte layout (0-indexed):
-      0  — OIL_LEVEL_RESTART flag (bit 7); simulator sends 0x00
-      1  — unused
-      2  — OIL_TEMPERATURE: raw − 40 °C (``0xFF`` = invalid)
-      3  — FUEL_LEVEL: 0–100 % (``0xFF`` = invalid)
-      4-5 — unused (``0xFF``)
-      6  — OIL_LEVEL: 0–100 % (``0xFF`` = invalid/not available)
+    Byte 2 is the oil-temperature source. Incoming frames decode using the
+    standard raw - 40 protocol rule, while simulator-generated frames use a
+    workbench-derived linear conversion so the physical combine display better
+    matches the UI setpoint.
     """
 
     can_id = 0x161
     period_ms = 500
 
     def encode(self, car) -> list:
-        oil_temp = int(car.bsi.oil + 40)
+        oil_temp = _encode_oil_temp(car.bsi.oil)
         oil_level = int(car.bsi.oil_level) & 0xFF
         return [0x00, 0x00, oil_temp, int(car.bsi.fuel), 0xFF, 0xFF, oil_level]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 4:
-            car.bsi.oil = int(data[2]) - 40
+            car.bsi.oil = _decode_oil_temp(data[2])
             car.bsi.fuel = int(data[3])
         if len(data) >= 7:
             car.bsi.oil_level = int(data[6])
@@ -714,6 +709,26 @@ def _decode_clim_fan(raw_value: int) -> int:
     if 0 <= raw <= 7:
         return raw + 1
     return 0
+
+
+def _encode_oil_temp(temp_c: int) -> int:
+    """Encode UI oil temperature using the workbench combine conversion.
+
+    Bench observations indicate the combine does not visually track a simple
+    raw = temperature + 40 mapping. A linear conversion fits the observed
+    points and produces closer agreement on the physical cluster.
+    """
+    temp = int(temp_c)
+    raw = round((79 * temp - 1360) / 50)
+    return max(0x00, min(0xFE, raw))
+
+
+def _decode_oil_temp(raw_value: int) -> int:
+    """Decode received 0x161 oil temperature using the standard raw - 40 rule."""
+    raw = int(raw_value) & 0xFF
+    if raw == 0xFF:
+        return 0
+    return raw - 40
 
 
 # ---------------------------------------------------------------------------
