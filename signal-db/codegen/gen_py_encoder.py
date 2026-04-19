@@ -120,7 +120,7 @@ def _generate_class(name: str, msg: dict) -> str:
     return "\n".join(parts)
 
 
-def _generate_module(yaml_path: Path) -> str:
+def _generate_module(yaml_path: Path) -> tuple[str, list[str]]:
     """Generate the full Python source for one YAML definition file."""
     with open(yaml_path) as fh:
         spec = yaml.safe_load(fh)
@@ -266,8 +266,7 @@ def _generate_init(module_info: dict[str, list[str]]) -> str:
     chunk_size = 6
     for i in range(0, len(all_msg_names), chunk_size):
         chunk = all_msg_names[i : i + chunk_size]
-        suffix = "," if i + chunk_size < len(all_msg_names) else ","
-        lines.append(f"        {', '.join(chunk)}{suffix}")
+        lines.append(f"        {', '.join(chunk)},")
     lines.append("    )")
     lines.append("}")
     lines.append("")
