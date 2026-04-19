@@ -309,15 +309,34 @@ class TestClimUiHelpers:
         assert widget.ids['slider_fan'].value == 5
         assert widget.ids['cur_fan'].text == 'Fan: 5'
 
-    def test_on_fan_zero_calls_set_off_state(self):
+    def test_on_fan_zero_preserves_settings_and_disables(self):
+        """Fan=0 sets enabled=False and fan=0 but preserves ac, dual, direction."""
         widget = self._make_clim_widget(ignition_on=True)
         widget.runner.car.clim.enabled = True
         widget.runner.car.clim.fan = 3
+        widget.runner.car.clim.ac = 1
+        widget.runner.car.clim.dual = 1
+        widget.runner.car.clim.dir_left = 4
         widget.on_fan(0)
         assert widget.runner.car.clim.fan == 0
         assert widget.runner.car.clim.enabled is False
-        assert widget.runner.car.clim.auto == 0
-        assert widget.runner.car.clim.ac == 0
+        # Other settings must be preserved for restoration on fan-up.
+        assert widget.runner.car.clim.ac == 1
+        assert widget.runner.car.clim.dual == 1
+        assert widget.runner.car.clim.dir_left == 4
+
+    def test_on_fan_from_zero_reenables_climate(self):
+        """Increasing fan from 0 re-enables climate with preserved settings."""
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.enabled = False
+        widget.runner.car.clim.fan = 0
+        widget.runner.car.clim.ac = 1
+        widget.runner.car.clim.dual = 1
+        widget.on_fan(3)
+        assert widget.runner.car.clim.enabled is True
+        assert widget.runner.car.clim.fan == 3
+        assert widget.runner.car.clim.ac == 1
+        assert widget.runner.car.clim.dual == 1
 
     def test_on_fan_disables_auto_mode(self):
         widget = self._make_clim_widget(ignition_on=True)
