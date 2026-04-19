@@ -692,8 +692,8 @@ class TestClimUiHelpers:
 
     def test_on_airflow_mode_auto_from_standby_reenables_climate_at_fan1(self):
         """Pressing AUTO while climate is in standby (fan=0) re-enables it at fan=1.
-        Workbench-verified: after fan→0 standby then AUTO pressed, 0x1E3 immediately
-        shows auto mode active and fan byte = raw 0x00 (fan level 1).
+        Workbench-verified: after fan→0 standby then AUTO pressed, climate is
+        immediately active with auto mode and fan level 1.
         """
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update(self._make_dir_ids())

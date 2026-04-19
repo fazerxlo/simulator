@@ -152,7 +152,9 @@ class Clim(TabbedPanelItem):
             self._update_options()
             return
         clim = self._clim
-        # Track prior state to decide whether a popup is warranted.
+        # Capture prior state BEFORE modifying clim.auto / clim.enabled below —
+        # these flags govern popup and re-enable logic and must reflect the
+        # state the user was in when the button was pressed.
         was_active_non_auto = clim.enabled and not clim.auto
         was_standby = not clim.enabled
         clim.auto = 1 if mode == 'auto' else 0

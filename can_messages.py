@@ -559,8 +559,7 @@ class Msg1A1(CanMessage):
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00
         msg_id = p.msg_id if p.msg_id not in (None, 0x00) else self.IDLE_MESSAGE_ID
-        display_flags = getattr(p, 'display_flags', self.DISPLAY_FLAGS)
-        return [flag, msg_id, display_flags, 0x00, 0x00, 0x00, 0x00, 0x00]
+        return [flag, msg_id, p.display_flags, 0x00, 0x00, 0x00, 0x00, 0x00]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 2:
