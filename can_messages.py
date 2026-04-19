@@ -118,13 +118,18 @@ class Msg036(CanMessage):
 # ---------------------------------------------------------------------------
 
 class Msg0B6(CanMessage):
-    """Fast dynamic data: engine RPM and vehicle speed."""
+    """Fast dynamic data: engine RPM and vehicle speed.
+
+    Workbench combine verification shows that bytes 0-1 carry RPM as a 13-bit
+    raw value in bits 15..3, which is equivalent to displayed RPM shifted left
+    by 3. Vehicle speed remains a uint16 scaled by 100.
+    """
 
     can_id = 0x0B6
     period_ms = 50
 
     def encode(self, car) -> list:
-        rpm = int(car.bsi.rpm * 10)
+        rpm = max(0, int(car.bsi.rpm)) << 3
         speed = int(car.bsi.speed * 100)
         if not car.bsi.ignition_on:
             return [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0xD0]
@@ -142,7 +147,7 @@ class Msg0B6(CanMessage):
         # Real bench idle / engine-off traces use 0xFFFF placeholders rather
         # than literal sensor values. Treat those as invalid zeros so monitor
         # mode does not show absurd RPM or speed readings.
-        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else int(raw_rpm / 10)
+        car.bsi.rpm = 0 if raw_rpm == 0xFFFF else (raw_rpm >> 3)
         car.bsi.speed = 0 if raw_speed == 0xFFFF else int(raw_speed / 100)
         car.bsi.engine_running = 1 if raw_rpm not in (0x0000, 0xFFFF) else 0
 
@@ -303,7 +308,9 @@ class Msg128(CanMessage):
             b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
                   dash.fog_front << 4 | dash.fog_rear << 3 |
                   dash.clig_r << 2 | dash.clig_l << 1)
-            cluster_on = 1 if (dash.on or car.bsi.ignition_on or int(car.bsi.power_mode) == 0x01) else 0
+            cluster_on = 1 if (
+                dash.on or car.bsi.ignition_on or int(car.bsi.power_mode) in (0x01, 0x03)
+            ) else 0
             # Keep the workbench cluster in the default manual-gearbox view
             # unless explicit gear-simulation fields are added later.
             gear_display = int(getattr(dash, 'gear_display', 0x00)) & 0xFF
@@ -337,6 +344,15 @@ class Msg128(CanMessage):
             dash.clig_r = (data[4] >> 2) & 1
             dash.clig_l = (data[4] >> 1) & 1
             dash.on = (data[5] >> 7) & 1
+            if dash.high_beam:
+                car.bsi.light_mode = 3
+            elif dash.low_beam:
+                car.bsi.light_mode = 2
+            elif dash.backlight:
+                car.bsi.light_mode = 1
+            else:
+                car.bsi.light_mode = 0
+            car.bsi.dash_lights = 1 if dash.backlight else 0
         else:
             d5 = int(data[4]) & 0xE0
             if d5 & 0x20:
@@ -356,28 +372,23 @@ class Msg128(CanMessage):
 class Msg161(CanMessage):
     """BSI gauges: oil temperature, fuel level, oil level.
 
-    PSA-RE canonical name: ``BSI_GAUGES`` / ``ETAT_BSI_TEMP_NIVEAU``.
-
-    Byte layout (0-indexed):
-      0  — OIL_LEVEL_RESTART flag (bit 7); simulator sends 0x00
-      1  — unused
-      2  — OIL_TEMPERATURE: raw − 40 °C (``0xFF`` = invalid)
-      3  — FUEL_LEVEL: 0–100 % (``0xFF`` = invalid)
-      4-5 — unused (``0xFF``)
-      6  — OIL_LEVEL: 0–100 % (``0xFF`` = invalid/not available)
+    Byte 2 is the oil-temperature source. Incoming frames decode using the
+    standard raw - 40 protocol rule, while simulator-generated frames use a
+    workbench-derived linear conversion so the physical combine display better
+    matches the UI setpoint.
     """
 
     can_id = 0x161
     period_ms = 500
 
     def encode(self, car) -> list:
-        oil_temp = int(car.bsi.oil + 40)
+        oil_temp = _encode_oil_temp(car.bsi.oil)
         oil_level = int(car.bsi.oil_level) & 0xFF
         return [0x00, 0x00, oil_temp, int(car.bsi.fuel), 0xFF, 0xFF, oil_level]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 4:
-            car.bsi.oil = int(data[2]) - 40
+            car.bsi.oil = _decode_oil_temp(data[2])
             car.bsi.fuel = int(data[3])
         if len(data) >= 7:
             car.bsi.oil_level = int(data[6])
@@ -507,8 +518,8 @@ class Msg1A1(CanMessage):
     period_ms = 200
     IDLE_MESSAGE_ID = 0x8B
     DISPLAY_FLAGS = 0xC6
-    DOOR_DISPLAY_FLAGS = 0xC7
-    DOOR_ANNOUNCE_FLAGS = 0x47
+    DOOR_DISPLAY_FLAGS = 0xC6
+    DOOR_ANNOUNCE_FLAGS = 0xC6
 
     @staticmethod
     def _door_status_bytes(doors) -> tuple[int, int]:
@@ -554,7 +565,7 @@ class Msg1A1(CanMessage):
             if any_open:
                 d3, d4 = self._door_status_bytes(d)
                 return [flag, msg_id, self.DOOR_DISPLAY_FLAGS, d3, d4, 0x00, 0x00, 0x00]
-            return [0xFF, 0x00, self.DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
+            return [0x00, self.IDLE_MESSAGE_ID, self.DOOR_ANNOUNCE_FLAGS, 0x00, 0x00, 0x00, 0x00, 0x00]
 
         p = car.mfd_popup
         flag = 0x80 if p.flag == 0x80 else 0x00
@@ -698,6 +709,26 @@ def _decode_clim_fan(raw_value: int) -> int:
     if 0 <= raw <= 7:
         return raw + 1
     return 0
+
+
+def _encode_oil_temp(temp_c: int) -> int:
+    """Encode UI oil temperature using the workbench combine conversion.
+
+    Bench observations indicate the combine does not visually track a simple
+    raw = temperature + 40 mapping. A linear conversion fits the observed
+    points and produces closer agreement on the physical cluster.
+    """
+    temp = int(temp_c)
+    raw = round((79 * temp - 1360) / 50)
+    return max(0x00, min(0xFE, raw))
+
+
+def _decode_oil_temp(raw_value: int) -> int:
+    """Decode received 0x161 oil temperature using the standard raw - 40 rule."""
+    raw = int(raw_value) & 0xFF
+    if raw == 0xFF:
+        return 0
+    return raw - 40
 
 
 # ---------------------------------------------------------------------------
