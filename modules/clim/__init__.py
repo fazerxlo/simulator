@@ -88,8 +88,8 @@ class Clim(TabbedPanelItem):
         clim.unfrost_front = 0
         clim.unfrost_rear = 0
         clim.recycle = 0
-        clim.auto = 1   # return to AUTO mode on next power-on
-        clim.ac = 1     # keep A/C on by default
+        clim.auto = 0
+        clim.ac = 0
         clim.dual = 0
         clim.temp_left = 0
         clim.temp_right = 0
@@ -202,6 +202,15 @@ class Clim(TabbedPanelItem):
         new_fan = self._normalize_ui_fan(value)
         if new_fan != self._clim.fan:
             logger.info('Fan speed set to %d', new_fan)
+        if new_fan == 0:
+            self._set_off_state()
+            self._clim.enabled = False
+            self._update_options()
+            return
+        clim = self._clim
+        if clim.auto:
+            clim.auto = 0
+            self._update_options()
         self._update_fan(new_fan)
 
     def on_toggle(self, bit, value):

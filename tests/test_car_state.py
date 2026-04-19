@@ -309,6 +309,24 @@ class TestClimUiHelpers:
         assert widget.ids['slider_fan'].value == 5
         assert widget.ids['cur_fan'].text == 'Fan: 5'
 
+    def test_on_fan_zero_calls_set_off_state(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.enabled = True
+        widget.runner.car.clim.fan = 3
+        widget.on_fan(0)
+        assert widget.runner.car.clim.fan == 0
+        assert widget.runner.car.clim.enabled is False
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.ac == 0
+
+    def test_on_fan_disables_auto_mode(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.ids.update(self._make_dir_ids())
+        widget.runner.car.clim.auto = 1
+        widget.on_fan(4)
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.fan == 4
+
     def test_update_dir_buttons_recognizes_real_fast_code(self):
         widget = self._make_clim_widget(ignition_on=True)
         widget.ids.update({
@@ -620,6 +638,14 @@ class TestClimUiHelpers:
         widget.runner.car.clim.enabled = True
         widget.on_clim_on('normal')
         assert widget.runner.car.clim.enabled is False
+
+    def test_on_clim_on_off_resets_auto_and_ac(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.auto = 1
+        widget.runner.car.clim.ac = 1
+        widget.on_clim_on('normal')
+        assert widget.runner.car.clim.auto == 0
+        assert widget.runner.car.clim.ac == 0
 
     def test_on_clim_on_on_enables_clim_enabled(self):
         widget = self._make_clim_widget(ignition_on=True)
