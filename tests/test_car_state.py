@@ -280,6 +280,8 @@ class TestClimUiHelpers:
             'auto': DummyWidget(),
             'dual': DummyWidget(),
             'recycle': DummyWidget(),
+            'intake_fresh': DummyWidget(),
+            'intake_recycle': DummyWidget(),
             'unfrost_front': DummyWidget(),
             'unfrost_rear': DummyWidget(),
         }
@@ -450,6 +452,34 @@ class TestClimUiHelpers:
         widget.on_temp(0, +1)
         assert widget.runner.car.clim.dual == 0
         assert widget.runner.car.clim.temp_left == 12
+
+    def test_on_intake_fresh_sets_recycle_off(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.recycle = 1
+        widget.on_intake(False, 'down')
+        assert widget.runner.car.clim.recycle == 0
+        assert widget.ids['intake_fresh'].state == 'down'
+        assert widget.ids['intake_recycle'].state == 'normal'
+
+    def test_on_intake_recirc_sets_recycle_on(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.recycle = 0
+        widget.on_intake(True, 'down')
+        assert widget.runner.car.clim.recycle == 1
+        assert widget.ids['intake_recycle'].state == 'down'
+        assert widget.ids['intake_fresh'].state == 'normal'
+
+    def test_on_intake_ignition_off_does_not_set_recycle(self):
+        widget = self._make_clim_widget(ignition_on=False)
+        widget.runner.car.clim.recycle = 0
+        widget.on_intake(True, 'down')
+        assert widget.runner.car.clim.recycle == 0
+
+    def test_on_intake_normal_state_is_ignored(self):
+        widget = self._make_clim_widget(ignition_on=True)
+        widget.runner.car.clim.recycle = 1
+        widget.on_intake(False, 'normal')
+        assert widget.runner.car.clim.recycle == 1
 
 
 class TestDoorsUiHelpers:

@@ -18,9 +18,18 @@
         text: 'unfrost front'
         on_state: root.on_option('unfrost_front', self.state)
       ToggleButton:
-        id: recycle
-        text: 'recycling'
-        on_state: root.on_option('recycle', self.state)
+        id: intake_fresh
+        text: 'Fresh'
+        group: 'intake'
+        state: 'down'
+        allow_no_selection: False
+        on_state: root.on_intake(False, self.state)
+      ToggleButton:
+        id: intake_recycle
+        text: 'Recirc'
+        group: 'intake'
+        allow_no_selection: False
+        on_state: root.on_intake(True, self.state)
       ToggleButton:
         id: unfrost_rear
         text: 'unfrost rear'

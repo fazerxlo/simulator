@@ -132,6 +132,14 @@ class Clim(TabbedPanelItem):
         logger.info('Climate %s %s', option.replace('_', ' '), state_str)
         self._update_options()
 
+    def on_intake(self, recirculate, state='down'):
+        if state != 'down' or not self._is_ignition_on():
+            self._update_options()
+            return
+        self._clim.recycle = 1 if recirculate else 0
+        logger.info('Climate intake %s', 'recirculate' if recirculate else 'fresh/outside')
+        self._update_options()
+
     def on_fan(self, value):
         if not self._is_ignition_on():
             self._update_fan(self._clim.fan)
@@ -216,6 +224,11 @@ class Clim(TabbedPanelItem):
 
     def _update_options(self):
         clim = self._clim
+        if 'intake_fresh' in self.ids:
+            self.ids['intake_fresh'].state = 'normal' if clim.recycle else 'down'
+        if 'intake_recycle' in self.ids:
+            self.ids['intake_recycle'].state = 'down' if clim.recycle else 'normal'
+        # Legacy single-toggle support (monitor mode / tests that still use 'recycle' id)
         if 'recycle' in self.ids:
             self.ids['recycle'].state = 'down' if clim.recycle else 'normal'
         if 'unfrost_front' in self.ids:
