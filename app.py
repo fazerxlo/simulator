@@ -30,6 +30,7 @@ def parse_args():
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('mode', nargs='?', choices=['monitor'], help='Run mode')
     parser.add_argument('--monitor', action='store_true', help='Monitor CAN bus only, do not send outgoing frames')
+    parser.add_argument('--can-version', choices=['2004', '2010'], default='2004', help='CAN database/version profile to use')
     parser.add_argument('--channel', default='vcan0', help='SocketCAN interface name, for example can0 or vcan0')
     parser.add_argument('--interface', default='socketcan', help='python-can backend interface')
     parser.add_argument('--bitrate', type=int, default=125000, help='CAN bitrate for the selected interface')
@@ -40,9 +41,10 @@ def parse_args():
 
 
 class PeugeotSim(App):
-    def __init__(self, monitor=False, channel='vcan0', interface='socketcan', bitrate=125000, **kwargs):
+    def __init__(self, monitor=False, can_version='2004', channel='vcan0', interface='socketcan', bitrate=125000, **kwargs):
         super().__init__(**kwargs)
         self.monitor = monitor
+        self.can_version = can_version
         self.channel = channel
         self.interface = interface
         self.bitrate = bitrate
@@ -64,6 +66,7 @@ class PeugeotSim(App):
             interface=self.interface,
             bitrate=self.bitrate,
             monitor=self.monitor,
+            can_version=self.can_version,
         )
         self.can_runner.set_enabled_modules(self.conf.get('modules', []))
 
@@ -103,6 +106,7 @@ if __name__ == '__main__':
     monitor_mode = args.monitor or args.mode == 'monitor'
     PeugeotSim(
         monitor=monitor_mode,
+        can_version=args.can_version,
         channel=args.channel,
         interface=args.interface,
         bitrate=args.bitrate,

@@ -41,6 +41,10 @@ Start normal simulator mode on the virtual bus:
 
     python app.py --channel vcan0
 
+Start with CAN2010 signal profile:
+
+    python app.py --can-version 2010
+
 Start monitor-only mode on the virtual bus:
 
     python app.py --monitor --channel vcan0
@@ -54,13 +58,13 @@ Monitor mode will receive and process incoming CAN frames on the selected interf
 - `config.yml` — list of enabled simulation modules
 - `modules/` — per-module simulation code and UI definitions
 - `generated/` — auto-generated CAN message encoder modules (one per subsystem)
-- `signal-db/` — YAML signal database (single source of truth for all CAN message definitions)
+- `signal-db/` — YAML signal database, split by CAN version (`2004/` and `2010/`)
 - `signal-db/codegen/` — code generator that reads YAML and produces `generated/` modules
 - `requirements.txt` — Python dependencies
 
 ## Signal database and code generation
 
-All CAN message definitions live in YAML files under `signal-db/`, one per vehicle subsystem:
+All CAN message definitions live in YAML files under `signal-db/<can-version>/`, one per vehicle subsystem:
 
 | YAML file | Module group | Messages |
 |-----------|-------------|----------|
@@ -74,22 +78,27 @@ All CAN message definitions live in YAML files under `signal-db/`, one per vehic
 
 ### Regenerating encoder modules
 
-After editing any YAML file in `signal-db/`, regenerate the Python encoder modules:
+After editing any YAML file in `signal-db/<can-version>/`, regenerate the Python encoder modules:
 
-    python -m signal-db.codegen.gen_py_encoder
+    python -m signal-db.codegen.gen_py_encoder --can-version 2004
 
-This reads all `signal-db/*.yaml` files and writes the corresponding Python modules to `generated/`. The generated files are committed to the repository so the simulator works out of the box without running codegen.
+or:
+
+    python -m signal-db.codegen.gen_py_encoder --can-version 2010
+
+This reads all `signal-db/<can-version>/*.yaml` files and writes the corresponding Python modules to `generated/`. The generated files are committed to the repository so the simulator works out of the box without running codegen.
 
 ### Adding a new CAN message
 
-1. Choose the appropriate YAML file in `signal-db/` (or create a new one for a new subsystem).
+1. Choose the appropriate YAML file in `signal-db/<can-version>/` (or create a new one for a new subsystem).
 2. Add a message entry with `can_id`, `period_ms`, `encode_body`, and optionally `decode_body`, `required_modules`, `listen_only`, etc.
-3. Run `python -m signal-db.codegen.gen_py_encoder` to regenerate `generated/`.
+3. Run `python -m signal-db.codegen.gen_py_encoder --can-version <2004|2010>` to regenerate `generated/`.
 4. Import the new message class from `generated.<module>_messages` in the appropriate simulator module.
 5. Run `python -m pytest tests/` to verify everything works.
 
 ## Notes
 
 - The CAN interface can be selected with `--channel`, so you can switch between `can0` and `vcan0` without editing code.
+- The CAN profile can be selected with `--can-version` (`2004` by default, `2010` optional).
 - Modules register themselves dynamically via `config.yml`.
 - Monitor mode is useful for observing live vehicle traffic and mapping incoming CAN state into simulator UI controls.

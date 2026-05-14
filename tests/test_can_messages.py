@@ -55,6 +55,18 @@ class TestAppArgumentParsing:
         assert args.channel == 'vcan0'
         assert args.monitor is True
 
+    def test_parse_args_defaults_can_version_to_2004(self, monkeypatch):
+        import app
+        monkeypatch.setattr(sys, 'argv', ['app.py'])
+        args = app.parse_args()
+        assert args.can_version == '2004'
+
+    def test_parse_args_accepts_can_version_option(self, monkeypatch):
+        import app
+        monkeypatch.setattr(sys, 'argv', ['app.py', '--can-version', '2010'])
+        args = app.parse_args()
+        assert args.can_version == '2010'
+
 
 class TestStartupWakeupBurst:
     def test_contains_expected_workbench_ids(self):
