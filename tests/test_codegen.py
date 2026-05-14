@@ -23,6 +23,7 @@ import yaml
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CAN_VERSION = "2004"
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
@@ -33,14 +34,14 @@ if REPO_ROOT not in sys.path:
 
 def _load_yaml(name):
     """Load a signal-db YAML file by module group name."""
-    path = os.path.join(REPO_ROOT, "signal-db", f"{name}.yaml")
+    path = os.path.join(REPO_ROOT, "signal-db", CAN_VERSION, f"{name}.yaml")
     with open(path) as fh:
         return yaml.safe_load(fh)
 
 
 def _all_yaml_names():
     """Return sorted list of all signal-db YAML file stems."""
-    db_dir = os.path.join(REPO_ROOT, "signal-db")
+    db_dir = os.path.join(REPO_ROOT, "signal-db", CAN_VERSION)
     return sorted(
         os.path.splitext(f)[0]
         for f in os.listdir(db_dir)
@@ -215,7 +216,7 @@ class TestCodegenIdempotency:
         what is already committed in generated/."""
         sys.path.insert(0, os.path.dirname(__file__))
         from signal_db_codegen_helper import regenerate_to_dir
-        regenerate_to_dir(tmp_path)
+        regenerate_to_dir(tmp_path, can_version=CAN_VERSION)
 
         generated_dir = os.path.join(REPO_ROOT, "generated")
         for fname in os.listdir(generated_dir):

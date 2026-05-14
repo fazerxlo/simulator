@@ -4,11 +4,12 @@ Python encoder/decoder modules in the ``generated/`` package.
 
 Usage::
 
-    python -m signal-db.codegen.gen_py_encoder          # generate all
-    python -m signal-db.codegen.gen_py_encoder bsi clim  # generate specific modules
+    python -m signal-db.codegen.gen_py_encoder --can-version 2004          # generate all
+    python -m signal-db.codegen.gen_py_encoder --can-version 2010 bsi clim  # generate specific modules
 
-Each YAML file in ``signal-db/`` maps to one Python module in ``generated/``.
-For example ``signal-db/bsi.yaml`` → ``generated/bsi_messages.py``.
+Each YAML file in ``signal-db/<version>/`` maps to one Python module in
+``generated/``. For example ``signal-db/2004/bsi.yaml`` →
+``generated/bsi_messages.py``.
 
 The generator also writes:
 * ``generated/__init__.py`` — re-exports every message class plus
@@ -23,6 +24,7 @@ from __future__ import annotations
 import os
 import sys
 import textwrap
+import argparse
 from pathlib import Path
 
 import yaml
@@ -33,7 +35,6 @@ import yaml
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-SIGNAL_DB_DIR = REPO_ROOT / "signal-db"
 GENERATED_DIR = REPO_ROOT / "generated"
 
 
@@ -120,7 +121,7 @@ def _generate_class(name: str, msg: dict) -> str:
     return "\n".join(parts)
 
 
-def _generate_module(yaml_path: Path) -> tuple[str, list[str]]:
+def _generate_module(yaml_path: Path, source_hint: str | None = None) -> tuple[str, list[str]]:
     """Generate the full Python source for one YAML definition file."""
     with open(yaml_path) as fh:
         spec = yaml.safe_load(fh)
@@ -129,7 +130,8 @@ def _generate_module(yaml_path: Path) -> tuple[str, list[str]]:
     desc = spec.get("description", f"Auto-generated CAN message encoders for {group}.")
 
     lines: list[str] = []
-    lines.append(f'"""Auto-generated from signal-db/{yaml_path.name} — do not edit by hand.')
+    source_display = source_hint or f"signal-db/{yaml_path.name}"
+    lines.append(f'"""Auto-generated from {source_display} — do not edit by hand.')
     lines.append("")
     lines.append(f"{desc}")
     lines.append('"""')
@@ -278,26 +280,31 @@ def _generate_init(module_info: dict[str, list[str]]) -> str:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def main(module_names: list[str] | None = None) -> None:
+def _signal_db_dir(can_version: str) -> Path:
+    return REPO_ROOT / "signal-db" / can_version
+
+
+def main(module_names: list[str] | None = None, can_version: str = "2004") -> None:
     """Generate Python encoder modules from signal-db YAML files.
 
     Parameters
     ----------
     module_names : list of str, optional
         If provided, only generate these modules (e.g. ``['bsi', 'clim']``).
-        Otherwise generate all YAML files found in ``signal-db/``.
+        Otherwise generate all YAML files found in ``signal-db/<can_version>/``.
     """
+    signal_db_dir = _signal_db_dir(can_version)
     GENERATED_DIR.mkdir(exist_ok=True)
 
     # Discover YAML files
-    yaml_files: list[Path] = sorted(SIGNAL_DB_DIR.glob("*.yaml"))
+    yaml_files: list[Path] = sorted(signal_db_dir.glob("*.yaml"))
     if module_names:
         yaml_files = [
             f for f in yaml_files if f.stem in module_names
         ]
 
     if not yaml_files:
-        print("No YAML files found in", SIGNAL_DB_DIR)
+        print("No YAML files found in", signal_db_dir)
         sys.exit(1)
 
     def _rel(path: Path) -> str:
@@ -315,7 +322,8 @@ def main(module_names: list[str] | None = None) -> None:
 
     # Generate per-module files
     for yaml_path in yaml_files:
-        source, msg_names = _generate_module(yaml_path)
+        source_hint = f"signal-db/{can_version}/{yaml_path.name}"
+        source, msg_names = _generate_module(yaml_path, source_hint=source_hint)
         group = yaml_path.stem
         out_path = GENERATED_DIR / f"{group}_messages.py"
         out_path.write_text(source)
@@ -323,9 +331,9 @@ def main(module_names: list[str] | None = None) -> None:
         print(f"  wrote {_rel(out_path)} ({len(msg_names)} messages)")
 
     # If generating all modules, also produce __init__.py
-    if not module_names or set(module_names) == {f.stem for f in sorted(SIGNAL_DB_DIR.glob("*.yaml"))}:
+    if not module_names or set(module_names) == {f.stem for f in sorted(signal_db_dir.glob("*.yaml"))}:
         # Need to re-scan all for init
-        all_yaml = sorted(SIGNAL_DB_DIR.glob("*.yaml"))
+        all_yaml = sorted(signal_db_dir.glob("*.yaml"))
         all_info: dict[str, list[str]] = {}
         for yp in all_yaml:
             with open(yp) as fh:
@@ -339,5 +347,8 @@ def main(module_names: list[str] | None = None) -> None:
 
 
 if __name__ == "__main__":
-    modules = sys.argv[1:] if len(sys.argv) > 1 else None
-    main(modules)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--can-version", choices=["2004", "2010"], default="2004")
+    parser.add_argument("modules", nargs="*")
+    args = parser.parse_args()
+    main(args.modules or None, can_version=args.can_version)

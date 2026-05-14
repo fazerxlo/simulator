@@ -1,4 +1,4 @@
-"""Auto-generated from signal-db/trip.yaml — do not edit by hand.
+"""Auto-generated from signal-db/2004/trip.yaml — do not edit by hand.
 
 Trip computer messages for Peugeot 407 CAN2004 comfort bus
 """
