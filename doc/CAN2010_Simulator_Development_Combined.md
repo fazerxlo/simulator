@@ -1,4 +1,4 @@
-# Simulator Development — Combined CAN2004 ↔ CAN2010 Reference
+# CAN2010 Simulator Development — Combined CAN2004 ↔ CAN2010 Reference
 
 This document combines and reconciles:
 
@@ -149,4 +149,3 @@ For full byte/bit-level detail and implementation-specific edge cases, consult:
 
 - `doc/PSACANBridgeCAN2010_Simulator_Development.md`
 - `doc/arduino-psa-comfort-can-adapter_Simulator_Development.md`
-
