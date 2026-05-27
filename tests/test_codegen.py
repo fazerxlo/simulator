@@ -227,3 +227,22 @@ class TestCodegenIdempotency:
             assert committed == regenerated, (
                 f"generated/{fname} differs from re-generated output"
             )
+
+
+class TestCan2010Definitions:
+    def test_can2010_bsi_contains_minimum_boot_ids(self):
+        path = os.path.join(REPO_ROOT, "signal-db", "2010", "bsi.yaml")
+        with open(path) as fh:
+            spec = yaml.safe_load(fh)
+
+        ids = {msg["can_id"] for msg in spec["messages"].values()}
+        for required in (0x036, 0x236, 0x0F6, 0x0B6, 0x128, 0x168, 0x260, 0x276):
+            assert required in ids, f"CAN2010 bsi.yaml missing required ID 0x{required:03X}"
+
+    def test_can2010_codegen_runs(self, tmp_path):
+        sys.path.insert(0, os.path.dirname(__file__))
+        from signal_db_codegen_helper import regenerate_to_dir
+
+        regenerate_to_dir(tmp_path, can_version="2010")
+        generated_bsi = (tmp_path / "bsi_messages.py").read_text()
+        assert "signal-db/2010/bsi.yaml" in generated_bsi

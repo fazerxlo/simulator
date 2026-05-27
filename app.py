@@ -4,6 +4,8 @@ import os
 import sys
 import argparse
 import logging
+import importlib.util
+from pathlib import Path
 
 # Kivy parses command-line arguments on import. Disable that behavior so
 # simulator-specific flags like --channel and --monitor are handled here.
@@ -24,6 +26,15 @@ from kivy.lang.builder import Builder
 from kivy.clock import Clock
 
 from can_runner import CanRunner
+
+
+def ensure_generated_messages(can_version):
+    codegen_path = Path(__file__).resolve().parent / 'signal-db' / 'codegen' / 'gen_py_encoder.py'
+    spec = importlib.util.spec_from_file_location('gen_py_encoder', codegen_path)
+    codegen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(codegen)
+    codegen.main(can_version=can_version)
+    importlib.invalidate_caches()
 
 
 def parse_args():
@@ -53,6 +64,8 @@ class PeugeotSim(App):
         return Builder.load_file('main.kv')
 
     def on_start(self):
+        ensure_generated_messages(self.can_version)
+
         # Get tabs id
         tabs = self.root.ids['modules']
         tabs.clear_widgets()
