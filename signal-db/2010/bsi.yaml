@@ -45,6 +45,14 @@ constants:
     ]
 
 messages:
+  Msg018:
+    can_id: 0x018
+    period_ms: 1000
+    description: |
+      Arduino bench helper frame used by CAN2010 low-speed diagnostics.
+    encode_body: |
+      return [0x80, 0x00, 0x02, 0x00, 0x00]
+
   Msg036:
     can_id: 0x036
     period_ms: 100
@@ -58,9 +66,9 @@ messages:
       return 100
     encode_body: |
       bsi = car.bsi
-      direction = 0x02 if int(bsi.reverse) else 0x01
-      b0 = (direction & 0x03) << 6
-      b2 = ((int(bsi.economy) & 0x01) << 7)
+      direction = 0x02 if int(bsi.reverse) else 0x00
+      b0 = ((direction & 0x03) << 6) | 0x0E
+      b2 = ((int(bsi.economy) & 0x01) << 7) | 0x03
       b3 = ((int(bsi.dark_mode) & 0x01) << 4) | ((int(bsi.dash_lights) & 0x01) << 5) | (int(bsi.lum) & 0x0F)
       if int(bsi.power_mode) in (0x01, 0x03):
           ignition_mode = 0x01
@@ -68,12 +76,7 @@ messages:
           ignition_mode = 0x00
       else:
           ignition_mode = 0x02
-      pending_banner = bool(getattr(bsi, 'startup_banner_pending', False))
-      trailer = 0x50 if pending_banner and not self._boot_banner_sent else 0xA0
-      if pending_banner:
-          bsi.startup_banner_pending = False
-          self._boot_banner_sent = True
-      return [b0, 0x00, b2, b3, ignition_mode, 0x00, 0x00, trailer]
+      return [b0, 0x00, b2, b3, 0x30 | ignition_mode, 0x00, 0x81, 0xAC]
     decode_body: |
       if len(data) < 5:
           return
@@ -137,10 +140,13 @@ messages:
       bsi = car.bsi
       temp = int((bsi.temperature + 40) * 2)
       coolant = int(bsi.coolant + 40)
-      # byte 7: reverse + blinkers; force bit 0 high for compatibility
+      status = 0x8E if int(getattr(bsi, 'engine_running', 0)) else 0x88
+      odometer_km = int(getattr(bsi, 'odometer_km', 42))
+      odometer = max(0, min(0xFFFFFF, odometer_km * 10))
       b7 = (int(bsi.reverse) << 7) | (int(bsi.blinkers) & 0x03)
-      # bytes 2-4: odometer — emit 0xFF FF FF (invalid) for bench simulation
-      return [0x88, coolant, 0xFF, 0xFF, 0xFF, temp, temp, b7]
+      if b7 == 0x00:
+          b7 = 0x20
+      return [status, coolant, (odometer >> 16) & 0xFF, (odometer >> 8) & 0xFF, odometer & 0xFF, temp, temp, b7]
     decode_body: |
       if len(data) < 8:
           return

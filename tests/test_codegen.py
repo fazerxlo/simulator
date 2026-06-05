@@ -10,6 +10,7 @@ Validates that:
 """
 
 import importlib
+import importlib.util
 import os
 import sys
 import textwrap
@@ -236,7 +237,7 @@ class TestCan2010Definitions:
             spec = yaml.safe_load(fh)
 
         ids = {msg["can_id"] for msg in spec["messages"].values()}
-        for required in (0x036, 0x236, 0x0F6, 0x0B6, 0x128, 0x168, 0x260, 0x276):
+        for required in (0x018, 0x036, 0x236, 0x0F6, 0x0B6, 0x128, 0x168, 0x260, 0x276):
             assert required in ids, f"CAN2010 bsi.yaml missing required ID 0x{required:03X}"
 
     def test_can2010_codegen_runs(self, tmp_path):
@@ -246,3 +247,28 @@ class TestCan2010Definitions:
         regenerate_to_dir(tmp_path, can_version="2010")
         generated_bsi = (tmp_path / "bsi_messages.py").read_text()
         assert "signal-db/2010/bsi.yaml" in generated_bsi
+
+    def test_can2010_matches_arduino_bsi_baseline(self, tmp_path):
+        sys.path.insert(0, os.path.dirname(__file__))
+        from signal_db_codegen_helper import regenerate_to_dir
+        from car_state import VirtualCar
+
+        regenerate_to_dir(tmp_path, can_version="2010")
+        spec = importlib.util.spec_from_file_location("bsi_messages_2010_test", tmp_path / "bsi_messages.py")
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+
+        car = VirtualCar()
+        car.bsi.power_mode = 0x01
+        car.bsi.ignition_on = True
+        car.bsi.dash_lights = 1
+        car.bsi.dark_mode = 0
+        car.bsi.lum = 10
+        car.bsi.coolant = 57
+        car.bsi.temperature = 21.5
+        car.bsi.engine_running = 1
+
+        assert mod.Msg018().encode(car) == [0x80, 0x00, 0x02, 0x00, 0x00]
+        assert mod.Msg036().encode(car) == [0x0E, 0x00, 0x03, 0x2A, 0x31, 0x00, 0x81, 0xAC]
+        assert mod.Msg0F6().encode(car) == [0x8E, 0x61, 0x00, 0x01, 0xA4, 0x7B, 0x7B, 0x20]
