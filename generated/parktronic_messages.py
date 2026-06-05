@@ -1,4 +1,4 @@
-"""Auto-generated from signal-db/parktronic.yaml — do not edit by hand.
+"""Auto-generated from signal-db/2004/parktronic.yaml — do not edit by hand.
 
 Parktronic sensor messages for Peugeot 407 CAN2004 comfort bus
 """

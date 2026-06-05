@@ -1,4 +1,4 @@
-"""Auto-generated from signal-db/radio.yaml — do not edit by hand.
+"""Auto-generated from signal-db/2004/radio.yaml — do not edit by hand.
 
 Radio and steering button messages for Peugeot 407 CAN2004 comfort bus
 """

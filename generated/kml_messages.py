@@ -1,4 +1,4 @@
-"""Auto-generated from signal-db/kml.yaml — do not edit by hand.
+"""Auto-generated from signal-db/2004/kml.yaml — do not edit by hand.
 
 KML hands-free phone module messages for Peugeot 407 CAN2004 comfort bus
 """

@@ -10,6 +10,7 @@ Validates that:
 """
 
 import importlib
+import importlib.util
 import os
 import sys
 import textwrap
@@ -23,6 +24,7 @@ import yaml
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CAN_VERSION = "2004"
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
@@ -33,14 +35,14 @@ if REPO_ROOT not in sys.path:
 
 def _load_yaml(name):
     """Load a signal-db YAML file by module group name."""
-    path = os.path.join(REPO_ROOT, "signal-db", f"{name}.yaml")
+    path = os.path.join(REPO_ROOT, "signal-db", CAN_VERSION, f"{name}.yaml")
     with open(path) as fh:
         return yaml.safe_load(fh)
 
 
 def _all_yaml_names():
     """Return sorted list of all signal-db YAML file stems."""
-    db_dir = os.path.join(REPO_ROOT, "signal-db")
+    db_dir = os.path.join(REPO_ROOT, "signal-db", CAN_VERSION)
     return sorted(
         os.path.splitext(f)[0]
         for f in os.listdir(db_dir)
@@ -215,7 +217,7 @@ class TestCodegenIdempotency:
         what is already committed in generated/."""
         sys.path.insert(0, os.path.dirname(__file__))
         from signal_db_codegen_helper import regenerate_to_dir
-        regenerate_to_dir(tmp_path)
+        regenerate_to_dir(tmp_path, can_version=CAN_VERSION)
 
         generated_dir = os.path.join(REPO_ROOT, "generated")
         for fname in os.listdir(generated_dir):
@@ -226,3 +228,47 @@ class TestCodegenIdempotency:
             assert committed == regenerated, (
                 f"generated/{fname} differs from re-generated output"
             )
+
+
+class TestCan2010Definitions:
+    def test_can2010_bsi_contains_minimum_boot_ids(self):
+        path = os.path.join(REPO_ROOT, "signal-db", "2010", "bsi.yaml")
+        with open(path) as fh:
+            spec = yaml.safe_load(fh)
+
+        ids = {msg["can_id"] for msg in spec["messages"].values()}
+        for required in (0x018, 0x036, 0x236, 0x0F6, 0x0B6, 0x128, 0x168, 0x260, 0x276):
+            assert required in ids, f"CAN2010 bsi.yaml missing required ID 0x{required:03X}"
+
+    def test_can2010_codegen_runs(self, tmp_path):
+        sys.path.insert(0, os.path.dirname(__file__))
+        from signal_db_codegen_helper import regenerate_to_dir
+
+        regenerate_to_dir(tmp_path, can_version="2010")
+        generated_bsi = (tmp_path / "bsi_messages.py").read_text()
+        assert "signal-db/2010/bsi.yaml" in generated_bsi
+
+    def test_can2010_matches_arduino_bsi_baseline(self, tmp_path):
+        sys.path.insert(0, os.path.dirname(__file__))
+        from signal_db_codegen_helper import regenerate_to_dir
+        from car_state import VirtualCar
+
+        regenerate_to_dir(tmp_path, can_version="2010")
+        spec = importlib.util.spec_from_file_location("bsi_messages_2010_test", tmp_path / "bsi_messages.py")
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+
+        car = VirtualCar()
+        car.bsi.power_mode = 0x01
+        car.bsi.ignition_on = True
+        car.bsi.dash_lights = 1
+        car.bsi.dark_mode = 0
+        car.bsi.lum = 10
+        car.bsi.coolant = 57
+        car.bsi.temperature = 21.5
+        car.bsi.engine_running = 1
+
+        assert mod.Msg018().encode(car) == [0x80, 0x00, 0x02, 0x00, 0x00]
+        assert mod.Msg036().encode(car) == [0x0E, 0x00, 0x03, 0x2A, 0x31, 0x00, 0x81, 0xAC]
+        assert mod.Msg0F6().encode(car) == [0x8E, 0x61, 0x00, 0x01, 0xA4, 0x7B, 0x7B, 0x20]

@@ -13,7 +13,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def regenerate_to_dir(out_dir: Path | str) -> None:
+def regenerate_to_dir(out_dir: Path | str, can_version: str = "2004") -> None:
     """Run the code generator, writing output to *out_dir* instead of
     the default ``generated/`` directory."""
     out_dir = Path(out_dir)
@@ -29,6 +29,6 @@ def regenerate_to_dir(out_dir: Path | str) -> None:
     orig_dir = codegen.GENERATED_DIR
     try:
         codegen.GENERATED_DIR = out_dir
-        codegen.main()
+        codegen.main(can_version=can_version)
     finally:
         codegen.GENERATED_DIR = orig_dir

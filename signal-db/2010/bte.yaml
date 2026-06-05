@@ -1,0 +1,15 @@
+module_group: bte
+description: "BTE module messages for Peugeot 407 CAN2004 comfort bus"
+
+messages:
+  Msg12B:
+    can_id: 0x12B
+    period_ms: 100
+    required_modules: ['bte']
+    description: |
+      BTE module status byte.
+    encode_body: |
+      return [car.bte.bits]
+    decode_body: |
+      if len(data) >= 1:
+          car.bte.bits = data[0]

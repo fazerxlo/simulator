@@ -1,4 +1,4 @@
-"""Auto-generated from signal-db/clim.yaml — do not edit by hand.
+"""Auto-generated from signal-db/2004/clim.yaml — do not edit by hand.
 
 Climate control messages for Peugeot 407 CAN2004 comfort bus
 """

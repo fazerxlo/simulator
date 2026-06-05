@@ -1,4 +1,4 @@
-"""Auto-generated from signal-db/bsi.yaml — do not edit by hand.
+"""Auto-generated from signal-db/2004/bsi.yaml — do not edit by hand.
 
 BSI core messages for Peugeot 407 CAN2004 comfort bus
 """

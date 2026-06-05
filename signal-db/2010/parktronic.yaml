@@ -1,0 +1,34 @@
+module_group: parktronic
+description: "Parktronic sensor messages for Peugeot 407 CAN2004 comfort bus"
+
+messages:
+  Msg0E1:
+    can_id: 0x0E1
+    period_ms: 100
+    required_modules: ['parktronic']
+    description: |
+      Parking sensor distances and zone activation.
+    class_body: |
+      _INACTIVE = [0x24, 0x00, 0x3F, 0xFC, 0xFC, 0xFC, 0x00]
+    encode_body: |
+      p = car.parktronic
+      if not p.display and not p.rear_active and not p.front_active:
+          return list(self._INACTIVE)
+      sensor_a = ((p.rear_left & 0x07) << 5) | ((p.rear_center & 0x07) << 2)
+      sensor_b = ((p.rear_right & 0x07) << 5) | ((p.front_left & 0x07) << 2)
+      sensor_c = ((p.front_center & 0x07) << 5) | ((p.front_right & 0x07) << 2) | 0x02
+      zone = (0x40 if p.rear_active else 0x00) | (0x10 if p.front_active else 0x00)
+      return [0x24, zone, 0x3F, sensor_a, sensor_b, sensor_c, 0x00]
+    decode_body: |
+      if len(data) < 6:
+          return
+      p = car.parktronic
+      p.rear_active = (data[1] >> 6) & 1
+      p.front_active = (data[1] >> 4) & 1
+      p.display = 1 if (data[5] & 0x02) else 0
+      p.rear_left = (data[3] >> 5) & 0x07
+      p.rear_center = (data[3] >> 2) & 0x07
+      p.rear_right = (data[4] >> 5) & 0x07
+      p.front_left = (data[4] >> 2) & 0x07
+      p.front_center = (data[5] >> 5) & 0x07
+      p.front_right = (data[5] >> 2) & 0x07

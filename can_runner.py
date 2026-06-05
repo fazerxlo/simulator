@@ -18,8 +18,9 @@ class CanRunner():
     SCHEDULE_ADVANCE_FACTOR = 0.95
     SENDER_SLEEP_S = 0.005
 
-    def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False):
+    def __init__(self, channel='vcan0', interface='socketcan', bitrate=125000, monitor=False, can_version='2004'):
         self.monitor = monitor
+        self.can_version = can_version
         self.channel = channel
         self.interface = interface
         self.bitrate = bitrate
