@@ -382,6 +382,55 @@ class SpeedControl:
         self.partial_odo: float | None = None
 
 
+class CDChanger:
+    """CD changer emulator state.
+
+    The CDC module transmits periodic status frames (0x1A0) and receives
+    command frames (0x131) from the head unit.  This object holds the
+    playback state that those frames encode and decode.
+    """
+
+    # Status constants (byte 0 of 0x1A0)
+    STATUS_IDLE = 0
+    STATUS_PLAYING = 1
+    STATUS_PAUSED = 2
+    STATUS_LOADING = 3
+    STATUS_SEARCHING = 4
+
+    def __init__(self):
+        # Set to True by the cdc module when it loads.
+        self.active = False
+
+        # Playback state: one of STATUS_* constants above.
+        self.status = CDChanger.STATUS_IDLE
+
+        # Current disc (1-6).
+        self.disc = 1
+        # Current track number (1-99).
+        self.track = 1
+        # Track elapsed time.
+        self.minutes = 0
+        self.seconds = 0
+        # Per-disc track counts (disc 1-6 → number of tracks).
+        self.disc_tracks = {i: 10 for i in range(1, 7)}
+
+        # Playback mode flags.
+        self.random = False
+        self.repeat = False        # repeat all tracks
+        self.repeat_track = False  # repeat current track
+        self.scan = False
+
+    @property
+    def total_tracks(self):
+        """Total tracks on the current disc (reads from disc_tracks)."""
+        return self.disc_tracks.get(self.disc, 10)
+
+    @total_tracks.setter
+    def total_tracks(self, value):
+        """Set the total track count for the current disc."""
+        self.disc_tracks[self.disc] = value
+
+
 class VirtualCar:
     """Shared virtual car state for the Peugeot 407 simulator.
 
@@ -414,3 +463,4 @@ class VirtualCar:
         self.buttons = Buttons()
         self.mfd_popup = MFDPopup()
         self.speed_control = SpeedControl()
+        self.cdc = CDChanger()

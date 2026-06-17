@@ -1,0 +1,142 @@
+<CDC>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: 4
+    spacing: 4
+
+    # Status information row
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: 0.15
+      Label:
+        id: status_label
+        text: 'Loading'
+        bold: True
+      Label:
+        id: disc_label
+        text: 'Disc: 1'
+      Label:
+        id: track_label
+        text: 'Track: 1/10'
+      Label:
+        id: time_label
+        text: '00:00'
+
+    # Playback control buttons
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: 0.2
+      Button:
+        text: '|<'
+        on_press: root.on_prev_disc()
+        size_hint_x: 0.1
+      Button:
+        text: '<|'
+        on_press: root.on_prev_track()
+        size_hint_x: 0.1
+      Button:
+        text: 'Play'
+        on_press: root.on_play()
+      Button:
+        text: 'Pause'
+        on_press: root.on_pause()
+      Button:
+        text: 'Stop'
+        on_press: root.on_stop()
+      Button:
+        text: '|>'
+        on_press: root.on_next_track()
+        size_hint_x: 0.1
+      Button:
+        text: '>|'
+        on_press: root.on_next_disc()
+        size_hint_x: 0.1
+
+    # Disc selection toggle buttons (label shows disc number + track count)
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: 0.2
+      Label:
+        text: 'Disc:'
+        size_hint_x: 0.1
+      ToggleButton:
+        id: disc_1
+        text: 'D1\n10'
+        group: 'disc'
+        state: 'down'
+        allow_no_selection: False
+        on_state: root.on_disc(1, self.state)
+      ToggleButton:
+        id: disc_2
+        text: 'D2\n10'
+        group: 'disc'
+        allow_no_selection: False
+        on_state: root.on_disc(2, self.state)
+      ToggleButton:
+        id: disc_3
+        text: 'D3\n10'
+        group: 'disc'
+        allow_no_selection: False
+        on_state: root.on_disc(3, self.state)
+      ToggleButton:
+        id: disc_4
+        text: 'D4\n10'
+        group: 'disc'
+        allow_no_selection: False
+        on_state: root.on_disc(4, self.state)
+      ToggleButton:
+        id: disc_5
+        text: 'D5\n10'
+        group: 'disc'
+        allow_no_selection: False
+        on_state: root.on_disc(5, self.state)
+      ToggleButton:
+        id: disc_6
+        text: 'D6\n10'
+        group: 'disc'
+        allow_no_selection: False
+        on_state: root.on_disc(6, self.state)
+
+    # Per-disc track count slider (targets the currently selected disc)
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: 0.2
+      Label:
+        id: disc_tracks_label
+        text: 'Tracks on disc 1:'
+        size_hint_x: 0.3
+      Slider:
+        id: total_tracks_slider
+        min: 1
+        max: 30
+        value: 10
+        step: 1
+        on_value: root.on_total_tracks(args[1])
+      Label:
+        id: total_tracks_label
+        text: '10'
+        size_hint_x: 0.1
+
+    # Playback mode toggles
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: 0.2
+      Label:
+        text: 'Mode:'
+        size_hint_x: 0.1
+      ToggleButton:
+        id: mode_random
+        text: 'Random'
+        on_state: root.on_mode('random', self.state)
+      ToggleButton:
+        id: mode_repeat
+        text: 'Repeat All'
+        on_state: root.on_mode('repeat', self.state)
+      ToggleButton:
+        id: mode_repeat_track
+        text: 'Repeat Track'
+        on_state: root.on_mode('repeat_track', self.state)
+      ToggleButton:
+        id: mode_scan
+        text: 'Scan'
+        on_state: root.on_mode('scan', self.state)
