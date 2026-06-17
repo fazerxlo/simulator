@@ -1,0 +1,107 @@
+#:kivy 1.0
+
+<BSI_tyre>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: 8
+    spacing: 8
+
+    Label:
+      text: 'Tyre Status (AEE2004 CAN 0x120 Block 2)'
+      size_hint_y: None
+      height: 30
+      bold: True
+
+    # ── Car diagram row ──────────────────────────────────────────────────
+    GridLayout:
+      cols: 3
+      size_hint_y: None
+      height: 200
+      spacing: 4
+
+      # ── Front Left ──────────────────────────────────────────────────────
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 4
+        Label:
+          text: 'Front Left'
+          size_hint_y: None
+          height: 24
+        ToggleButton:
+          text: 'FL Flat / Puncture'
+          on_state: root.on_toggle('fl_flat', self.state)
+        ToggleButton:
+          text: 'FL Under-pressure'
+          on_state: root.on_toggle('fl_pressure', self.state)
+
+      # ── Centre (car body placeholder) ────────────────────────────────────
+      Label:
+        text: '[  car  ]'
+        halign: 'center'
+
+      # ── Front Right ──────────────────────────────────────────────────────
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 4
+        Label:
+          text: 'Front Right'
+          size_hint_y: None
+          height: 24
+        ToggleButton:
+          text: 'FR Flat / Puncture'
+          on_state: root.on_toggle('fr_flat', self.state)
+        ToggleButton:
+          text: 'FR Under-pressure'
+          on_state: root.on_toggle('fr_pressure', self.state)
+
+    GridLayout:
+      cols: 3
+      size_hint_y: None
+      height: 200
+      spacing: 4
+
+      # ── Rear Left ────────────────────────────────────────────────────────
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 4
+        Label:
+          text: 'Rear Left'
+          size_hint_y: None
+          height: 24
+        ToggleButton:
+          text: 'RL Flat / Puncture'
+          on_state: root.on_toggle('rl_flat', self.state)
+        ToggleButton:
+          text: 'RL Under-pressure'
+          on_state: root.on_toggle('rl_pressure', self.state)
+
+      Label:
+        text: ''
+
+      # ── Rear Right ───────────────────────────────────────────────────────
+      BoxLayout:
+        orientation: 'vertical'
+        spacing: 4
+        Label:
+          text: 'Rear Right'
+          size_hint_y: None
+          height: 24
+        ToggleButton:
+          text: 'RR Flat / Puncture'
+          on_state: root.on_toggle('rr_flat', self.state)
+        ToggleButton:
+          text: 'RR Under-pressure'
+          on_state: root.on_toggle('rr_pressure', self.state)
+
+    # ── Status summary ───────────────────────────────────────────────────
+    BoxLayout:
+      orientation: 'horizontal'
+      size_hint_y: None
+      height: 30
+      spacing: 8
+      Label:
+        text: 'CAN 0x120 Block 2: per-tire flat (data[1]) and pressure (data[5]/data[6])'
+        halign: 'left'
+      Label:
+        text: 'CAN 0x168 data[1]: generic flat_tyre (bit6) / pressure (bit7)'
+        halign: 'left'
