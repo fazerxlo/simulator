@@ -65,6 +65,11 @@ class PeugeotSim(App):
             bitrate=self.bitrate,
             monitor=self.monitor,
         )
+
+        vin = self.conf.get('vin')
+        if vin:
+            self.can_runner.car.vin = str(vin)
+
         self.can_runner.set_enabled_modules(self.conf.get('modules', []))
 
         # Init modules before starting the runner so monitor mode does not

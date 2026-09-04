@@ -205,6 +205,19 @@ class TestStartupBurst:
             assert isinstance(data, list)
 
 
+class TestVINConfig:
+    def test_vin_frames_use_car_vin(self):
+        from generated.bsi_messages import Msg2B6, Msg336, Msg3B6
+
+        class DummyCar:
+            vin = "VF3TEST1234567890"
+
+        car = DummyCar()
+        assert Msg336().encode(car) == list(b"VF3")
+        assert Msg3B6().encode(car) == list(b"TEST12")
+        assert Msg2B6().encode(car) == list(b"3456789X")
+
+
 # ---------------------------------------------------------------------------
 # Test: Codegen idempotency — re-running produces the same output
 # ---------------------------------------------------------------------------

@@ -374,17 +374,23 @@ class BSI_base(TabbedPanelItem):
         speed = int(bsi.speed * 100)
         return 0x0B6, [rpm >> 8, rpm & 0xFF, speed >> 8, speed & 0xFF, 0x00, 0x00, 0x00, 0xD0]
 
+    def _vin_slice(self, start, length):
+        vin = str(getattr(self.runner.car, 'vin', getattr(self.runner.car.bsi, 'vin', 'VF3TEST1234567890')))
+        vin = vin.strip().upper()
+        if len(vin) < 17:
+            vin = (vin + 'X' * 17)[:17]
+        if len(vin) > 17:
+            vin = vin[:17]
+        return list(vin[start:start + length].encode('ascii'))
+
     def can_vin_vis(self):
-        #32 31 37 31 35 33 38 33
-        return 0x2B6, [0x32, 0x31, 0x37, 0x31, 0x35, 0x33, 0x38, 0x33]
+        return 0x2B6, self._vin_slice(9, 8)
 
     def can_vin_wmi(self):
-        #56 46 33
-        return 0x336, [0x56, 0x46, 0x33]
+        return 0x336, self._vin_slice(0, 3)
 
     def can_vin_vds(self):
-        #36 4A 52 48 52 48
-        return 0x3B6, [0x36, 0x4A, 0x52, 0x48, 0x52, 0x48]
+        return 0x3B6, self._vin_slice(3, 6)
 
     def can_110(self):
         return 0x110, [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]

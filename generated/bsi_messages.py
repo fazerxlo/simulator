@@ -28,6 +28,16 @@ def _decode_oil_temp(raw_value: int) -> int:
     return raw - 40
 
 
+def _vin_bytes(vin: str, start: int, length: int) -> list[int]:
+    """Split a VIN into its ASCII bytes, padding with X when needed."""
+    value = str(vin or 'VF3TEST1234567890').strip().upper()
+    if len(value) < 17:
+        value = (value + 'X' * 17)[:17]
+    if len(value) > 17:
+        value = value[:17]
+    return list(value[start:start + length].encode('ascii'))
+
+
 STARTUP_WAKEUP_BURST = [
     (0.000, 0x5D2, [0xB0, 0x00, 0x00, 0x00, 0x01, 0x0A, 0x06, 0x16]),
     (0.010, 0x5ED, [0x2D, 0x09, 0x06, 0x04, 0x64, 0x05, 0x20, 0x0D]),
@@ -517,7 +527,8 @@ class Msg2B6(CanMessage):
     period_ms = 1000
 
     def encode(self, car) -> list:
-        return [0x32, 0x31, 0x37, 0x31, 0x35, 0x33, 0x38, 0x33]
+        vin = getattr(car, 'vin', getattr(getattr(car, 'bsi', None), 'vin', 'VF3TEST1234567890'))
+        return _vin_bytes(vin, 9, 8)
 
 
 class Msg336(CanMessage):
@@ -527,7 +538,8 @@ class Msg336(CanMessage):
     period_ms = 1000
 
     def encode(self, car) -> list:
-        return [0x56, 0x46, 0x33]
+        vin = getattr(car, 'vin', getattr(getattr(car, 'bsi', None), 'vin', 'VF3TEST1234567890'))
+        return _vin_bytes(vin, 0, 3)
 
 
 class Msg3B6(CanMessage):
@@ -537,7 +549,8 @@ class Msg3B6(CanMessage):
     period_ms = 1000
 
     def encode(self, car) -> list:
-        return [0x36, 0x4A, 0x52, 0x48, 0x52, 0x48]
+        vin = getattr(car, 'vin', getattr(getattr(car, 'bsi', None), 'vin', 'VF3TEST1234567890'))
+        return _vin_bytes(vin, 3, 6)
 
 
 class Msg52D(CanMessage):

@@ -21,6 +21,16 @@ helpers: |
           return 0
       return raw - 40
 
+
+  def _vin_bytes(vin: str, start: int, length: int) -> list[int]:
+      """Split a VIN into its ASCII bytes, padding with X when needed."""
+      value = str(vin or 'VF3TEST1234567890').strip().upper()
+      if len(value) < 17:
+          value = (value + 'X' * 17)[:17]
+      if len(value) > 17:
+          value = value[:17]
+      return list(value[start:start + length].encode('ascii'))
+
 constants:
   STARTUP_WAKEUP_BURST: |
     [
@@ -468,7 +478,8 @@ messages:
     description: |
       VIN — Vehicle Indicator Section.
     encode_body: |
-      return [0x32, 0x31, 0x37, 0x31, 0x35, 0x33, 0x38, 0x33]
+      vin = getattr(car, 'vin', getattr(getattr(car, 'bsi', None), 'vin', 'VF3TEST1234567890'))
+      return _vin_bytes(vin, 9, 8)
 
   Msg336:
     can_id: 0x336
@@ -476,7 +487,8 @@ messages:
     description: |
       VIN — World Manufacturer Identifier.
     encode_body: |
-      return [0x56, 0x46, 0x33]
+      vin = getattr(car, 'vin', getattr(getattr(car, 'bsi', None), 'vin', 'VF3TEST1234567890'))
+      return _vin_bytes(vin, 0, 3)
 
   Msg3B6:
     can_id: 0x3B6
@@ -484,7 +496,8 @@ messages:
     description: |
       VIN — Vehicle Descriptor Section.
     encode_body: |
-      return [0x36, 0x4A, 0x52, 0x48, 0x52, 0x48]
+      vin = getattr(car, 'vin', getattr(getattr(car, 'bsi', None), 'vin', 'VF3TEST1234567890'))
+      return _vin_bytes(vin, 3, 6)
 
   Msg52D:
     can_id: 0x52D

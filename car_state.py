@@ -14,6 +14,7 @@ class BSI:
     """Body Systems Interface and drivetrain state."""
 
     def __init__(self):
+        self.vin = 'VF3TEST1234567890'
         self.ignition_on = False
         self.power_mode = 0x02
         self.economy = 0
@@ -402,6 +403,7 @@ class VirtualCar:
 
     def __init__(self):
         self.bsi = BSI()
+        self.vin = self.bsi.vin
         self.clim = Clim()
         self.doors = Doors()
         self.parktronic = Parktronic()
@@ -414,3 +416,11 @@ class VirtualCar:
         self.buttons = Buttons()
         self.mfd_popup = MFDPopup()
         self.speed_control = SpeedControl()
+
+    @property
+    def vin(self):
+        return self.bsi.vin
+
+    @vin.setter
+    def vin(self, value):
+        self.bsi.vin = str(value or 'VF3TEST1234567890')
