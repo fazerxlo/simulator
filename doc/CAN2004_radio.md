@@ -447,7 +447,7 @@ elif pci_type == 2:        # Consecutive Frame — extend buffer
 
 ---
 
-## 9. `0x2A5` — Radio Station Name / RDS PS
+## 8. `0x2A5` — Radio Station Name / RDS PS
 
 **PSA name:** `NOM_STATION` (inferred)  
 **Period:** 100 ms  
@@ -469,7 +469,7 @@ description (serial frame `0x07`), both stripped of leading/trailing whitespace.
 
 ---
 
-## 10. `0x3E5` — Steering Wheel Panel Buttons
+## 9. `0x3E5` — Steering Wheel Panel Buttons
 
 **PSA name:** `CDE_CLAVIER_VOLANT` / `COMMANDES_CLAVIER` (inferred)  
 **Period:** 50 ms  
@@ -510,7 +510,7 @@ Different keys: `TRIP` (b1[7:6]), `SOURCE` (b1[5:4]), `DARK` (b1[1:0]), `NEXT` (
 
 ---
 
-## 11. Comparison summary: simulator vs ios-car-dashboard
+## 10. Comparison summary: simulator vs ios-car-dashboard
 
 | Signal | Simulator (Peugeot 407) | ios-car-dashboard (Peugeot 207) | Match? |
 |---|---|---|---|
@@ -528,7 +528,7 @@ positions are expected to be identical for infotainment-related frames.
 
 ---
 
-## 12. Open questions
+## 11. Open questions
 
 - `0x265` byte 0 flag meanings are inferred from the simulator source; independent capture
   is needed to confirm each bit.

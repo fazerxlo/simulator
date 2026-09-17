@@ -198,9 +198,14 @@ t+3.64 s:   80 7F 46 FF FF FF FF FF   (max right action window)
 t+15.65 s:  00 83 46 FF FF FF FF FF   (max left action window)
 ```
 - D1 bit 7 toggles with side state (`0x00 <-> 0x80`).
-- D2 moves around `0x80` (`0x78 -> 0x7F -> 0x83`) and is the best steering-position candidate.
+- D2 moves around `0x80` (`0x78 -> 0x7F -> 0x83`) and was initially considered a steering-position candidate.
 - D3 stayed constant (`0x46`) in this run.
-- Confidence: **medium** (direction/state), requires slow sweep capture for angle scaling.
+
+> **Protocol Note:** PSA CAN specifications and codebase implementation confirm that `0x1A1` is **`BSI_DISPLAY_MESSAGE`** (MFD / instrument cluster popup notification commands), not steering angle or front lighting.
+> - D1 Bit 7 (`0x80`): `DISPLAY_MESSAGE` trigger flag.
+> - D2: `MESSAGE_ID` (e.g. `0x78`, `0x7F`, `0x83` corresponding to notification IDs in `messages.py`).
+> - D3: Display duration / alert parameter (`0x46`).
+> Actual steering angle is broadcast on the high-speed inter-system bus (CAL / DAE, typically `0x0C5`), while column stalk switches appear on `0x1E1`.
 
 ---
 
@@ -209,7 +214,7 @@ t+15.65 s:  00 83 46 FF FF FF FF FF   (max left action window)
 | ID | Period | Sample | Priority |
 |---|---|---|---|
 | `0x110` | 100 ms | `FF FF FF FF 00 00 00 00` | Medium — always alive, unknown |
-| `0x120` | 1 s | `BC 00 00 00 00 00 00 00` | Medium — first byte `0xBC` |
+| `0x120` | 1 s | `BC 00 00 00 00 00 00 00` | Medium — alerts journal frame (`0xBC` header) |
 | `0x14C` | 100 ms | `00 00 00 00 80 00 00 00` | Low |
 | `0x15B` | 260 ms | `05 00 00 00 00 00 00 00` | Low |
 | `0x1CC` | 200 ms | `00 00 00 00 00 00 00 00` | Low — all zeros |
@@ -233,15 +238,15 @@ To decode lights state (your planned next scenario):
    python -m tools.can_sniff_ai_agent compare lights_parking.log lights_low_beam.log
    ```
 
-Primary candidates for lights signal based on this log: **`0x128`** (confirmed), plus secondary context IDs **`0x225`** and **`0x1A1`**.
+Primary candidate for lights signal based on this log: **`0x128`** (confirmed dashboard indicators). Note: `0x225` is FM RDS / tuner PTY status, and `0x1A1` is MFD popup alerts.
 
 ---
 
 ## 9. Open questions
 
-- What does `0x1D0` encode? Completely static throughout 86 s log.
+- What does `0x1D0` encode? Completely static throughout 86 s log. *(Resolved: 0x1D0 is Climate panel state / `CLIM_AIR_CONDITIONING`; static because climate controls were unadjusted during bench run.)*
 - What does `0x52D` D5 represent? (Both D1 and D5 flip to 0x01 at ignition.)
 - Does `0x190` D4 upper nibble carry meaning beyond the rolling counter bit 0?
 - Why does `0x036` first broadcast `0x02` for ~14 s then drop to `0x00` — is this BSI ACC detection timeout?
 - VIN period mismatch: simulator 100 ms vs real BSI ~1000 ms.
-- For `0x1A1`, determine angle scaling/sign with a slow center->right->left sweep capture.
+- For `0x1A1`, determine angle scaling/sign with a slow center->right->left sweep capture. *(Resolved: 0x1A1 is BSI display popup messages, not steering angle.)*

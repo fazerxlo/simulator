@@ -103,7 +103,7 @@ Bits are read right-to-left (LSB first):
 | 6   | Show popup on CMB (instrument cluster) |
 | 7   | Show popup on EMF |
 
-Typical door-warning value: `0xC7` = priority 7, show on VTH + CMB + EMF.
+Typical door-warning value: `0xC7` = priority 7, show on CMB + EMF (bit 5 VTH is 0; to also show on VTH, use `0xE7`).
 
 ### Byte 3 — DoorStatus1
 
@@ -145,7 +145,7 @@ Individual door open flags. Bits are read right-to-left (LSB first):
 
 ### Example frame — doors + boot open
 
-Send a popup for "doors/boot open" showing front-left, rear-right and boot open:
+Send a popup for "doors/boot open" showing front-left, rear-left and boot open:
 
 ```
 Byte:  0     1     2     3     4     5     6     7
@@ -154,7 +154,7 @@ Byte:  0     1     2     3     4     5     6     7
 
 - Byte 0 `0x80` = show category 1
 - Byte 1 `0x0B` = DOORS_BOOT_BONNET... message
-- Byte 2 `0xC7` = priority 7, display on CMB + VTH + EMF
+- Byte 2 `0xC7` = priority 7, display on CMB + EMF (or `0xE7` to include VTH)
 - Byte 3 `0x58` = `0101 1000` → bit6=FL, bit4=RL, bit3=boot
 - Byte 4 `0x00` = fuel flap and rear screen closed
 

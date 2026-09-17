@@ -1,10 +1,12 @@
+vin: "VF7SWYHYSJT721649"
+
 modules:
   - bsi-base
   - buttons
   - parktronic
   - bsi-trip
   #- bsi-log
-  - radio
+  #- radio
   - clim
   - combine
   - tyres

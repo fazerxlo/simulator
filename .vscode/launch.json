@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Simulator vcan",
+      "name": "Simulator vcan (debug)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
@@ -12,7 +12,7 @@
       "justMyCode": true
     },
     {
-      "name": "Monitor vcan",
+      "name": "Monitor vcan (debug)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
@@ -22,7 +22,7 @@
       "justMyCode": true
     },
     {
-      "name": "Simulator can",
+      "name": "Simulator can (debug)",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
@@ -32,8 +32,49 @@
       "justMyCode": true
     },
     {
-      "name": "Monitor can",
+      "name": "Monitor can (debug)",
       "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "args": ["--monitor", "--channel", "can0"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    }, 
+    // add configurations for running without debugger
+    {
+      "name": "Simulator vcan (no debug)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "args": ["--channel", "vcan0"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Monitor vcan (no debug)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "args": ["--monitor", "--channel", "vcan0"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Simulator can (no debug)",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/app.py",
+      "args": ["--channel", "can0"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true
+    },
+    {
+      "name": "Monitor can (no debug)",
+      "type": "python",
       "request": "launch",
       "program": "${workspaceFolder}/app.py",
       "args": ["--monitor", "--channel", "can0"],

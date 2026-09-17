@@ -98,14 +98,14 @@ D9 00 65 8F 00 FF 00 A0   (brief burst — engine running / wheels spinning on b
 
 | Byte | Payload 1 | Payload 2 | Meaning |
 |------|-----------|-----------|---------|
-| 0-1  | 0x0000    | 0xD900    | RPM raw: 0 → 0 RPM; 55552 / 10 = **5,555 RPM** |
+| 0-1  | 0x0000    | 0xD900    | RPM raw: 0 → 0 RPM; 0xD900 >> 3 = **6,944 RPM** (13-bit format in bits 15..3) |
 | 2-3  | 0x0000    | 0x658F    | Speed raw: 0 → 0 km/h; 25999 / 100 = **259.99 km/h** |
 | 4    | 0x00      | 0x00      | Unused |
 | 5    | 0xFF      | 0xFF      | Real car sends 0xFF here (implementation sends 0x00) |
 | 6    | 0x00      | 0x00      | Unused |
 | 7    | 0xA0      | 0xA0      | Status/flags: real car sends 0xA0; **implementation sends 0xD0** |
 
-**Documentation check:** ✅ RPM and speed encoding (`/10` and `/100` respectively) confirmed.
+**Documentation check:** ✅ RPM (13-bit `raw >> 3`) and speed encoding (`/100`) confirmed.
 
 **Implementation check:** ⚠️ Two minor byte-level discrepancies:
 
@@ -115,7 +115,7 @@ D9 00 65 8F 00 FF 00 A0   (brief burst — engine running / wheels spinning on b
    (`0b11010000`). Bit 6 (0x40) and bit 4 (0x10) differ. These bits are not decoded in the
    current implementation.
 
-The extreme RPM (5,555 RPM) and speed (260 km/h) values in the second payload appear during a
+The extreme RPM (6,944 RPM) and speed (260 km/h) values in the second payload appear during a
 very brief burst at around t = 23,125 ms. This is consistent with a bench test where the wheels
 were spun at high speed or the BSI was exercising sensors.
 
@@ -249,15 +249,15 @@ cosmetic; `0xFF` is the standard PSA "invalid/not available" sentinel but real B
 | Byte | Value | Meaning |
 |------|-------|---------|
 | 0-3  | 0x00  | No alert indicators |
-| 4    | 0x00 / 0x02 | Bit 1 active — exact alert signal not yet decoded |
+| 4    | 0x00 / 0x02 | Bit 1 active — **ALTERNATOR_FAULT** (`GENE_DEF`) |
 | 5-7  | 0x00  | No further alerts |
 
 **Documentation check:** ✅ Confirmed as alert/indicator frame (not ambient temperature or battery
 voltage — previous workspace confusion corrected in PSA_RE_comparison.md).
 
-**Implementation check:** ✅ Implementation decodes byte 4 and other alert bytes. The specific
-signal at byte 4 bit 1 (`0x02`) is not currently mapped to a named car state variable; it may
-correspond to a generic warning light not yet enumerated in the workspace.
+**Implementation check:** ✅ Implementation decodes byte 4 and other alert bytes. Byte 4 bit 1
+(`0x02`) is `ALTERNATOR_FAULT` (`GENE_DEF`), which is expected to be set when the ignition is ON
+while the engine / generator is not yet running.
 
 ---
 
@@ -447,5 +447,5 @@ output. All are minor; none affect the primary functional simulation.
    payload. This suggests a permanently active module reporting a fixed status, not a dynamic
    data source.
 
-6. **0x168 byte 4 bit 1** — one active alert (value `0x02`) appears intermittently. Its signal
-   name is not resolved from the available PSA-RE tables.
+6. **0x168 byte 4 bit 1** — one active alert (value `0x02`) is **ALTERNATOR_FAULT** (`GENE_DEF`),
+   naturally active when ignition is ON while the alternator is stationary.

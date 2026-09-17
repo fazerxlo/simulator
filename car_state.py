@@ -273,6 +273,14 @@ class Buttons:
         'ok', 'esc', 'up', 'down', 'next', 'prev', 'right', 'left',
     )
 
+    REMOTE_ACTIONS = {
+        'volume_up': 0x08,
+        'volume_down': 0x04,
+        'source': 0x02,
+        'next': 0x80,
+        'previous': 0x40,
+    }
+
     def __init__(self):
         self.active = False
         self.volume = 15
@@ -282,6 +290,9 @@ class Buttons:
         self.panel = {k: 0 for k in self.BUTTON_KEYS}
         self._pulse_ticks = {k: 0 for k in self.BUTTON_KEYS}
         self._pulse_window = 3
+        self.remote_action = None
+        self.remote_aux = 0x09
+        self._remote_pulse_ticks = 0
 
     def press(self, key: str) -> None:
         """Assert a button for one pulse window.
@@ -305,6 +316,25 @@ class Buttons:
                     self.panel[key] = 0
                     changed = True
         return changed
+
+    def step_remote_pulses(self) -> bool:
+        """Advance the steering-wheel remote pulse timer by one tick."""
+        if self.remote_action is None:
+            return False
+        if self._remote_pulse_ticks > 0:
+            self._remote_pulse_ticks -= 1
+            if self._remote_pulse_ticks == 0:
+                self.remote_action = None
+                return True
+        return False
+
+    def press_remote(self, action: str) -> None:
+        """Assert a steering-wheel remote action for a short pulse."""
+        if action not in self.REMOTE_ACTIONS:
+            return
+        self.remote_action = action
+        self.remote_aux = 0x09
+        self._remote_pulse_ticks = self._pulse_window
 
     def step_volume(self) -> None:
         """Advance the volume volflag timer by one tick.
@@ -330,6 +360,15 @@ class Buttons:
         self.volume = max(0, self.volume - 1)
         self.volflag = 0x00
         self._volume_action_ticks = 3
+
+    def pulse_volume(self, direction: str) -> None:
+        """Convenience helper used by the buttons UI to trigger volume and remote frames."""
+        if direction == 'up':
+            self.volume_up()
+            self.press_remote('volume_up')
+        else:
+            self.volume_down()
+            self.press_remote('volume_down')
 
 
 class MFDPopup:

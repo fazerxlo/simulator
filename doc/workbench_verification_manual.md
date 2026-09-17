@@ -225,11 +225,12 @@ Use this order for the final verification run:
 - 0x1E3
 
 **Reference expectations:**
-- 0x1D0 byte 3 = fan level
-- 0x1D0 byte 4 = repeated-nibble air direction code
-- 0x1D0 byte 5 bit 5 = recycle
-- 0x1D0 byte 5 bit 4 = front defrost
-- 0x1E3 carries auto / dual / direction / temperature state
+- 0x1D0 byte 3 (idx 2) = fan level raw nibble
+- 0x1D0 byte 4 (idx 3) = repeated-nibble air direction code
+- 0x1D0 byte 5 (idx 4) bit 5 = explicit non-auto intake mode (`intake_explicit`)
+- 0x1D0 byte 5 (idx 4) bit 4 = recirculation active (`recycle`)
+- 0x1D0 byte 1 (idx 0) = 0x19 when front demist/defrost active (0x08 base)
+- 0x1E3 carries auto / dual / direction / temperature state and front defrost flag (byte 2 bit 7)
 
 **Expected UI result:**
 - fan slider and labels update
@@ -258,9 +259,9 @@ Use this order for the final verification run:
 
 **Reference expectations:**
 - 0x0F6 external temperature = raw × 0.5 − 40
-- 0x0B6 RPM = raw / 10
+- 0x0B6 RPM = raw >> 3 (13-bit raw value in bits 15..3)
 - 0x0B6 speed = raw / 100
-- 0x161 byte 7 = oil level
+- 0x161 byte 7 (idx 6) = oil level (0–100%)
 
 ---
 

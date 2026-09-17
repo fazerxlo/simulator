@@ -3,6 +3,8 @@ import os
 from kivy.lang.builder import Builder
 from kivy.uix.tabbedpanel import TabbedPanelItem
 
+from generated.radio_messages import Msg21F
+
 _modname = 'Buttons'
 _modversion = '0.0.1'
 
@@ -20,9 +22,11 @@ class Buttons(TabbedPanelItem):
         # buttons encoding path rather than the radio path.
         runner.car.buttons.active = True
 
-        # No register_message() call here — bsi-base already registered Msg1A5
-        # and Msg3E5 for all modules.  Setting car.buttons.active switches the
-        # encoding inside those objects automatically.
+        # Register the steering-wheel remote frame used by momentary wheel
+        # buttons.  BSI / radio keep Msg1A5 and Msg3E5 as the other periodic
+        # traffic owners, while 0x21F is button-specific and only active when
+        # the buttons module is enabled.
+        runner.register_message(Msg21F())
 
         self._button_ids = {f'btn_{k}': k for k in runner.car.buttons.panel}
 
@@ -59,15 +63,14 @@ class Buttons(TabbedPanelItem):
         if key not in b.panel:
             return
         b.press(key)
+        if key in b.REMOTE_ACTIONS:
+            b.press_remote(key)
         self._set_button_state(key, True)
         self._update_pressed_label()
 
     def pulse_volume(self, direction):
         b = self._buttons
-        if direction == 'up':
-            b.volume_up()
-        else:
-            b.volume_down()
+        b.pulse_volume(direction)
         self.ids['cur_vol'].text = f'volume: {b.volume}'
 
     def on_can_message(self, msg):

@@ -13,9 +13,9 @@ from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
 from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
-                          Msg323, Msg165, Msg1A5, Msg1E5, Msg3E5, Msg52D,
-                          Msg110, Msg0F6, Msg161, Msg1A8, Msg217, Msg12D,
-                          STARTUP_WAKEUP_BURST)
+                          Msg323, Msg165, Msg1A5, Msg1E5, Msg21F, Msg3E5,
+                          Msg52D, Msg110, Msg0F6, Msg161, Msg1A8, Msg217,
+                          Msg12D, STARTUP_WAKEUP_BURST)
 from conftest import make_can_mock, DummyWidget
 
 BSIBaseModule = importlib.import_module('modules.bsi-base').BSI_base
@@ -941,6 +941,27 @@ class TestMsg1A5Buttons:
         car = VirtualCar()
         Msg1A5().decode(car, [0x00 | 22])
         assert car.radio.volume == 22
+
+
+class TestMsg21FSteeringWheelButtons:
+    def test_encode_volume_up_press_uses_remote_mask(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.press_remote('volume_up')
+        assert Msg21F().encode(car) == [0x08, 0x09, 0x00]
+
+    def test_encode_releases_after_pulse_window(self):
+        car = VirtualCar()
+        car.buttons.active = True
+        car.buttons.press_remote('source')
+        for _ in range(car.buttons._pulse_window):
+            Msg21F().encode(car)
+        assert Msg21F().encode(car) == [0x00, 0x09, 0x00]
+
+    def test_decode_identifies_volume_up(self):
+        car = VirtualCar()
+        Msg21F().decode(car, [0x08, 0x09, 0x00])
+        assert car.buttons.remote_action == 'volume_up'
 
 
 class TestMsg3E5Buttons:

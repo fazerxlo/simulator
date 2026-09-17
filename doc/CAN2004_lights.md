@@ -103,51 +103,40 @@ Remains at `0x2A` for all subsequent light states (headlights, full beam).
 
 ---
 
-## 3. Secondary signal — `0x225` D1 bit 4 (MEDIUM confidence)
+## 3. Secondary signal — `0x225` D1 bit 4 (COINCIDENTAL — FM Tuner RDS/PTY)
+
+> ⚠️ **Protocol Clarification:** Cross-referencing against verified infotainment specifications (see [CAN2004_radio.md §5](CAN2004_radio.md)) and `generated/radio_messages.py` confirms that **`0x225` is the FM Tuner Status frame** (`ETAT_TUNER`), emitted by the radio head-unit. In Byte 0 (D1), bit 5 is `RDS` and bit 4 is `PTY` (Program Type search/flag). This frame has **no connection to exterior lighting**; the transition observed during the bench test was coincidental RDS tuner activity.
 
 | State | D1 hex | D1 binary | bit 4 |
 |---|---|---|---|
 | Lights OFF | `0x20` | `00100000` | 0 |
 | Side lights ON | `0x30` | `00110000` | 1 |
 
-Transition at **t+2.02 s**, which is ~400 ms **before** `0x128` changes at t+2.43 s.
-This may be a pre-activation signal from BSM/body control — or the rotary switch
-position being reported earlier than the actual light relay state.
-
-Remains set for headlights and full beam.
-
 ---
 
-## 4. Secondary signal — `0x1A1` D1 bit 7 (MEDIUM confidence)
+## 4. Secondary signal — `0x1A1` D1 bit 7 (COINCIDENTAL — BSI Popup Alert)
+
+> ⚠️ **Protocol Clarification:** Verified BSI documentation (see [CAN2004_doors.md §2](CAN2004_doors.md), [PSA_RE_comparison.md](PSA_RE_comparison.md), and [CAN_2004.md §3](CAN_2004.md)) confirms that **`0x1A1` is the BSI MFD popup / alert notification frame** (`BSI_DISPLAY_MESSAGE`). Byte 0 (D1) bit 7 (`0x80`) is the `DISPLAY_MESSAGE` show trigger, D2 is the `MESSAGE_ID`, and D3 is display destination flags (`0xC6`/`0x46`). The transition observed here coincided with an automatic headlight or dashboard status popup, not a headlamp relay or steering angle signal.
 
 | State | D1 hex | Meaning |
 |---|---|---|
-| OFF / Side lights | `0x00` | Headlights inactive |
-| Headlights / Full beam | `0x80` | Headlamps active |
+| OFF / Side lights | `0x00` | Popup idle / dismiss |
+| Headlights / Full beam | `0x80` | Popup active (`DISPLAY_MESSAGE`) |
 
 Transition at **t+4.36 s** (headlights), before `0x128` changes at t+4.53 s.
-D2 and D3 also change significantly at the same time:
-```
-OFF:   00 65 41 ...
-HEAD:  80 E0 46 ...
-```
-D2 change (`0x65→0xE0`) and D3 (`0x41→0x46`) may encode headlamp intensity or
-adaptive lighting angle — needs further investigation.
 
 ---
 
-## 5. `0x120` — rolling counter, NOT lights-related
+## 5. `0x120` — Alerts Journal (multiplexed), NOT lights-related
 
-`0x120` cycles through 3 fixed payloads every 1 second regardless of light state.
-Transitions that appear in the "headlights" and "full beam" windows are coincidental.
+`0x120` cycles through 3 fixed payloads every 1 second. As detailed in [CAN2004_0x120.md](CAN2004_0x120.md), this is the **multiplexed Alerts Journal / Diagnostics frame**, cycling across Block 1, Block 2, and Block 3 selected by `data[0]` bits 7:6:
 
-Cycle sequence:
 ```
-FC 00 00 00 00 0F 00 00
-BC 00 00 00 00 00 00 00
-7C 10 00 03 00 04 00 08
+FC 00 00 00 00 0F 00 00   (Block 3: bits 7:6 = 11)
+BC 00 00 00 00 00 00 00   (Block 2: bits 7:6 = 10)
+7C 10 00 03 00 04 00 08   (Block 1: bits 7:6 = 01)
 ```
-Probably a rolling version/status counter from another ECU.
+While not a lighting frame, it is the alert diagnostic broadcast.
 
 ---
 
@@ -165,8 +154,8 @@ Ignore for lights decoding.
 | Light switch position | `0x128` | D5 | `0xE0` | See bitfield above |
 | Dash illumination enabled | `0x036` | D4 | `0x20` | Set when any lights on |
 | Dash luminosity | `0x036` | D4 | `0x0F` | 15=day, 10=lights on |
-| Side+head lamp active flag? | `0x225` | D1 | `0x10` | Set at side lights or above |
-| Headlamp relay active? | `0x1A1` | D1 | `0x80` | Set at headlights or above |
+
+*(Note: `0x225` and `0x1A1` were observed in the capture but are FM tuner and popup alert frames respectively; they should not be simulated as lighting outputs.)*
 
 ---
 
@@ -175,7 +164,7 @@ Ignore for lights decoding.
 The `clim` and `bsi-base` modules need updates to:
 1. Emit `0x128` with correct D5 when light state changes in UI.
 2. Automatically update `0x036` D4 dash illumination bit when side lights or above.
-3. Optionally reflect `0x225` D1 bit 4 and `0x1A1` D1 bit 7 for ECU compatibility.
+3. Keep `0x225` strictly in the `radio` module and `0x1A1` in `bsi-log`.
 
 Current `0x128` in `bsi-base` emits the frame — verify D5 encoding matches.
 

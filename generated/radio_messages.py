@@ -330,6 +330,43 @@ class Msg2A5(CanMessage):
             pass
 
 
+class Msg21F(CanMessage):
+    """Steering-wheel remote key actions.
+
+    The real remote uses a 3-byte frame on 0x21F.  The key identity is carried
+    in byte 0, while byte 1 is a secondary pulse/aux value and byte 2 is
+    reserved/zero.  This simulator models the momentary wheel button action as a
+    short pulse so the button's press is visible on the bus for a few frames.
+    """
+
+    can_id = 0x21F
+    period_ms = 100
+    required_modules = frozenset({'buttons'})
+
+    def encode(self, car) -> list | None:
+        if not car.buttons.active:
+            return None
+        if car.buttons.remote_action is None:
+            return [0x00, car.buttons.remote_aux, 0x00]
+
+        mask = car.buttons.REMOTE_ACTIONS[car.buttons.remote_action]
+        car.buttons.step_remote_pulses()
+        return [mask, car.buttons.remote_aux, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 3:
+            return
+        cmd = data[0]
+        if cmd == 0x00:
+            car.buttons.remote_action = None
+            return
+        for name, mask in car.buttons.REMOTE_ACTIONS.items():
+            if cmd == mask:
+                car.buttons.remote_action = name
+                return
+        car.buttons.remote_action = None
+
+
 class Msg3E5(CanMessage):
     """Steering wheel control panel buttons.
     

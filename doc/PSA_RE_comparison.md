@@ -41,6 +41,7 @@ corrections, and new signal knowledge that did not exist in the workspace before
 
 | Byte (1-idx) | Idx | Bits | PSA-RE signal | Alt name | Notes |
 |---|---|---|---|---|---|
+| 1 | 0 | 7-0 | HEADER / CONSTANT | — | Sent as `0x0E` on 407 bus |
 | 2 | 1 | 7-6 | PROFILE_NUMBER_1 | NUM_PROF_1 | 0=factory, 1-3=user profile |
 | 2 | 1 | 5 | DRIVER_MEMORY | RAPP_MEM_C | driver memory recall |
 | 2 | 1 | 4 | DRIVER_MEMORY_SAVE | MISE_MEM_C | driver memory save |
@@ -68,14 +69,15 @@ corrections, and new signal knowledge that did not exist in the workspace before
 
 **Simulator cross-check:**
 
-The simulator correctly encodes:
-- `POWER_MANAGEMENT` in byte 6 (idx 5) bits 2-0 using values 0-3.
-- `ECO_MODE` in byte 4 (idx 3) bit 7.
-- `DARK_MODE` and `BRIGHTNESS` in byte 5 (idx 4) bits 4-0.
+The simulator (`Msg036`) encodes:
+- `0x0E` constant in byte 1 (idx 0).
+- `0x00` in byte 2 (idx 1).
+- `ECO_MODE` in byte 3 (idx 2) bit 7.
+- `DARK_MODE` and `BRIGHTNESS` (and dash lights) in byte 4 (idx 3).
+- `POWER_MANAGEMENT` / power mode in byte 5 (idx 4) using values 0–3 (`0x00` sleeping, `0x01` on, `0x02` off, `0x03` wakeup).
+- `0xA0` (or `0x50` boot banner) in byte 8 (idx 7).
 
-The simulator sends byte 2 (idx 1) as `0x0E` (fixed). PSA-RE shows byte 2 carries profile/memory
-signals. On a real bus these may be non-zero if seat-memory ECUs are present. For bench-only
-simulation the constant is acceptable.
+*Note:* PSA-RE assigns profile/memory registers to bytes 2–3 (idx 1–2) and shifts `ECO_MODE` to byte 4 and `POWER_MANAGEMENT` to byte 6. Real-bus captures (`dump_real_car.csv`, `power_on_and_ignition_on.csv`) confirm the simulator's wire layout (`data[0]=0x0E`, `data[2]=eco`, `data[3]=dark/lum`, `data[4]=power_mode`) is the actual format sent by the Peugeot 407 BSI.
 
 ---
 
@@ -232,7 +234,7 @@ simulation is added.
 
 ### 0x161 — BSI_GAUGES (ETAT_BSI_TEMP_NIVEAU)
 
-**PSA-RE frame length:** 7 bytes (simulator encodes 8, with trailing `0xFF` padding)  
+**PSA-RE frame length:** 7 bytes (simulator `Msg161` also encodes 7 bytes)  
 **PSA-RE periodicity:** 500 ms
 
 | Byte (1-idx) | Idx | Bits | Signal | Encoding |
@@ -242,7 +244,7 @@ simulation is added.
 | 3 | 2 | 7-0 | OIL_TEMPERATURE | raw − 40 °C, invalid 0xFF |
 | 4 | 3 | 7-0 | FUEL_LEVEL | 0-100 %, invalid 0xFF |
 | 5-6 | 4-5 | — | (unused) | |
-| 7 | 6 | 7-0 | OIL_LEVEL | 0-250 %, invalid 0xFF |
+| 7 | 6 | 7-0 | OIL_LEVEL | 0–100 %, invalid 0xFF |
 
 **New signal:** `OIL_LEVEL` in byte 7 (idx 6) was not previously documented. The simulator sends
 `0xFF` in that position (unused/invalid), which is the correct invalid value per PSA-RE.
@@ -535,7 +537,7 @@ which the display may show as `"--"`. This is consistent.
 
 ## Frames in PSA-RE Not Implemented in Simulator
 
-The following frames exist in the PSA-RE LS.CONF but are not yet implemented in the simulator:
+The following frames exist in the PSA-RE LS.CONF and remain unimplemented in the simulator:
 
 | Frame | PSA-RE name | Notes |
 |-------|-------------|-------|
@@ -549,23 +551,21 @@ The following frames exist in the PSA-RE LS.CONF but are not yet implemented in 
 | 0x15B | ? | not in simulator |
 | 0x1DF | ? | not in simulator |
 | 0x1E0 | ? | not in simulator |
-| 0x217 | ? | ignition flag at bit 0 (see `CAN2004_cold_start.md`) |
-| 0x21F | ? | not in simulator |
-| 0x220 | DOORS_STATUS | documented; not yet transmitted by simulator |
+| 0x21F | ? | documented in `CAN2004_sterringkeys.md` |
 | 0x227 | ? | not in simulator |
-| 0x228 | ? | not in simulator |
+| 0x228 | ? | static heartbeat seen in real-car capture |
 | 0x257 | ? | not in simulator |
 | 0x260 | ? | not in simulator |
-| 0x265 | ? | not in simulator |
 | 0x297 | ? | not in simulator |
-| 0x2A5 | ? | not in simulator |
 | 0x2E1 | ? | not in simulator |
 | 0x317 | ? | not in simulator |
 | 0x325 | ? | not in simulator |
 | 0x365 | ? | not in simulator |
 | 0x3A5 | ? | not in simulator |
 | 0x3A7 | ? | not in simulator |
-| 0x3F6 | ? | not in simulator |
+| 0x3F6 | ? | date/time from radio |
+
+*(Note: `0x217`, `0x220` (doors), `0x265` (tuner flags), and `0x2A5` (station name) are implemented in the simulator codebase.)*
 
 ---
 

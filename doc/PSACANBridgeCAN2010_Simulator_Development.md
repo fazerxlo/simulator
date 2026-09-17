@@ -89,7 +89,7 @@ The bridge listens to the following messages on the **CAN2004 bus** and maps the
 | 0 | Ignition | [7:6] | `config_mode` |
 | 1 | — | — | **`CoolantTemperature`** → `DataBroker.CoolantTemperature` |
 | 2–4 | Mileage | — | Three-byte odometer (MSB first) |
-| 6 | — | — | **`ExternalTemperature`** → `DataBroker.ExternalTemperature` |
+| 5–6 | — | — | **`ExternalTemperature`** (Byte 5 primary, Byte 6 duplicate; raw × 0.5 − 40) → `DataBroker.ExternalTemperature` |
 | 7 | Lights | [0] | `turn_left_light` |
 | 7 | Lights | [1] | `turn_right_light` |
 | 7 | Lights | [6] | `wiper_status` |
@@ -105,8 +105,8 @@ The bridge listens to the following messages on the **CAN2004 bus** and maps the
 
 | Byte | Field | Description |
 |------|-------|-------------|
-| 0–1 | — | Passed through to `DataBroker.S_0B6Byte1–2` |
-| 2–3 | Speed | Unsigned 16-bit speed in km/h → `DataBroker.SpeedInKmh` |
+| 0–1 | RPM | Engine RPM (13-bit value in bits 15..3, raw = RPM << 3) → passed through to `DataBroker.S_0B6Byte1–2` |
+| 2–3 | Speed | Unsigned 16-bit speed scaled by 100 (0.01 km/h per LSB, e.g. raw 5000 = 50.00 km/h) → `DataBroker.SpeedInKmh` |
 | 4–7 | — | Passed through to `DataBroker.S_0B6Byte5–8` |
 
 ---
@@ -353,7 +353,7 @@ These are the messages the bridge sends on the **CAN2010 bus** for the head unit
 
 **Length:** 8 bytes · **Interval:** ~45 ms
 
-All 8 bytes are forwarded verbatim from `DataBroker.S_0B6Byte1–8`. Bytes 2–3 encode the current speed in km/h (unsigned 16-bit, big-endian).
+All 8 bytes are forwarded verbatim from `DataBroker.S_0B6Byte1–8`. Bytes 0–1 encode engine RPM (13-bit raw value in bits 15..3; raw = RPM << 3). Bytes 2–3 encode the vehicle speed (unsigned 16-bit, big-endian, scaled by 100: 0.01 km/h per LSB, e.g. 5000 = 50.00 km/h).
 
 ---
 

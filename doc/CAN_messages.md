@@ -5,7 +5,7 @@ This document is derived from the current workspace, not from a single external 
 Primary sources used:
 
 - simulator implementation in [modules/bsi-base](../modules/bsi-base), [modules/bsi-trip](../modules/bsi-trip), [modules/combine](../modules/combine), [modules/clim](../modules/clim), and [modules/bsi-log](../modules/bsi-log)
-- workspace notes in [doc/peugeot407can.yaml](peugeot407can.yaml), [doc/psa_pf2.md](psa_pf2.md), and [doc/psa_pf2_comfort.md](psa_pf2_comfort.md)
+- legacy workspace notes (historically referenced from `peugeot407can.yaml`, `psa_pf2.md`, and `psa_pf2_comfort.md`)
 - cross-project notes in [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md)
 - observed traffic in [dump.csv](../dump.csv) (bench) and [dump_real_car.csv](../dump_real_car.csv) (real car)
 - community data from [autowp/autowp.github.io](https://github.com/autowp/autowp.github.io) (see [CAN2004_autowp_comparison.md](CAN2004_autowp_comparison.md))
@@ -37,7 +37,7 @@ These frames are the primary set for a car-parameter monitor.
 | 0x128 | cluster warning and lamp state | Verified (PSA-RE) | full 8-byte signal map confirmed; rich signal set |
 | 0x161 | oil temperature, fuel level, oil level | Verified (PSA-RE) | byte 6 = oil level 0-100 % |
 | 0x168 | dashboard alert/fault indicators | Verified (PSA-RE) | **NOT ambient temperature** — see correction below |
-| 0x220 | door and body openings | Observed | present in dump, implemented in simulator |
+| 0x220 | door and body openings | Verified | present in dump, implemented in simulator (Msg220) |
 | 0x1A8 | cruise/speed-limiter state | Verified | present in dump, implemented in simulator (Msg1A8) |
 | 0x228 | unknown static frame | Observed | present in real-car dump; constant payload `80 00 80 80 00 00 00 00`; not implemented |
 | 0x361 | vehicle configuration/features | Observed | present in bench dump, not in real-car dump; not implemented |
@@ -64,8 +64,8 @@ project (Peugeot 207 RD4 head unit), see [CAN2004_radio.md](CAN2004_radio.md).
 | 0x1E5 | radio audio settings (balance, bass, treble, loudness, ambiance) | Verified | 7-byte frame confirmed against ios-car-dashboard AudioSettings; see [CAN2004_radio.md §4](CAN2004_radio.md) |
 | 0x225 | FM tuner status (frequency, band, memory, scan, RDS) | Inferred | freq = `raw × 0.05 + 50` MHz; see [CAN2004_radio.md §5](CAN2004_radio.md) |
 | 0x265 | RDS / station info flags | Inferred | see [CAN2004_radio.md §6](CAN2004_radio.md) |
-| 0x2A5 | radio station name / RDS PS text | Inferred | raw ASCII bytes; see [CAN2004_radio.md §7](CAN2004_radio.md) |
-| 0x3E5 | steering wheel panel buttons | Verified | two layouts (radio vs buttons module); see [CAN2004_radio.md §8](CAN2004_radio.md) |
+| 0x2A5 | radio station name / RDS PS text | Inferred | raw ASCII bytes; see [CAN2004_radio.md §8](CAN2004_radio.md) |
+| 0x3E5 | steering wheel panel buttons | Verified | two layouts (radio vs buttons module); see [CAN2004_radio.md §9](CAN2004_radio.md) |
 | 0x162 / 0x1A0 / 0x1A2 / 0x1E0 / 0x1E2 | radio changer / source status | Inferred | audio-source integration only |
 | 0x1A1 | BSI informational display message | Observed | useful for text warnings, not raw vehicle-state decoding |
 | 0x325 / 0x365 / 0x3A5 / 0x5E0 / 0x5E5 | disk, RDS, and device metadata | Inferred | infotainment-specific |
@@ -187,9 +187,9 @@ Status: Verified/Observed
 Source evidence:
 
 - partially implemented in [modules/combine/__init__.py](../modules/combine/__init__.py)
-- described in [psa_pf2_comfort.md](psa_pf2_comfort.md)
+- described in legacy notes (`psa_pf2_comfort.md`)
 - described in [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md)
-- described in [PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md](PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md)
+- detailed in [PSA_RE_comparison.md](PSA_RE_comparison.md)
 - observed in [dump.csv](../dump.csv)
 
 Observed examples:
@@ -303,9 +303,7 @@ Recommended monitor decode:
 - oil temperature raw: byte 2
 - oil temperature celsius: `byte2 - 40` if following simulator convention, or `byte2 + 40` if following older note wording; verify against real temperature
 - fuel raw: byte 3
-- fuel level bits: `(byte3 >> 2) & 0x3F`
-- fuel max bits: `(byte3 >> 1) & 0x7F`
-- fuel percent: `fuel_level * 100 / fuel_max` when `fuel_max != 0`
+- fuel percent: byte 3 directly encodes fuel level (0–100 %, 1 % per LSB; `0xFF` = invalid)
 
 Notes:
 
@@ -360,14 +358,14 @@ Notes:
 
 ### 0x220 - Door and Body Openings
 
-Status: Observed
+Status: **Verified (Msg220)**
 
 Source evidence:
 
-- described in [PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md](PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md)
+- implemented in `generated/bsi_messages.py` (`Msg220`)
+- described in [CAN2004_doors.md](CAN2004_doors.md) and [PSA_RE_comparison.md](PSA_RE_comparison.md)
 - described in [canbox/doc/sources/PSACAN.md](../../canbox/doc/sources/PSACAN.md)
 - observed in [dump.csv](../dump.csv)
-- mentioned in [psa_pf2.md](psa_pf2.md)
 
 Observed example:
 
@@ -402,12 +400,13 @@ Interpretation update:
 
 ### 0x1A8 - Cruise Control and Function Settings
 
-Status: Observed
+Status: **Verified (Msg1A8)**
 
 Source evidence:
 
-- described in [PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md](PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md)
-- observed in [dump.csv](../dump.csv)
+- implemented in `generated/bsi_messages.py` (`Msg1A8`)
+- detailed in [CAN2004_0x1A8.md](CAN2004_0x1A8.md) and [PSA_RE_comparison.md](PSA_RE_comparison.md)
+- observed in [dump.csv](../dump.csv) and [dump_real_car.csv](../dump_real_car.csv)
 
 Observed examples:
 
@@ -434,7 +433,7 @@ Status: Observed
 
 Source evidence:
 
-- described in [PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md](PSA_CAN_2004_COMFORT_MESSAGES_DOCUMENTATION.md)
+- detailed in [PSA_RE_comparison.md](PSA_RE_comparison.md)
 - observed in [dump.csv](../dump.csv)
 
 Observed example:

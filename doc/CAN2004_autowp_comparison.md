@@ -125,30 +125,24 @@ Byte 7:    11010000            — constant 0xD0
 
 | Field | autowp | Simulator | Status |
 |-------|--------|-----------|--------|
-| RPM encoding | 13-bit raw RPM in bits 15-3 | 16-bit RPM × 10 (uint16 BE) | **Conflict** |
+| RPM encoding | 13-bit raw RPM in bits 15-3 | 13-bit raw RPM in bits 15-3 (`rpm << 3`) | ✓ matches |
 | Speed encoding | uint16 × 100 km/h | uint16 × 100 km/h | ✓ matches |
 | Bytes 4-5 | Trip odometer from start (cm) | `0x00 0x00` (not implemented) | **Gap** |
 | Byte 6 | Fuel consumption counter | `0x00` (not implemented) | **Gap** |
 | Byte 7 | constant `0xD0` | constant `0xD0` | ✓ matches |
 
-**RPM encoding conflict detail:**
+**RPM encoding alignment:**
 
 autowp documents a 13-bit raw RPM packed into the top 13 bits of the first
 16-bit word (bits 15..3), with 3 zero padding bits (bits 2..0).  For 800 RPM:
-- autowp encoding: `(800 << 3) = 0x1900` → bytes `0x19 0x00`
-- Simulator encoding: `800 × 10 = 8000 = 0x1F40` → bytes `0x1F 0x40`
+- `(800 << 3) = 0x1900` → bytes `0x19 0x00`
 
-The simulator uses **RPM × 10** (a ×10 integer scale).  This encoding is also
-used in the `decode` path (`raw / 10`), making encode/decode self-consistent.
-The real-bus value `0xFF 0xFF` seen in cold-start captures for "engine off /
-invalid" fits neither a 13-bit RPM of 8191 (nonsensical) nor RPM × 10 = 65535
-(also nonsensical), so `0xFF 0xFF` is a sentinel value used by both approaches
-to indicate "no engine data".
+Earlier simulator prototypes used a naive `RPM × 10` scale. The simulator has since been updated
+to align with both the physical combine display and autowp: `Msg0B6` in `generated/bsi_messages.py` encodes
+`rpm = max(0, int(car.bsi.rpm)) << 3` and decodes `(raw_rpm >> 3)`. Real-bus idle/cold-start captures
+also use `0xFFFF` as the sentinel for "engine stopped / invalid", which the simulator normalizes to 0 RPM.
 
-> **Recommendation:** Do not change the simulator RPM encoding — it is
-> internally consistent and verified against the cold-start capture in
-> `CAN2004_cold_start.md`.  The autowp 13-bit claim may reflect a different
-> head-unit or firmware variant, or a documentation error.
+> **Conclusion:** autowp and the simulator are in full agreement on RPM encoding.
 
 **Trip odometer / fuel counter gap:**
 
@@ -437,8 +431,10 @@ Bytes 10-11: ZZZZZZZZ ZZZZZZZZZ — fuel consumption (L/100km × 10, 0-25.5)
 Bytes 12-19: VVVVVVVV × 8  — last 8 VIN digits (ASCII)
 ```
 
-This frame is documented for C4 B7 but not for the Peugeot 407.  It combines
-date/time with trip statistics.  Not implemented in the simulator.
+This frame is documented for C4 B7 but not for the Peugeot 407. Note that the 20-byte payload
+described above represents an ISO-TP (ISO 15765-2) or multi-frame transport structure,
+as standard CAN 2.0 frames are limited to 8 bytes. It combines date/time with trip statistics.
+Not implemented in the simulator.
 
 ### 0x39B — Set System Date/Time (Display → BSI)
 
@@ -489,7 +485,7 @@ comfort bus (125 kbps).  Out of scope for this simulator.
 | Area | Action |
 |------|--------|
 | 0x036 | No change required — full agreement with autowp |
-| 0x0B6 | Notes added — RPM encoding discrepancy documented; simulator kept as-is |
+| 0x0B6 | Confirmed — simulator Msg0B6 encodes 13-bit raw RPM (rpm << 3), matching autowp |
 | 0x0B6 | Notes added — bytes 4-5 (trip odometer cm) and byte 6 (fuel counter) not implemented |
 | 0x0F6 | Notes added — autowp byte 5 claim (constant 0x8E) contradicts PSA-RE and captures |
 | 0x128 | No change required — autowp confirms all lighting bit positions |
