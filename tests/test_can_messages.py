@@ -8,14 +8,17 @@ import types
 import pytest
 
 from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
+from car_state import (BSI, Buttons, SteeringWheel, Clim, Dashboard, Doors, MFDPopup,
                        Parktronic, Tyres, VirtualCar, Radio, Trip,
                        KMLState, BTEState, SpeedControl)
 from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg21F, Msg3E5,
+                          Msg323, Msg165, Msg1A5, Msg1E5, Msg0C5, Msg21F, Msg3E5,
                           Msg52D, Msg110, Msg0F6, Msg161, Msg1A8, Msg217,
-                          Msg12D, STARTUP_WAKEUP_BURST)
+                          Msg12D, Msg0A9, Msg0E6, Msg1E1, Msg2E1, Msg3A1,
+                          Msg3A7, Msg4A4, Msg269, STARTUP_WAKEUP_BURST)
 from conftest import make_can_mock, DummyWidget
 
 BSIBaseModule = importlib.import_module('modules.bsi-base').BSI_base
@@ -871,6 +874,184 @@ class TestMsg221EncodeDecodeRoundtrip:
         assert car_b.trip.autonomy == 500
         assert abs(car_b.trip.dist - 45) < 0.2
 
+    def test_com_right_pulse_asserted(self):
+        car = VirtualCar()
+        car.trip.press_com('com_right', ticks=2)
+        d1 = Msg221().encode(car)
+        assert (d1[0] >> 3) & 1 == 1  # com_right bit asserted
+        d2 = Msg221().encode(car)
+        assert (d2[0] >> 3) & 1 == 1  # 2nd tick still asserted
+        d3 = Msg221().encode(car)
+        assert (d3[0] >> 3) & 1 == 0  # cleared after ticks expire
+
+    def test_com_buttons_press_and_release(self):
+        car = VirtualCar()
+        # Press com_right
+        car.trip.com_right = 1
+        d_press = Msg221().encode(car)
+        assert (d_press[0] >> 3) & 1 == 1
+        # Release com_right
+        car.trip.com_right = 0
+        car.trip._com_right_ticks = 0
+        d_release = Msg221().encode(car)
+        assert (d_release[0] >> 3) & 1 == 0
+
+        # Press com_left
+        car.trip.com_left = 1
+        d_press_l = Msg221().encode(car)
+        assert d_press_l[0] & 1 == 1
+        # Release com_left
+        car.trip.com_left = 0
+        car.trip._com_left_ticks = 0
+        d_release_l = Msg221().encode(car)
+        assert d_release_l[0] & 1 == 0
+
+
+class TestMsg2A1Msg261EncodeDecodeRoundtrip:
+    """Wire layout: B0 = speed (uint8 km/h), B1-2 = dist, B3-4 = fuel, B5-6 = speed (uint16)."""
+
+    def test_msg2a1_roundtrip(self):
+        car_a = VirtualCar()
+        car_a.trip.hist[0] = {'speed': 48, 'dist': 650, 'fuel': 6.8}
+        data = Msg2A1().encode(car_a)
+        assert len(data) == 7
+        assert data[0] == 48  # Mean speed in Byte 0 for EMF-C and cluster displays
+        assert data[1] == 650 >> 8
+        assert data[2] == 650 & 0xFF
+        assert data[3] == 68 >> 8
+        assert data[4] == 68 & 0xFF
+        assert data[5] == 48 >> 8
+        assert data[6] == 48 & 0xFF
+
+        car_b = VirtualCar()
+        Msg2A1().decode(car_b, data)
+        assert car_b.trip.hist[0]['dist'] == 650
+        assert abs(car_b.trip.hist[0]['fuel'] - 6.8) < 0.1
+        assert car_b.trip.hist[0]['speed'] == 48
+
+    def test_msg261_roundtrip(self):
+        car_a = VirtualCar()
+        car_a.trip.hist[1] = {'speed': 92, 'dist': 1420, 'fuel': 5.4}
+        data = Msg261().encode(car_a)
+        assert len(data) == 7
+        assert data[0] == 92  # Mean speed in Byte 0
+        assert data[5] == 92 >> 8
+        assert data[6] == 92 & 0xFF
+
+        car_b = VirtualCar()
+        Msg261().decode(car_b, data)
+        assert car_b.trip.hist[1]['dist'] == 1420
+        assert abs(car_b.trip.hist[1]['fuel'] - 5.4) < 0.1
+        assert car_b.trip.hist[1]['speed'] == 92
+
+
+class TestRT4NewMessages:
+    def test_msg0a9_nav_repeat_idle(self):
+        car = VirtualCar()
+        data = Msg0A9().encode(car)
+        # Default idle vector from RT4 spec
+        assert data == [0x00, 0x3F, 0xFF, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF]
+
+    def test_msg0a9_nav_repeat_active(self):
+        car = VirtualCar()
+        car.bsi.nav_active = True
+        car.bsi.nav_picto = 0x12
+        car.bsi.nav_altitude = 250  # +999 offset: raw = 1249 = 0x04E1
+        car.bsi.nav_dist_dest = 1500  # raw = 0x05DC
+        car.bsi.nav_dist_maneuver = 400
+        car.bsi.nav_eta_hour = 14
+        car.bsi.nav_eta_minute = 35
+        data = Msg0A9().encode(car)
+        assert data[0] & 0x80  # active
+        assert (data[0] & 0x3F) == 0x12  # picto
+        # decode
+        car_b = VirtualCar()
+        Msg0A9().decode(car_b, data)
+        assert car_b.bsi.nav_active is True
+        assert car_b.bsi.nav_picto == 0x12
+        assert car_b.bsi.nav_altitude == 250
+        assert car_b.bsi.nav_dist_dest == 1500
+        assert car_b.bsi.nav_dist_maneuver == 400
+        assert car_b.bsi.nav_eta_hour == 14
+        assert car_b.bsi.nav_eta_minute == 35
+
+    def test_msg0e6_wheel_ticks(self):
+        car = VirtualCar()
+        car.bsi.wheel_ticks_rr = 1234
+        car.bsi.wheel_ticks_rl = 5678
+        data = Msg0E6().encode(car)
+        assert len(data) == 5
+        car_b = VirtualCar()
+        Msg0E6().decode(car_b, data)
+        assert car_b.bsi.wheel_ticks_rr == 1234
+        assert car_b.bsi.wheel_ticks_rl == 5678
+
+    def test_msg1e1_tpms_wheel_status(self):
+        car = VirtualCar()
+        car.tyres.fl = Tyres.LOW
+        car.tyres.fr = Tyres.OK
+        car.tyres.rr = Tyres.FLAT
+        car.tyres.rl = Tyres.OK
+        data = Msg1E1().encode(car)
+        assert len(data) == 8
+        assert data[0] >> 3 == 1  # LOW
+        assert data[1] >> 3 == 0  # OK
+        assert data[2] >> 3 == 2  # FLAT
+        car_b = VirtualCar()
+        Msg1E1().decode(car_b, data)
+        assert car_b.tyres.fl == Tyres.LOW
+        assert car_b.tyres.fr == Tyres.OK
+        assert car_b.tyres.rr == Tyres.FLAT
+
+    def test_msg2e1_functions_status(self):
+        car = VirtualCar()
+        car.bsi.light_mode = 2  # low beam
+        car.bsi.wipers_front = 2
+        car.speed_control.control_type = SpeedControl.REGULATOR
+        data = Msg2E1().encode(car)
+        assert len(data) == 3
+        car_b = VirtualCar()
+        Msg2E1().decode(car_b, data)
+        assert car_b.bsi.wipers_front == 2
+
+    def test_msg3a1_wheel_pressures(self):
+        car = VirtualCar()
+        car.tyres.pressure_fl = 2.4
+        car.tyres.pressure_fr = 2.4
+        car.tyres.pressure_rr = 2.2
+        car.tyres.pressure_rl = 2.2
+        data = Msg3A1().encode(car)
+        assert len(data) == 8
+        assert data[0] == 48  # 2.4 / 0.05
+        assert data[2] == 44  # 2.2 / 0.05
+        car_b = VirtualCar()
+        Msg3A1().decode(car_b, data)
+        assert abs(car_b.tyres.pressure_fl - 2.4) < 0.05
+
+    def test_msg3a7_maintenance(self):
+        car = VirtualCar()
+        car.bsi.service_countdown = 15000
+        car.bsi.service_spanner = 0
+        data = Msg3A7().encode(car)
+        assert len(data) == 8
+        car_b = VirtualCar()
+        Msg3A7().decode(car_b, data)
+        assert car_b.bsi.service_countdown == 15000
+
+    def test_msg4a4_failure_dtc(self):
+        car = VirtualCar()
+        data = Msg4A4().encode(car)
+        assert data == [0x50, 0x00, 0x00, 0x80, 0x01, 0x02, 0x05, 0x07]
+
+    def test_msg269_crash_status(self):
+        car = VirtualCar()
+        car.bsi.crash_confirmed = 0
+        data = Msg269().encode(car)
+        assert data == [0x00, 0x00, 0x00]
+        car.bsi.crash_confirmed = 1
+        data = Msg269().encode(car)
+        assert data[0] & 0x80
+
 
 class TestMsg12BEncodeDecode:
     def test_encode(self):
@@ -975,27 +1156,27 @@ class TestMsg3E5Buttons:
     def test_buttons_encoding_when_active(self):
         car = VirtualCar()
         car.buttons.active = True
-        car.buttons.panel['tel'] = 1
+        car.buttons.panel['source'] = 1
         data = Msg3E5().encode(car)
-        # buttons layout: tel is in b0 bits [5:4]
-        assert (data[0] >> 4) & 1 == 1
+        # buttons layout: source is in b1 bits [5:4]
+        assert (data[1] >> 4) & 1 == 1
 
-    def test_buttons_encoding_ok_key(self):
+    def test_buttons_encoding_next_key(self):
         car = VirtualCar()
         car.buttons.active = True
-        car.buttons.panel['ok'] = 1
+        car.buttons.panel['next'] = 1
         data = Msg3E5().encode(car)
-        assert (data[2] >> 6) & 1 == 1
+        assert (data[2] >> 2) & 1 == 1
 
     def test_buttons_encode_steps_pulse_ticks(self):
         car = VirtualCar()
         car.buttons.active = True
-        car.buttons.press('trip')
-        assert car.buttons.panel['trip'] == 1
+        car.buttons.press('source')
+        assert car.buttons.panel['source'] == 1
         # Encoding steps the pulse timer; after _pulse_window ticks button clears
         for _ in range(car.buttons._pulse_window):
             Msg3E5().encode(car)
-        assert car.buttons.panel['trip'] == 0
+        assert car.buttons.panel['source'] == 0
 
     def test_buttons_required_modules_includes_buttons(self):
         assert 'buttons' in Msg3E5.required_modules
@@ -1003,10 +1184,10 @@ class TestMsg3E5Buttons:
     def test_decode_updates_buttons_panel_when_active(self):
         car = VirtualCar()
         car.buttons.active = True
-        # Encode 'ok' pressed in buttons layout
-        frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
+        # Encode 'source' pressed in buttons layout
+        frame = [0x00, (1 << 4), 0x00, 0x00, 0x00, 0x00]
         Msg3E5().decode(car, frame)
-        assert car.buttons.panel['ok'] == 1
+        assert car.buttons.panel['source'] == 1
 
     def test_decode_updates_radio_panel_when_buttons_inactive(self):
         car = VirtualCar()
@@ -1014,3 +1195,33 @@ class TestMsg3E5Buttons:
         frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
         Msg3E5().decode(car, frame)
         assert car.radio.panel['ok'] == 1
+
+
+class TestMsg0C5SteeringAngle:
+    def test_encode_centered_angle_zero(self):
+        car = VirtualCar()
+        car.steering_wheel.active = True
+        car.steering_wheel.angle = 0.0
+        assert Msg0C5().encode(car) == [0x00, 0x00, 0x00, 0x00]
+
+    def test_encode_positive_angle(self):
+        car = VirtualCar()
+        car.steering_wheel.active = True
+        car.steering_wheel.angle = 90.0  # 900 in 0.1 deg
+        assert Msg0C5().encode(car) == [900 >> 8, 900 & 0xFF, 0x00, 0x00]
+
+    def test_encode_negative_angle(self):
+        car = VirtualCar()
+        car.steering_wheel.active = True
+        car.steering_wheel.angle = -90.0  # -900 = 0xFC7C
+        assert Msg0C5().encode(car) == [0xFC, 0x7C, 0x00, 0x00]
+
+    def test_encode_returns_none_when_inactive(self):
+        car = VirtualCar()
+        assert Msg0C5().encode(car) is None
+
+    def test_decode_updates_angle(self):
+        car = VirtualCar()
+        # 45.0 deg -> raw 450 = 0x01C2
+        Msg0C5().decode(car, [0x01, 0xC2, 0x00, 0x00])
+        assert car.steering_wheel.angle == 45.0

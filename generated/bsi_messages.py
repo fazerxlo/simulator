@@ -564,3 +564,194 @@ class Msg52D(CanMessage):
             return [0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00]
         return [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 
+
+class Msg0A9(CanMessage):
+    """Instrument cluster navigation matrix repeat (MSG_RAPPEL_NAV_VTH).
+    Carries maneuver picto ID, altitude, distance to destination, distance to maneuver, and ETA.
+    """
+
+    can_id = 0x0A9
+    period_ms = 100
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        if not getattr(bsi, 'nav_active', False):
+            return [0x00, 0x3F, 0xFF, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF]
+        b0 = 0x80 | (0x40 if getattr(bsi, 'nav_recalc', False) else 0x00) | (int(getattr(bsi, 'nav_picto', 0)) & 0x3F)
+        alt = int(getattr(bsi, 'nav_altitude', 0)) + 999
+        alt_msb = (alt >> 8) & 0x3F
+        alt_lsb = alt & 0xFF
+        dist_dest = int(getattr(bsi, 'nav_dist_dest', 0)) & 0x3FFF
+        dd_msb = (dist_dest >> 8) & 0x3F
+        dd_lsb = dist_dest & 0xFF
+        dist_man = int(getattr(bsi, 'nav_dist_maneuver', 0)) & 0x1FFF
+        dm_msb = (dist_man >> 5) & 0xFF
+        dm_lsb = (dist_man & 0x1F) << 3
+        eta_h = int(getattr(bsi, 'nav_eta_hour', 0)) & 0x1F
+        eta_m = int(getattr(bsi, 'nav_eta_minute', 0)) & 0x3F
+        b6 = dm_lsb | ((eta_h >> 2) & 0x07)
+        b7 = ((eta_h & 0x03) << 6) | eta_m
+        return [b0, alt_msb, alt_lsb, dd_msb, dd_lsb, dm_msb, b6, b7]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 8:
+            return
+        bsi = car.bsi
+        bsi.nav_active = bool(data[0] & 0x80)
+        bsi.nav_recalc = bool(data[0] & 0x40)
+        bsi.nav_picto = data[0] & 0x3F
+        if data == [0x00, 0x3F, 0xFF, 0x3F, 0xFF, 0xFF, 0xFF, 0xFF]:
+            return
+        alt_raw = ((data[1] & 0x3F) << 8) | data[2]
+        bsi.nav_altitude = alt_raw - 999
+        bsi.nav_dist_dest = ((data[3] & 0x3F) << 8) | data[4]
+        bsi.nav_dist_maneuver = (data[5] << 5) | (data[6] >> 3)
+        bsi.nav_eta_hour = ((data[6] & 0x07) << 2) | ((data[7] & 0xC0) >> 6)
+        bsi.nav_eta_minute = data[7] & 0x3F
+
+
+class Msg0E6(CanMessage):
+    """ABS wheel pulse counters for dead reckoning (MSG_IS_DAT_ABR)."""
+
+    can_id = 0x0E6
+    period_ms = 50
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        rr = int(getattr(bsi, 'wheel_ticks_rr', 0x7FFF)) & 0x7FFF
+        rl = int(getattr(bsi, 'wheel_ticks_rl', 0x7FFF)) & 0x7FFF
+        return [0x00, rr >> 8, rr & 0xFF, rl >> 8, rl & 0xFF]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 5:
+            return
+        car.bsi.wheel_ticks_rr = ((data[1] & 0x7F) << 8) | data[2]
+        car.bsi.wheel_ticks_rl = ((data[3] & 0x7F) << 8) | data[4]
+
+
+class Msg1E1(CanMessage):
+    """TPMS wheel status enum (MSG_DONNEES_ETAT_ROUES)."""
+
+    can_id = 0x1E1
+    period_ms = 250
+
+    def encode(self, car) -> list:
+        tyres = car.tyres
+        fl = (int(tyres.fl) & 0x07) << 3
+        fr = (int(tyres.fr) & 0x07) << 3
+        rr = (int(tyres.rr) & 0x07) << 3
+        rl = (int(tyres.rl) & 0x07) << 3
+        spare = (int(getattr(tyres, 'spare', 0)) & 0x07) << 3
+        return [fl, fr, rr, rl, spare, 0x20, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 4:
+            return
+        car.tyres.fl = (data[0] >> 3) & 0x07
+        car.tyres.fr = (data[1] >> 3) & 0x07
+        car.tyres.rr = (data[2] >> 3) & 0x07
+        car.tyres.rl = (data[3] >> 3) & 0x07
+
+
+class Msg269(CanMessage):
+    """Airbag and crash notification (MSG_ETAT_INFO_CRASH)."""
+
+    can_id = 0x269
+    period_ms = 1000
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        crash = 0x80 if getattr(bsi, 'crash_confirmed', 0) else 0x00
+        return [crash, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 1:
+            return
+        car.bsi.crash_confirmed = 1 if (data[0] & 0x80) else 0
+
+
+class Msg2E1(CanMessage):
+    """Vehicle lighting, wipers, and cruise status (MSG_ETAT_FONCTIONS)."""
+
+    can_id = 0x2E1
+    period_ms = 500
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        sc = car.speed_control
+        b0 = 0x00
+        if bsi.light_mode == 1:
+            b0 |= 0x80
+        elif bsi.light_mode == 2:
+            b0 |= 0xC0
+        elif bsi.light_mode == 3:
+            b0 |= 0xE0
+        b1 = ((int(getattr(bsi, 'wipers_front', 0)) & 0x0F) << 4) | (int(getattr(bsi, 'wipers_rear', 0)) & 0x0F)
+        cruise_mode = (int(sc.control_type) & 0x0F) << 4
+        pause = 0x01 if sc.function_status == 0 else 0x00
+        b2 = cruise_mode | pause
+        return [b0, b1, b2]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 3:
+            return
+        car.bsi.wipers_front = (data[1] >> 4) & 0x0F
+        car.bsi.wipers_rear = data[1] & 0x0F
+        car.speed_control.control_type = (data[2] >> 4) & 0x0F
+        car.speed_control.function_status = 0 if (data[2] & 0x01) else 1
+
+
+class Msg3A1(CanMessage):
+    """Direct tire pressure values in bar (MSG_DONNEES_PRESSION_ROUES)."""
+
+    can_id = 0x3A1
+    period_ms = 250
+
+    def encode(self, car) -> list:
+        tyres = car.tyres
+        fl = round(float(getattr(tyres, 'pressure_fl', 2.4)) / 0.05) & 0xFF
+        fr = round(float(getattr(tyres, 'pressure_fr', 2.4)) / 0.05) & 0xFF
+        rr = round(float(getattr(tyres, 'pressure_rr', 2.2)) / 0.05) & 0xFF
+        rl = round(float(getattr(tyres, 'pressure_rl', 2.2)) / 0.05) & 0xFF
+        return [fl, fr, rr, rl, 0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 4:
+            return
+        car.tyres.pressure_fl = round(data[0] * 0.05, 2)
+        car.tyres.pressure_fr = round(data[1] * 0.05, 2)
+        car.tyres.pressure_rr = round(data[2] * 0.05, 2)
+        car.tyres.pressure_rl = round(data[3] * 0.05, 2)
+
+
+class Msg3A7(CanMessage):
+    """Scheduled maintenance distance countdown (MSG_INFOS_MAINTENANCE)."""
+
+    can_id = 0x3A7
+    period_ms = 250
+
+    def encode(self, car) -> list:
+        bsi = car.bsi
+        spanner = 0x80 if getattr(bsi, 'service_spanner', 0) else 0x10
+        cd = int(getattr(bsi, 'service_countdown', 15000)) & 0xFFFF
+        return [spanner, 0x00, 0x00, 0x00, 0x00, cd >> 8, cd & 0xFF, 0x05]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 7:
+            return
+        car.bsi.service_spanner = 1 if (data[0] & 0x80) else 0
+        car.bsi.service_countdown = (data[5] << 8) | data[6]
+
+
+class Msg4A4(CanMessage):
+    """Telematics failure DTC broadcast (EVENEMENT_DEFAUT_BTEL)."""
+
+    can_id = 0x4A4
+    period_ms = 255
+
+    def encode(self, car) -> list:
+        return [0x50, 0x00, 0x00, 0x80, 0x01, 0x02, 0x05, 0x07]
+
+    def decode(self, car, data: bytes) -> None:
+        pass
+

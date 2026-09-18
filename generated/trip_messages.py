@@ -9,7 +9,7 @@ from generated.base import CanMessage
 
 
 class Msg221(CanMessage):
-    """Trip computer: instantaneous fuel consumption, autonomy, distance."""
+    """Trip computer: instantaneous fuel consumption, autonomy, distance, stalk buttons."""
 
     can_id = 0x221
     period_ms = 1000
@@ -17,7 +17,11 @@ class Msg221(CanMessage):
 
     def encode(self, car) -> list:
         t = car.trip
-        b0 = t.hide_fuel << 7 | t.hide_dist << 6 | t.com_right << 3 | t.com_left
+        com_r = 1 if (t.com_right or getattr(t, '_com_right_ticks', 0) > 0) else 0
+        com_l = 1 if (t.com_left or getattr(t, '_com_left_ticks', 0) > 0) else 0
+        if hasattr(t, 'step_com_pulses'):
+            t.step_com_pulses()
+        b0 = (t.hide_fuel << 7) | (t.hide_dist << 6) | (com_r << 3) | com_l
         fuel = int(t.fuel * 10)
         autonomy = int(t.autonomy)
         distance = int(t.dist * 10)
@@ -39,7 +43,9 @@ class Msg221(CanMessage):
 
 
 class Msg2A1(CanMessage):
-    """Trip computer historical record 1."""
+    """Trip computer historical record 1 (MSG_INFOS_TRAJET1_ODB).
+    Byte 0 = mean speed (uint8 km/h), Bytes 1-2 = distance, Bytes 3-4 = avg consumption, Bytes 5-6 = avg speed (uint16).
+    """
 
     can_id = 0x2A1
     period_ms = 1000
@@ -49,19 +55,23 @@ class Msg2A1(CanMessage):
         hist = car.trip.hist[0]
         dist = int(hist['dist'])
         fuel = int(hist['fuel'] * 10)
-        return [int(hist['speed']), dist >> 8, dist & 0xFF,
-                fuel >> 8, fuel & 0xFF, 0x00, 0x00]
+        speed = int(hist['speed'])
+        return [speed & 0xFF, dist >> 8, dist & 0xFF,
+                fuel >> 8, fuel & 0xFF,
+                speed >> 8, speed & 0xFF]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) >= 5:
             h = car.trip.hist[0]
-            h['speed'] = data[0]
             h['dist'] = (data[1] << 8) | data[2]
             h['fuel'] = ((data[3] << 8) | data[4]) / 10.0
+            h['speed'] = (data[5] << 8) | data[6] if len(data) >= 7 and (data[5] or data[6]) else data[0]
 
 
 class Msg261(CanMessage):
-    """Trip computer historical record 2."""
+    """Trip computer historical record 2 (MSG_INFOS_TRAJET2_ODB).
+    Byte 0 = mean speed (uint8 km/h), Bytes 1-2 = distance, Bytes 3-4 = avg consumption, Bytes 5-6 = avg speed (uint16).
+    """
 
     can_id = 0x261
     period_ms = 1000
@@ -71,13 +81,15 @@ class Msg261(CanMessage):
         hist = car.trip.hist[1]
         dist = int(hist['dist'])
         fuel = int(hist['fuel'] * 10)
-        return [int(hist['speed']), dist >> 8, dist & 0xFF,
-                fuel >> 8, fuel & 0xFF, 0x00, 0x00]
+        speed = int(hist['speed'])
+        return [speed & 0xFF, dist >> 8, dist & 0xFF,
+                fuel >> 8, fuel & 0xFF,
+                speed >> 8, speed & 0xFF]
 
     def decode(self, car, data: bytes) -> None:
-        if len(data) >= 5:
+        if len(data) >= 7:
             h = car.trip.hist[1]
-            h['speed'] = data[0]
             h['dist'] = (data[1] << 8) | data[2]
             h['fuel'] = ((data[3] << 8) | data[4]) / 10.0
+            h['speed'] = (data[5] << 8) | data[6] if len(data) >= 7 and (data[5] or data[6]) else data[0]
 

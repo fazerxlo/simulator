@@ -215,7 +215,7 @@ class TestVINConfig:
         car = DummyCar()
         assert Msg336().encode(car) == list(b"VF3")
         assert Msg3B6().encode(car) == list(b"TEST12")
-        assert Msg2B6().encode(car) == list(b"3456789X")
+        assert Msg2B6().encode(car) == list(b"34567890")
 
 
 # ---------------------------------------------------------------------------

@@ -332,7 +332,7 @@ class Msg2A5(CanMessage):
 
 class Msg21F(CanMessage):
     """Steering-wheel remote key actions.
-
+    
     The real remote uses a 3-byte frame on 0x21F.  The key identity is carried
     in byte 0, while byte 1 is a secondary pulse/aux value and byte 2 is
     reserved/zero.  This simulator models the momentary wheel button action as a
@@ -346,10 +346,11 @@ class Msg21F(CanMessage):
     def encode(self, car) -> list | None:
         if not car.buttons.active:
             return None
+        car.buttons.step_pulses()
         if car.buttons.remote_action is None:
             return [0x00, car.buttons.remote_aux, 0x00]
 
-        mask = car.buttons.REMOTE_ACTIONS[car.buttons.remote_action]
+        mask = car.buttons.REMOTE_ACTIONS.get(car.buttons.remote_action, 0x00)
         car.buttons.step_remote_pulses()
         return [mask, car.buttons.remote_aux, 0x00]
 
@@ -384,10 +385,10 @@ class Msg3E5(CanMessage):
         if car.buttons.active:
             p = car.buttons.panel
             car.buttons.step_pulses()
-            b0 = (p['tel'] << 4) | p['clima']
-            b1 = (p['trip'] << 6) | (p['source'] << 4) | p['dark']
-            b2 = (p['ok'] << 6) | (p['esc'] << 4) | (p['next'] << 2) | p['prev']
-            b5 = (p['up'] << 6) | (p['down'] << 4) | (p['right'] << 2) | p['left']
+            b0 = (p.get('tel', 0) << 4) | p.get('clima', 0)
+            b1 = (p.get('trip', 0) << 6) | (p.get('source', 0) << 4) | p.get('dark', 0)
+            b2 = (p.get('ok', 0) << 6) | (p.get('esc', 0) << 4) | (p.get('next', 0) << 2) | p.get('prev', 0)
+            b5 = (p.get('up', 0) << 6) | (p.get('down', 0) << 4) | (p.get('right', 0) << 2) | p.get('left', 0)
             return [b0, b1, b2, 0x00, 0x00, b5]
         return None  # radio is listen-only; do not transmit on its behalf
 
@@ -397,19 +398,32 @@ class Msg3E5(CanMessage):
         if car.buttons.active:
             b0, b1, b2 = data[0], data[1], data[2]
             b5 = data[5]
-            car.buttons.panel['tel'] = (b0 >> 4) & 1
-            car.buttons.panel['clima'] = b0 & 1
-            car.buttons.panel['trip'] = (b1 >> 6) & 1
-            car.buttons.panel['source'] = (b1 >> 4) & 1
-            car.buttons.panel['dark'] = b1 & 1
-            car.buttons.panel['ok'] = (b2 >> 6) & 1
-            car.buttons.panel['esc'] = (b2 >> 4) & 1
-            car.buttons.panel['next'] = (b2 >> 2) & 1
-            car.buttons.panel['prev'] = b2 & 1
-            car.buttons.panel['up'] = (b5 >> 6) & 1
-            car.buttons.panel['down'] = (b5 >> 4) & 1
-            car.buttons.panel['right'] = (b5 >> 2) & 1
-            car.buttons.panel['left'] = b5 & 1
+            if 'tel' in car.buttons.panel:
+                car.buttons.panel['tel'] = (b0 >> 4) & 1
+            if 'clima' in car.buttons.panel:
+                car.buttons.panel['clima'] = b0 & 1
+            if 'trip' in car.buttons.panel:
+                car.buttons.panel['trip'] = (b1 >> 6) & 1
+            if 'source' in car.buttons.panel:
+                car.buttons.panel['source'] = (b1 >> 4) & 1
+            if 'dark' in car.buttons.panel:
+                car.buttons.panel['dark'] = b1 & 1
+            if 'ok' in car.buttons.panel:
+                car.buttons.panel['ok'] = (b2 >> 6) & 1
+            if 'esc' in car.buttons.panel:
+                car.buttons.panel['esc'] = (b2 >> 4) & 1
+            if 'next' in car.buttons.panel:
+                car.buttons.panel['next'] = (b2 >> 2) & 1
+            if 'prev' in car.buttons.panel:
+                car.buttons.panel['prev'] = b2 & 1
+            if 'up' in car.buttons.panel:
+                car.buttons.panel['up'] = (b5 >> 6) & 1
+            if 'down' in car.buttons.panel:
+                car.buttons.panel['down'] = (b5 >> 4) & 1
+            if 'right' in car.buttons.panel:
+                car.buttons.panel['right'] = (b5 >> 2) & 1
+            if 'left' in car.buttons.panel:
+                car.buttons.panel['left'] = b5 & 1
             return
         b0, b1, b2 = data[0], data[1], data[2]
         b5 = data[5]

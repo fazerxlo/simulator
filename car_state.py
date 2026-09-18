@@ -37,6 +37,26 @@ class BSI:
         # Blinker state from 0x0F6 byte 7 bits 1-0 (PSA-RE BLINKERS_STATUS).
         # 0 = none, 1 = right, 2 = left, 3 = both (hazards).
         self.blinkers = 0
+        # Navigation matrix repeat (0x0A9)
+        self.nav_active = False
+        self.nav_recalc = False
+        self.nav_picto = 0
+        self.nav_altitude = 0
+        self.nav_dist_dest = 0
+        self.nav_dist_maneuver = 0
+        self.nav_eta_hour = 0
+        self.nav_eta_minute = 0
+        # Wheel pulse counters (0x0E6)
+        self.wheel_ticks_rr = 0x7FFF
+        self.wheel_ticks_rl = 0x7FFF
+        # Functions status (0x2E1)
+        self.wipers_front = 0
+        self.wipers_rear = 0
+        # Crash status (0x269)
+        self.crash_confirmed = 0
+        # Maintenance (0x3A7)
+        self.service_spanner = 0
+        self.service_countdown = 15000
 
 
 class Clim:
@@ -123,6 +143,11 @@ class Tyres:
         self.fr = Tyres.OK
         self.rl = Tyres.OK
         self.rr = Tyres.OK
+        self.spare = Tyres.OK
+        self.pressure_fl = 2.4
+        self.pressure_fr = 2.4
+        self.pressure_rr = 2.2
+        self.pressure_rl = 2.2
         # True while a tyre-warning popup is being displayed on the MFD
         self.display_active = False
         # Byte 1 value for the 0x168 dashboard alert frame
@@ -227,6 +252,8 @@ class Trip:
         self.hide_dist = 0
         self.com_left = 0
         self.com_right = 0
+        self._com_left_ticks = 0
+        self._com_right_ticks = 0
         self.fuel = 7.1
         self.autonomy = 740
         self.dist = 120
@@ -235,6 +262,26 @@ class Trip:
             {'speed': 37, 'dist': 569, 'fuel': 7.3},
             {'speed': 35, 'dist': 921, 'fuel': 7.9},
         ]
+
+    def press_com(self, button: str, ticks: int = 3) -> None:
+        """Assert a stalk button for a pulse window of transmit cycles."""
+        if button == 'com_right':
+            self.com_right = 1
+            self._com_right_ticks = ticks
+        elif button == 'com_left':
+            self.com_left = 1
+            self._com_left_ticks = ticks
+
+    def step_com_pulses(self) -> None:
+        """Step down active stalk button pulse timers."""
+        if self._com_right_ticks > 0:
+            self._com_right_ticks -= 1
+            if self._com_right_ticks == 0:
+                self.com_right = 0
+        if self._com_left_ticks > 0:
+            self._com_left_ticks -= 1
+            if self._com_left_ticks == 0:
+                self.com_left = 0
 
 
 class KMLState:
@@ -255,13 +302,13 @@ class BTEState:
         self.bits = 0
 
 
-class Buttons:
-    """Steering wheel and physical button state.
+class SteeringWheel:
+    """Steering wheel, column stalks, and wheel angle state.
 
-    The ``active`` flag is set by the ``buttons`` module when it loads.
-    When active, ``Msg1A5`` and ``Msg3E5`` encode from this object instead
-    of ``car.radio``, allowing the lightweight buttons module to run
-    independently of the full ``radio`` head-unit module.
+    The ``active`` flag is set by the ``steering_wheel`` (or ``buttons``)
+    module when it loads.  When active, ``Msg1A5``, ``Msg21F``, ``Msg0C5``, and
+    ``Msg3E5`` encode from this object, allowing the steering wheel subsystem
+    to run independently of the head unit.
 
     Pulse-tick tracking keeps button press assertions alive for a few
     CAN frames (``_pulse_window`` encodes), matching the physical behaviour
@@ -269,8 +316,8 @@ class Buttons:
     """
 
     BUTTON_KEYS = (
-        'source', 'trip', 'clima', 'tel', 'dark',
-        'ok', 'esc', 'up', 'down', 'next', 'prev', 'right', 'left',
+        'volume_up', 'volume_down', 'source', 'next', 'prev',
+        'com_left', 'com_right',
     )
 
     REMOTE_ACTIONS = {
@@ -279,6 +326,7 @@ class Buttons:
         'source': 0x02,
         'next': 0x80,
         'previous': 0x40,
+        'prev': 0x40,
     }
 
     def __init__(self):
@@ -293,6 +341,12 @@ class Buttons:
         self.remote_action = None
         self.remote_aux = 0x09
         self._remote_pulse_ticks = 0
+        # Steering wheel angle in degrees (-540.0° to +540.0°, centered at 0.0° by default)
+        self.angle: float = 0.0
+
+    def set_angle(self, angle: float) -> None:
+        """Set the steering wheel angle in degrees."""
+        self.angle = float(angle)
 
     def press(self, key: str) -> None:
         """Assert a button for one pulse window.
@@ -369,6 +423,9 @@ class Buttons:
         else:
             self.volume_down()
             self.press_remote('volume_down')
+
+
+Buttons = SteeringWheel
 
 
 class MFDPopup:
@@ -452,7 +509,8 @@ class VirtualCar:
         self.trip = Trip()
         self.kml = KMLState()
         self.bte = BTEState()
-        self.buttons = Buttons()
+        self.steering_wheel = SteeringWheel()
+        self.buttons = self.steering_wheel
         self.mfd_popup = MFDPopup()
         self.speed_control = SpeedControl()
 

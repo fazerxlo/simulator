@@ -1,9 +1,10 @@
-<Buttons>:
+<SteeringWheel>:
   BoxLayout:
     orientation: 'vertical'
     padding: '8dp'
     spacing: '8dp'
 
+    # Top info row: Pressed keys + Volume display
     BoxLayout:
       size_hint_y: None
       height: '36dp'
@@ -18,8 +19,33 @@
         text: 'volume: 15'
         size_hint_x: 0.25
 
+    # Steering Wheel Angle Slider row
+    BoxLayout:
+      size_hint_y: None
+      height: '44dp'
+      spacing: '8dp'
+      Label:
+        text: 'Angle:'
+        size_hint_x: 0.15
+      Slider:
+        id: slider_angle
+        min: -540.0
+        max: 540.0
+        step: 1.0
+        value: 0.0
+        on_value: root.on_angle(args[1])
+      Label:
+        id: cur_angle
+        text: '0.0°'
+        size_hint_x: 0.2
+      Button:
+        text: 'Center'
+        size_hint_x: 0.18
+        on_press: slider_angle.value = 0.0
+
+    # Steering wheel & stalk buttons grid
     GridLayout:
-      cols: 3
+      cols: 4
       spacing: '6dp'
       row_default_height: '44dp'
       row_force_default: True
@@ -36,6 +62,10 @@
         id: btn_next
         text: 'Next'
         on_press: root.press_key('next')
+      Button:
+        id: btn_com_left
+        text: 'COM Left'
+        on_press: root.press_com('com_left')
 
       Button:
         id: btn_volume_down
@@ -47,3 +77,8 @@
         id: btn_prev
         text: 'Prev'
         on_press: root.press_key('prev')
+      Button:
+        id: btn_com_right
+        text: 'COM Right'
+        on_press: root.press_com('com_right')
+

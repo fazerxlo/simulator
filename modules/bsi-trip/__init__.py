@@ -61,7 +61,21 @@ class BSI_trip(TabbedPanelItem):
                 self.on_hist_param(i, param, t.hist[i][param])
 
     def on_inst_button(self, name, value):
-        setattr(self._trip, name, 1 if value == 'down' else 0)
+        if name in ('com_left', 'com_right'):
+            pressed = 1 if value == 'down' else 0
+            setattr(self._trip, name, pressed)
+            if not pressed:
+                setattr(self._trip, f'_{name}_ticks', 0)
+            if hasattr(self.runner, 'send_message'):
+                try:
+                    from generated.trip_messages import Msg221
+                    data = Msg221().encode(self.runner.car)
+                    if data:
+                        self.runner.send_message(0x221, data)
+                except Exception as exc:
+                    logger.error('Error sending immediate 0x221 frame: %s', exc)
+        else:
+            setattr(self._trip, name, 1 if value == 'down' else 0)
 
     def on_inst_param(self, param, value):
         labels = {
