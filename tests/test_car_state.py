@@ -115,7 +115,6 @@ class TestVirtualCarDefaults:
 
 
 class TestVirtualCarMutation:
-    def test_bsi_state_mutation(self):
     """Subsystem state changes must persist on the car instance."""
 
     def test_bsi_mutation(self):
@@ -127,7 +126,6 @@ class TestVirtualCarMutation:
         assert car.bsi.reverse == 1
         assert car.bsi.rpm == 2500
 
-    def test_doors_state_mutation(self):
     def test_clim_mutation(self):
         car = VirtualCar()
         car.clim.temp_left = 21.5
@@ -144,8 +142,22 @@ class TestVirtualCarMutation:
         assert car.doors.boot == 1
         assert car.doors.display_active is True
 
-    def test_tyres_state_mutation(self):
     def test_parktronic_mutation(self):
+        car = VirtualCar()
+        car.parktronic.rear_left = 3
+        car.parktronic.front_center = 1
+        car.parktronic.rear_center = 2
+        assert car.parktronic.rear_left == 3
+        assert car.parktronic.front_center == 1
+        assert car.parktronic.rear_center == 2
+
+    def test_tyres_constants(self):
+        assert Tyres.OK == 0
+        assert Tyres.LOW == 1
+        assert Tyres.FLAT == 2
+        assert Tyres.NO_DATA == 3
+
+    def test_tyres_mutation(self):
         car = VirtualCar()
         car.tyres.fl = Tyres.FLAT
         car.tyres.fr = Tyres.LOW
@@ -155,31 +167,12 @@ class TestVirtualCarMutation:
         assert car.tyres.fr == Tyres.LOW
         assert car.tyres.display_active is True
         assert car.tyres.alert_0x168_b1 == 0xC0
-        car.parktronic.rear_center = 2
-        assert car.parktronic.rear_center == 2
 
-    def test_tyres_constants(self):
-        assert Tyres.OK == 0
-        assert Tyres.LOW == 1
-        assert Tyres.FLAT == 2
-        assert Tyres.NO_DATA == 3
-
-    def test_dashboard_active_flag(self):
-    def test_tyres_mutation(self):
-        car = VirtualCar()
-        car.dashboard.active = True
-        assert car.dashboard.active is True
-        car.tyres.fl = Tyres.LOW
-        assert car.tyres.fl == Tyres.LOW
-
-    def test_parktronic_sensor_mutation(self):
     def test_dashboard_mutation(self):
         car = VirtualCar()
-        car.parktronic.rear_left = 3
-        car.parktronic.front_center = 1
-        assert car.parktronic.rear_left == 3
-        assert car.parktronic.front_center == 1
+        car.dashboard.active = True
         car.dashboard.seatbelt = 1
+        assert car.dashboard.active is True
         assert car.dashboard.seatbelt == 1
 
     def test_radio_mutation(self):
@@ -222,7 +215,6 @@ class TestVirtualCarMutation:
         assert car.mfd_popup.msg_id == 0x42
 
     def test_buttons_mutation(self):
-    def test_steering_wheel_mutation(self):
         car = VirtualCar()
         car.buttons.active = True
         car.buttons.volume = 22
@@ -230,6 +222,9 @@ class TestVirtualCarMutation:
         assert car.buttons.active is True
         assert car.buttons.volume == 22
         assert car.buttons.panel['source'] == 1
+
+    def test_steering_wheel_mutation(self):
+        car = VirtualCar()
         car.steering_wheel.active = True
         car.steering_wheel.volume = 22
         car.steering_wheel.set_angle(120.5)

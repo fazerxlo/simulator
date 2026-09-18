@@ -9,7 +9,7 @@ import types
 import pytest
 
 from car_state import VirtualCar
-from generated import (Msg036, Msg1D0, Msg12D, Msg1A5, Msg3E5, Msg12B, Msg0B6, Msg1E3, CanMessage)
+from generated import (Msg036, Msg1D0, Msg12D, Msg1A5, Msg3E5, Msg21F, Msg12B, Msg0B6, Msg1E3, CanMessage)
 from conftest import make_can_mock
 
 
@@ -121,6 +121,10 @@ class TestCanRunnerVirtualCar:
     def test_buttons_message_enabled_when_buttons_active(self):
         runner = self._make_runner()
         runner.set_enabled_modules(['bsi-base', 'buttons'])
+        assert runner.message_enabled(Msg21F()) is True
+        assert runner.message_enabled(Msg3E5()) is False
+
+        runner.set_enabled_modules(['bsi-base', 'radio'])
         assert runner.message_enabled(Msg1A5()) is True
         assert runner.message_enabled(Msg3E5()) is True
 

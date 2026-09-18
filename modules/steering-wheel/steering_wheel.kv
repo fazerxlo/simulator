@@ -1,0 +1,121 @@
+<SteeringWheel>:
+  BoxLayout:
+    orientation: 'vertical'
+    padding: '8dp'
+    spacing: '8dp'
+
+    # Top info row: Pressed keys, Scroll Counter, Trip Screen
+    BoxLayout:
+      size_hint_y: None
+      height: '32dp'
+      spacing: '8dp'
+      Label:
+        text: 'Pressed:'
+        size_hint_x: 0.15
+      Label:
+        id: pressed_keys
+        text: '-'
+        size_hint_x: 0.35
+      Label:
+        id: cur_scroll
+        text: 'Scroll: 0x09'
+        size_hint_x: 0.25
+      Label:
+        id: cur_trip_screen
+        text: 'Trip: Instant'
+        size_hint_x: 0.25
+
+    # Steering Wheel Angle Slider row
+    BoxLayout:
+      size_hint_y: None
+      height: '40dp'
+      spacing: '8dp'
+      Label:
+        text: 'Angle:'
+        size_hint_x: 0.12
+      Slider:
+        id: slider_angle
+        min: -540.0
+        max: 540.0
+        step: 1.0
+        value: 0.0
+        on_value: root.on_angle(args[1])
+      Label:
+        id: cur_angle
+        text: '0.0°'
+        size_hint_x: 0.18
+      Button:
+        text: 'Center'
+        size_hint_x: 0.15
+        on_press: slider_angle.value = 0.0
+
+    # Section Header: Right Lower Satellite Audio Stalk
+    Label:
+      text: '[b]Right Lower Satellite Audio Stalk & Rotary Encoder[/b]'
+      markup: True
+      size_hint_y: None
+      height: '24dp'
+
+    # Right Lower Audio Stalk Grid
+    GridLayout:
+      cols: 4
+      spacing: '6dp'
+      row_default_height: '40dp'
+      row_force_default: True
+
+      Button:
+        id: btn_volume_up
+        text: 'Vol +'
+        on_state: root.on_stalk_state('volume_up', self.state)
+      Button:
+        id: btn_src
+        text: 'SRC (Short: Mode / Long: Tel)'
+        on_state: root.on_stalk_state('src', self.state)
+      Button:
+        id: btn_seek_up
+        text: 'Seek + (Next)'
+        on_state: root.on_stalk_state('seek_up', self.state)
+      Button:
+        id: btn_scroll_cw
+        text: 'Scroll CW (Up)'
+        on_press: root.on_scroll(+1)
+
+      Button:
+        id: btn_volume_down
+        text: 'Vol -'
+        on_state: root.on_stalk_state('volume_down', self.state)
+      Button:
+        id: btn_mute
+        text: 'Mute (Vol+ & Vol-)'
+        on_press: root.trigger_mute()
+      Button:
+        id: btn_seek_down
+        text: 'Seek - (Prev)'
+        on_state: root.on_stalk_state('seek_down', self.state)
+      Button:
+        id: btn_scroll_ccw
+        text: 'Scroll CCW (Down)'
+        on_press: root.on_scroll(-1)
+
+    # Section Header: Multifunction Stalk Tips
+    Label:
+      text: '[b]Multifunction Stalk Tips (Primary Commodo Ends)[/b]'
+      markup: True
+      size_hint_y: None
+      height: '24dp'
+
+    GridLayout:
+      cols: 2
+      spacing: '8dp'
+      row_default_height: '40dp'
+      row_force_default: True
+
+      Button:
+        id: btn_trip
+        text: 'Wiper Stalk Tip: TRIP (com right)'
+        on_state: root.on_stalk_state('trip', self.state)
+
+      Button:
+        id: btn_voice_nav
+        text: 'Indicator Stalk Tip: Voice / Nav Repeat (com left)'
+        on_state: root.on_stalk_state('voice_nav_repeat', self.state)

@@ -7,14 +7,12 @@ import types
 
 import pytest
 
-from car_state import (BSI, Buttons, Clim, Dashboard, Doors, MFDPopup,
 from car_state import (BSI, Buttons, SteeringWheel, Clim, Dashboard, Doors, MFDPopup,
                        Parktronic, Tyres, VirtualCar, Radio, Trip,
                        KMLState, BTEState, SpeedControl)
 from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg128, Msg168, Msg190, Msg1A1, Msg1D0, Msg1E3,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
-                          Msg323, Msg165, Msg1A5, Msg1E5, Msg21F, Msg3E5,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg0C5, Msg21F, Msg3E5,
                           Msg52D, Msg110, Msg0F6, Msg161, Msg1A8, Msg217,
                           Msg12D, Msg0A9, Msg0E6, Msg1E1, Msg2E1, Msg3A1,
@@ -1145,56 +1143,55 @@ class TestMsg21FSteeringWheelButtons:
         assert car.buttons.remote_action == 'volume_up'
 
 
-class TestMsg3E5Buttons:
-    def test_radio_encoding_when_buttons_inactive(self):
+class TestMsg3E5RadioPanel:
+    def test_radio_encoding_when_inactive(self):
         car = VirtualCar()
+        car.radio.active = False
         car.radio.panel['tel'] = 1
         data = Msg3E5().encode(car)
-        # radio is listen-only; encode returns None when buttons are not active
         assert data is None
 
-    def test_buttons_encoding_when_active(self):
+    def test_radio_encoding_when_active(self):
         car = VirtualCar()
-        car.buttons.active = True
-        car.buttons.panel['source'] = 1
+        car.radio.active = True
+        car.radio.panel['menu'] = 1
+        car.radio.panel['tel'] = 1
+        car.radio.panel['ok'] = 1
         data = Msg3E5().encode(car)
-        # buttons layout: source is in b1 bits [5:4]
-        assert (data[1] >> 4) & 1 == 1
+        assert data is not None
+        assert (data[0] >> 6) & 1 == 1  # menu
+        assert (data[0] >> 4) & 1 == 1  # tel
+        assert (data[2] >> 6) & 1 == 1  # ok
 
-    def test_buttons_encoding_next_key(self):
+    def test_radio_required_modules(self):
+        assert 'radio' in Msg3E5.required_modules
+
+    def test_decode_updates_radio_panel(self):
         car = VirtualCar()
-        car.buttons.active = True
-        car.buttons.panel['next'] = 1
-        data = Msg3E5().encode(car)
-        assert (data[2] >> 2) & 1 == 1
-
-    def test_buttons_encode_steps_pulse_ticks(self):
-        car = VirtualCar()
-        car.buttons.active = True
-        car.buttons.press('source')
-        assert car.buttons.panel['source'] == 1
-        # Encoding steps the pulse timer; after _pulse_window ticks button clears
-        for _ in range(car.buttons._pulse_window):
-            Msg3E5().encode(car)
-        assert car.buttons.panel['source'] == 0
-
-    def test_buttons_required_modules_includes_buttons(self):
-        assert 'buttons' in Msg3E5.required_modules
-
-    def test_decode_updates_buttons_panel_when_active(self):
-        car = VirtualCar()
-        car.buttons.active = True
-        # Encode 'source' pressed in buttons layout
-        frame = [0x00, (1 << 4), 0x00, 0x00, 0x00, 0x00]
+        # Byte 0: menu (b0 >> 6), tel (b0 >> 4), clim (b0 & 1)
+        # Byte 1: trip (b1 >> 6), mode (b1 >> 4), audio (b1 & 1)
+        # Byte 2: ok (b2 >> 6), esc (b2 >> 4)
+        # Byte 5: up (b5 >> 6), down (b5 >> 4), right (b5 >> 2), left (b5 & 1)
+        b0 = (1 << 6) | (1 << 4) | 1
+        b1 = (1 << 6) | (1 << 4) | 1
+        b2 = (1 << 6) | (1 << 4)
+        b5 = (1 << 6) | (1 << 4) | (1 << 2) | 1
+        frame = [b0, b1, b2, 0x00, 0x00, b5]
         Msg3E5().decode(car, frame)
-        assert car.buttons.panel['source'] == 1
 
-    def test_decode_updates_radio_panel_when_buttons_inactive(self):
-        car = VirtualCar()
-        # radio module layout: ok is b2[7:6]
-        frame = [0x00, 0x00, (1 << 6), 0x00, 0x00, 0x00]
-        Msg3E5().decode(car, frame)
+        assert car.radio.panel['menu'] == 1
+        assert car.radio.panel['tel'] == 1
+        assert car.radio.panel['clim'] == 1
+        assert car.radio.panel['trip'] == 1
+        assert car.radio.panel['mode'] == 1
+        assert car.radio.panel['audio'] == 1
         assert car.radio.panel['ok'] == 1
+        assert car.radio.panel['esc'] == 1
+        assert car.radio.panel['up'] == 1
+        assert car.radio.panel['down'] == 1
+        assert car.radio.panel['right'] == 1
+        assert car.radio.panel['left'] == 1
+
 
 
 class TestMsg0C5SteeringAngle:

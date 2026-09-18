@@ -295,93 +295,24 @@ messages:
       except Exception:
           pass
 
-  Msg21F:
-    can_id: 0x21F
-    period_ms: 100
-    required_modules: ['buttons']
-    description: |
-      Steering-wheel remote key actions.
-
-      The real remote uses a 3-byte frame on 0x21F.  The key identity is carried
-      in byte 0, while byte 1 is a secondary pulse/aux value and byte 2 is
-      reserved/zero.  This simulator models the momentary wheel button action as a
-      short pulse so the button's press is visible on the bus for a few frames.
-    encode_body: |
-      if not car.buttons.active:
-          return None
-      car.buttons.step_pulses()
-      if car.buttons.remote_action is None:
-          return [0x00, car.buttons.remote_aux, 0x00]
-
-      mask = car.buttons.REMOTE_ACTIONS.get(car.buttons.remote_action, 0x00)
-      car.buttons.step_remote_pulses()
-      return [mask, car.buttons.remote_aux, 0x00]
-    decode_body: |
-      if len(data) < 3:
-          return
-      cmd = data[0]
-      if cmd == 0x00:
-          car.buttons.remote_action = None
-          return
-      for name, mask in car.buttons.REMOTE_ACTIONS.items():
-          if cmd == mask:
-              car.buttons.remote_action = name
-              return
-      car.buttons.remote_action = None
-
   Msg3E5:
     can_id: 0x3E5
     period_ms: 50
-    required_modules: ['buttons', 'radio']
+    required_modules: ['radio']
     description: |
-      Steering wheel control panel buttons.
-
-      Encodes from ``car.buttons`` when the ``buttons`` module is active
-      (different bit layout and key set).  When only the ``radio`` module is
-      active the real workbench radio owns this frame, so the simulator does
-      not transmit it (returns ``None``).
+      Radio / head-unit front fascia buttons.
+      Carries momentary button states for WIP Nav+ / RT6 front panel controls.
     encode_body: |
-      if car.buttons.active:
-          p = car.buttons.panel
-          car.buttons.step_pulses()
-          b0 = (p.get('tel', 0) << 4) | p.get('clima', 0)
-          b1 = (p.get('trip', 0) << 6) | (p.get('source', 0) << 4) | p.get('dark', 0)
-          b2 = (p.get('ok', 0) << 6) | (p.get('esc', 0) << 4) | (p.get('next', 0) << 2) | p.get('prev', 0)
-          b5 = (p.get('up', 0) << 6) | (p.get('down', 0) << 4) | (p.get('right', 0) << 2) | p.get('left', 0)
-          return [b0, b1, b2, 0x00, 0x00, b5]
-      return None  # radio is listen-only; do not transmit on its behalf
+      if not getattr(car.radio, 'active', False):
+          return None
+      p = car.radio.panel
+      b0 = (p.get('menu', 0) << 6) | (p.get('tel', 0) << 4) | p.get('clim', 0)
+      b1 = (p.get('trip', 0) << 6) | (p.get('mode', 0) << 4) | p.get('audio', 0)
+      b2 = (p.get('ok', 0) << 6) | (p.get('esc', 0) << 4)
+      b5 = (p.get('up', 0) << 6) | (p.get('down', 0) << 4) | (p.get('right', 0) << 2) | p.get('left', 0)
+      return [b0, b1, b2, 0x00, 0x00, b5]
     decode_body: |
       if len(data) < 6:
-          return
-      if car.buttons.active:
-          b0, b1, b2 = data[0], data[1], data[2]
-          b5 = data[5]
-          if 'tel' in car.buttons.panel:
-              car.buttons.panel['tel'] = (b0 >> 4) & 1
-          if 'clima' in car.buttons.panel:
-              car.buttons.panel['clima'] = b0 & 1
-          if 'trip' in car.buttons.panel:
-              car.buttons.panel['trip'] = (b1 >> 6) & 1
-          if 'source' in car.buttons.panel:
-              car.buttons.panel['source'] = (b1 >> 4) & 1
-          if 'dark' in car.buttons.panel:
-              car.buttons.panel['dark'] = b1 & 1
-          if 'ok' in car.buttons.panel:
-              car.buttons.panel['ok'] = (b2 >> 6) & 1
-          if 'esc' in car.buttons.panel:
-              car.buttons.panel['esc'] = (b2 >> 4) & 1
-          if 'next' in car.buttons.panel:
-              car.buttons.panel['next'] = (b2 >> 2) & 1
-          if 'prev' in car.buttons.panel:
-              car.buttons.panel['prev'] = b2 & 1
-          if 'up' in car.buttons.panel:
-              car.buttons.panel['up'] = (b5 >> 6) & 1
-          if 'down' in car.buttons.panel:
-              car.buttons.panel['down'] = (b5 >> 4) & 1
-          if 'right' in car.buttons.panel:
-              car.buttons.panel['right'] = (b5 >> 2) & 1
-          if 'left' in car.buttons.panel:
-              car.buttons.panel['left'] = b5 & 1
           return
       b0, b1, b2 = data[0], data[1], data[2]
       b5 = data[5]
@@ -397,3 +328,5 @@ messages:
       car.radio.panel['down'] = (b5 >> 4) & 1
       car.radio.panel['right'] = (b5 >> 2) & 1
       car.radio.panel['left'] = b5 & 1
+
+

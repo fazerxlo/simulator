@@ -17,7 +17,7 @@ class Msg0C5(CanMessage):
 
     can_id = 0x0C5
     period_ms = 50
-    required_modules = frozenset({'buttons', 'steering_wheel'})
+    required_modules = frozenset({'steering-wheel', 'steering_wheel', 'buttons'})
 
     def encode(self, car) -> list | None:
         sw = getattr(car, 'steering_wheel', getattr(car, 'buttons', None))
@@ -40,29 +40,25 @@ class Msg0C5(CanMessage):
 
 
 class Msg21F(CanMessage):
-    """Steering-wheel remote key actions.
+    """Steering-wheel remote key actions and rotary scroll encoder position.
     
-    The real remote uses a 3-byte frame on 0x21F.  The key identity is carried
-    in byte 0, while byte 1 is a secondary pulse/aux value and byte 2 is
-    reserved/zero.  This simulator models the momentary wheel button action as a
-    short pulse so the button's press is visible on the bus for a few frames.
+    The Peugeot 407 / WIP Nav+ satellite stalk uses a 3-byte frame on 0x21F.
+    Byte 0 carries the button command mask, Byte 1 contains the rotary scroll
+    encoder position counter, and Byte 2 indicates the button state
+    (0x00=idle, 0x01=pressed, 0x02=long_press).
     """
 
     can_id = 0x21F
     period_ms = 100
-    required_modules = frozenset({'buttons', 'steering_wheel'})
+    required_modules = frozenset({'steering-wheel', 'steering_wheel', 'buttons'})
 
     def encode(self, car) -> list | None:
         sw = getattr(car, 'steering_wheel', getattr(car, 'buttons', None))
         if sw is None or not sw.active:
             return None
         sw.step_pulses()
-        if sw.remote_action is None:
-            return [0x00, sw.remote_aux, 0x00]
-
-        mask = sw.REMOTE_ACTIONS.get(sw.remote_action, 0x00)
         sw.step_remote_pulses()
-        return [mask, sw.remote_aux, 0x00]
+        return sw.sm.get_can_21f_frame()
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 3:
@@ -71,6 +67,8 @@ class Msg21F(CanMessage):
         if sw is None:
             return
         cmd = data[0]
+        sw.sm.scroll_counter = data[1]
+        sw.remote_aux = data[1]
         if cmd == 0x00:
             sw.remote_action = None
             return
@@ -79,79 +77,4 @@ class Msg21F(CanMessage):
                 sw.remote_action = name
                 return
         sw.remote_action = None
-
-
-class Msg3E5(CanMessage):
-    """Steering wheel control panel buttons.
-    
-    Encodes from ``car.steering_wheel`` (or ``car.buttons``) when the
-    steering wheel subsystem is active.  When only the ``radio`` module is
-    active the real workbench radio owns this frame, so the simulator does
-    not transmit it (returns ``None``).
-    """
-
-    can_id = 0x3E5
-    period_ms = 50
-    required_modules = frozenset({'buttons', 'radio', 'steering_wheel'})
-
-    def encode(self, car) -> list | None:
-        sw = getattr(car, 'steering_wheel', getattr(car, 'buttons', None))
-        if sw is not None and sw.active:
-            p = sw.panel
-            sw.step_pulses()
-            b0 = (p.get('tel', 0) << 4) | p.get('clima', 0)
-            b1 = (p.get('trip', 0) << 6) | (p.get('source', 0) << 4) | p.get('dark', 0)
-            b2 = (p.get('ok', 0) << 6) | (p.get('esc', 0) << 4) | (p.get('next', 0) << 2) | p.get('prev', 0)
-            b5 = (p.get('up', 0) << 6) | (p.get('down', 0) << 4) | (p.get('right', 0) << 2) | p.get('left', 0)
-            return [b0, b1, b2, 0x00, 0x00, b5]
-        return None  # radio is listen-only; do not transmit on its behalf
-
-    def decode(self, car, data: bytes) -> None:
-        if len(data) < 6:
-            return
-        sw = getattr(car, 'steering_wheel', getattr(car, 'buttons', None))
-        if sw is not None and sw.active:
-            b0, b1, b2 = data[0], data[1], data[2]
-            b5 = data[5]
-            if 'tel' in sw.panel:
-                sw.panel['tel'] = (b0 >> 4) & 1
-            if 'clima' in sw.panel:
-                sw.panel['clima'] = b0 & 1
-            if 'trip' in sw.panel:
-                sw.panel['trip'] = (b1 >> 6) & 1
-            if 'source' in sw.panel:
-                sw.panel['source'] = (b1 >> 4) & 1
-            if 'dark' in sw.panel:
-                sw.panel['dark'] = b1 & 1
-            if 'ok' in sw.panel:
-                sw.panel['ok'] = (b2 >> 6) & 1
-            if 'esc' in sw.panel:
-                sw.panel['esc'] = (b2 >> 4) & 1
-            if 'next' in sw.panel:
-                sw.panel['next'] = (b2 >> 2) & 1
-            if 'prev' in sw.panel:
-                sw.panel['prev'] = b2 & 1
-            if 'up' in sw.panel:
-                sw.panel['up'] = (b5 >> 6) & 1
-            if 'down' in sw.panel:
-                sw.panel['down'] = (b5 >> 4) & 1
-            if 'right' in sw.panel:
-                sw.panel['right'] = (b5 >> 2) & 1
-            if 'left' in sw.panel:
-                sw.panel['left'] = b5 & 1
-            return
-        b0, b1, b2 = data[0], data[1], data[2]
-        b5 = data[5]
-        car.radio.panel['menu'] = (b0 >> 6) & 1
-        car.radio.panel['tel'] = (b0 >> 4) & 1
-        car.radio.panel['clim'] = b0 & 1
-        car.radio.panel['trip'] = (b1 >> 6) & 1
-        car.radio.panel['mode'] = (b1 >> 4) & 1
-        car.radio.panel['audio'] = b1 & 1
-        car.radio.panel['ok'] = (b2 >> 6) & 1
-        car.radio.panel['esc'] = (b2 >> 4) & 1
-        car.radio.panel['up'] = (b5 >> 6) & 1
-        car.radio.panel['down'] = (b5 >> 4) & 1
-        car.radio.panel['right'] = (b5 >> 2) & 1
-        car.radio.panel['left'] = b5 & 1
 

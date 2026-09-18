@@ -2,13 +2,13 @@ vin: "VF7SWYHYSJT721649"
 
 modules:
   - bsi-base
-  - steering_wheel
+  - steering-wheel
   - parktronic
   - bsi-trip
   #- bsi-log
   #- radio
   - clim
-  - combine
+  # - combine
   - tyres
   - doors
   #- kml

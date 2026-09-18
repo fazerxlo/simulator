@@ -11,8 +11,8 @@ from generated.bte_messages import Msg12B  # noqa: F401
 from generated.clim_messages import Msg12D, Msg1D0, Msg1E3  # noqa: F401
 from generated.kml_messages import Msg1A3, Msg223, Msg323  # noqa: F401
 from generated.parktronic_messages import Msg0E1  # noqa: F401
-from generated.radio_messages import Msg0A4, Msg165, Msg1A5, Msg1E0, Msg1E5, Msg225, Msg265, Msg2A5  # noqa: F401
-from generated.steering_wheel_messages import Msg0C5, Msg21F, Msg3E5  # noqa: F401
+from generated.radio_messages import Msg0A4, Msg165, Msg1A5, Msg1E0, Msg1E5, Msg225, Msg265, Msg2A5, Msg3E5  # noqa: F401
+from generated.steering_wheel_messages import Msg0C5, Msg21F  # noqa: F401
 from generated.trip_messages import Msg221, Msg2A1, Msg261  # noqa: F401
 
 
@@ -26,7 +26,7 @@ ALL_MESSAGES: dict[int, type] = {
         Msg1E1, Msg269, Msg2E1, Msg3A1, Msg3A7, Msg4A4,
         Msg12B, Msg12D, Msg1D0, Msg1E3, Msg1A3, Msg223,
         Msg323, Msg0E1, Msg0A4, Msg165, Msg1A5, Msg1E0,
-        Msg1E5, Msg225, Msg265, Msg2A5, Msg0C5, Msg21F,
-        Msg3E5, Msg221, Msg2A1, Msg261,
+        Msg1E5, Msg225, Msg265, Msg2A5, Msg3E5, Msg0C5,
+        Msg21F, Msg221, Msg2A1, Msg261,
     )
 }

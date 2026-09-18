@@ -43,8 +43,6 @@ class Buttons(TabbedPanelItem):
                 if self.ids[wid].state != desired:
                     self.ids[wid].state = desired
         self._update_pressed_label()
-        if 'cur_vol' in self.ids:
-            self.ids['cur_vol'].text = f'volume: {b.volume}'
         if 'cur_angle' in self.ids and 'slider_angle' in self.ids:
             self.ids['slider_angle'].value = b.angle
             self.ids['cur_angle'].text = f'{b.angle:.1f}°'
@@ -98,16 +96,9 @@ class Buttons(TabbedPanelItem):
             b.press(key)
             self._set_button_state(key, True)
             self._update_pressed_label()
-        if 'cur_vol' in self.ids:
-            self.ids['cur_vol'].text = f'volume: {b.volume}'
 
     def on_can_message(self, msg):
         b = self._buttons
-        if msg.arbitration_id == 0x1A5 and len(msg.data) >= 1:
-            if 'cur_vol' in self.ids:
-                self.ids['cur_vol'].text = f'volume: {b.volume}'
-            return
-
         if msg.arbitration_id == 0x0C5:
             if 'cur_angle' in self.ids and 'slider_angle' in self.ids:
                 self.ids['slider_angle'].value = b.angle
@@ -119,10 +110,3 @@ class Buttons(TabbedPanelItem):
                 self._set_button_state(key, bool(value))
             self._update_pressed_label()
             return
-
-        if msg.arbitration_id != 0x3E5 or len(msg.data) < 6:
-            return
-
-        for key, value in b.panel.items():
-            self._set_button_state(key, bool(value))
-        self._update_pressed_label()
