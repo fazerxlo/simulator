@@ -40,46 +40,12 @@
         on_press: root.clear_sensors()
 
     GridLayout:
-      cols: 2
+      cols: 3
       row_force_default: True
       row_default_height: '68dp'
       spacing: '6dp'
-      BoxLayout:
-        orientation: 'vertical'
-        Label:
-          id: cur_park_rear_left
-          text: 'Rear left: 7'
-        Slider:
-          id: slider_park_rear_left
-          min: 0
-          max: 7
-          step: 1
-          value: 7
-          on_value: root.on_sensor('rear_left', args[1])
-      BoxLayout:
-        orientation: 'vertical'
-        Label:
-          id: cur_park_rear_center
-          text: 'Rear center: 7'
-        Slider:
-          id: slider_park_rear_center
-          min: 0
-          max: 7
-          step: 1
-          value: 7
-          on_value: root.on_sensor('rear_center', args[1])
-      BoxLayout:
-        orientation: 'vertical'
-        Label:
-          id: cur_park_rear_right
-          text: 'Rear right: 7'
-        Slider:
-          id: slider_park_rear_right
-          min: 0
-          max: 7
-          step: 1
-          value: 7
-          on_value: root.on_sensor('rear_right', args[1])
+
+      # --- Row 1: Front Sensors (Left, Center, Right) ---
       BoxLayout:
         orientation: 'vertical'
         Label:
@@ -116,3 +82,41 @@
           step: 1
           value: 7
           on_value: root.on_sensor('front_right', args[1])
+
+      # --- Row 2: Rear Sensors (Left, Center, Right) ---
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_rear_left
+          text: 'Rear left: 7'
+        Slider:
+          id: slider_park_rear_left
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('rear_left', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_rear_center
+          text: 'Rear center: 7'
+        Slider:
+          id: slider_park_rear_center
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('rear_center', args[1])
+      BoxLayout:
+        orientation: 'vertical'
+        Label:
+          id: cur_park_rear_right
+          text: 'Rear right: 7'
+        Slider:
+          id: slider_park_rear_right
+          min: 0
+          max: 7
+          step: 1
+          value: 7
+          on_value: root.on_sensor('rear_right', args[1])

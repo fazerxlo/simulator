@@ -4,7 +4,7 @@ This document isolates and describes **only the differences, signal corrections,
 
 > [!NOTE]
 > **Omission of Identical Frames:**
-> Frames with 100% agreement and identical signal definitions (`0x018`, `0x026`, `0x036`, `0x0E1`, `0x120`, `0x125`, `0x162`, `0x1A0`, `0x1A1`, `0x1A2`, `0x1D0`, `0x1E2`, `0x1E3`, `0x21F`, `0x260`, `0x265`, `0x764`/`0x664`) are excluded from this document.
+> Frames with 100% agreement and identical signal definitions (`0x018`, `0x026`, `0x036`, `0x120`, `0x125`, `0x162`, `0x1A0`, `0x1A1`, `0x1A2`, `0x1D0`, `0x1E2`, `0x1E3`, `0x21F`, `0x260`, `0x265`, `0x764`/`0x664`) are excluded from this document.
 
 ---
 
@@ -14,6 +14,7 @@ This document isolates and describes **only the differences, signal corrections,
 |:---:|---|---|---|:---:|---|
 | **`0x0A9`** | `MSG_RAPPEL_NAV_VTH` | Missing or misdocumented as `0x1A9` with a progress bargraph | Verified CAN ID `0x0A9`: Picto ID (B0[5:0]), 14-bit GPS Altitude (B1–2), Dist to Dest (B3–4), Dist to Maneuver (B5–6[7:3]), ETA Hour/Minute (B6–7). **No bargraph exists**. | **Correction & Extension** | Cluster nav repeat must be emitted on `0x0A9` using the verified bitfield. Default idle vector: `00 3F FF 3F FF FF FF FF`. |
 | **`0x0B6`** | Drivetrain Dynamic Data | Varied speed vs. RPM placement; assumed head unit calculates speed arithmetic | Wire layout: RPM in Bytes 0–1 (`raw >> 3`), Speed in Bytes 2–3 (`raw * 0.01 km/h`), Byte 7 status/counter. **RT4 does not parse this frame** (opaque `memcpy` cache; `get_filtered_speed` is a dummy stub). | **Protocol Clarification** | Wire layout confirmed via `dump_real_car.csv`. Bench simulators must emit RPM in B0–1 and Speed in B2–3. |
+| **`0x0E1`** | `MSG_DONNEES_AAS` | Documented as 6 sensors (3 rear, 3 front) $\times$ 3 bits (0..7 distance band), 100 ms period | **8 detection zones** (4 rear, 4 front) $\times$ 2 bits (0=Clear, 1=Far, 2=Medium, 3=Stop), 50 ms period. B0 = System status & buzzer cadence, B3 = Rear min dist (cm), B4 = Front min dist (cm), B5–6 = Speaker pitch / channel. | **Architecture & Resolution Divergence** | RT4 color display uses 8-zone radar silhouette with direct obstacle distance in cm. Two middle zones map to center sensor on 6-sensor physical bumpers. |
 | **`0x0E6`** | `MSG_IS_DAT_ABR` | Not documented in existing project files | Dead reckoning wheel encoder ticks: 15-bit modulo counters for Rear Right (B1–2) and Rear Left (B3–4) with validity flags, correlated with `0x0F6` Reverse gear. | **New Discovery** | Required for dead reckoning simulation in navigation-equipped benches. |
 | **`0x0F6`** | `MSG_DONNEES_BSI_LENTES` | Byte 1 described as general engine alarm info (`0xFF`); Ext Temp byte positions debated | **Byte 1 is Coolant Water Temp** (`TEAU`, $raw - 40^\circ\text{C}$); drives cluster water temp gauge. **Byte 6 is Filtered External Temp** ($raw \times 0.5 - 40^\circ\text{C}$); Byte 5 is Instantaneous. | **Signal Correction** | Water temperature gauge on cluster/trip computer is driven by `0x0F6` Byte 1, not `0x161`. |
 | **`0x128`** | `MSG_INFOS_STT_ET_HY` | Documented as 8-byte cluster telltales (`CDE_COMBINE_SIGNALISATION`) | RT4 treats as 3-byte Stop & Start / Hybrid status frame; does not process cluster warning lamps. | **Scope Divergence** | RT4 consumes only the first 3 bytes; cluster nodes consume all 8 bytes. |
@@ -93,3 +94,21 @@ This document isolates and describes **only the differences, signal corrections,
   - **Byte 6[2:0] & Byte 7:** 5-bit ETA Hour (`((B6 & 0x07) << 2) | ((B7 & 0xC0) >> 6)`) and 6-bit ETA Minute (`B7 & 0x3F`).
   - **Bargraph Status:** **Completely absent**. Byte 7 carries the ETA minute and lower hour bits.
   - **Default Idle Payload:** `00 3F FF 3F FF FF FF FF`.
+
+---
+
+### 2.4 Parking Assistance: `0x0E1` (`MSG_DONNEES_AAS`)
+
+* **RD4 / EMF-C Monochrome Architecture:**
+  - 6 physical sensors (3 rear, 3 front) packed across Bytes 3, 4, 5 with 3 bits per sensor ($0..7$, where $7 = \text{clear}$, $0 = \text{closest}$).
+  - Byte 1 carries zone activation mask (`0x40` rear, `0x10` front), Byte 5 bit 1 is display active flag.
+  - Periodicity: 100 ms.
+* **RT4 Color NaviDrive Architecture:**
+  - **8 detection zones** (4 rear in Byte 1: RL, RCL, RCR, RR; 4 front in Byte 2: FL, FCL, FCR, FR).
+  - 2 bits per zone ($0 = \text{Clear}$, $1 = \text{Far}$, $2 = \text{Medium}$, $3 = \text{Stop}$).
+  - Byte 0 carries System Status ($0\text{xD} = \text{Active functioning}$, $0\text{xE} = \text{Deactivated}$, $0\text{x0} = \text{Inactive}$) and Buzzer Cadence ($0 = \text{Silence}$, $1..6 = \text{Intermittent}$, $7 = \text{Continuous tone}$).
+  - Byte 3 carries minimum rear obstacle distance in cm (`REAR_RAW_MIN`, default `0xFC` = 252 cm / clear).
+  - Byte 4 carries minimum front obstacle distance in cm (`FRONT_RAW_MIN`, default `0xFC` = 252 cm / clear).
+  - Bytes 5–6 carry Audio Chime Frequency / speaker channel allocation (`AUDIO_CHIME_FREQ`).
+  - Periodicity: 50 ms (`Reception_Period_Tab` offset `0x652A`).
+  - When simulating 6-sensor physical bumpers, the center sensor control simultaneously drives both middle zones (`center_l` and `center_r`).

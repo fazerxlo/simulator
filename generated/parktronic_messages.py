@@ -40,4 +40,3 @@ class Msg0E1(CanMessage):
         p.front_left = (data[4] >> 2) & 0x07
         p.front_center = (data[5] >> 5) & 0x07
         p.front_right = (data[5] >> 2) & 0x07
-

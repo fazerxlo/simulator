@@ -12,12 +12,12 @@ _modversion = '0.0.1'
 
 class Parktronic(TabbedPanelItem):
     _sensor_labels = {
-        'rear_left': 'Rear left',
-        'rear_center': 'Rear center',
-        'rear_right': 'Rear right',
         'front_left': 'Front left',
         'front_center': 'Front center',
         'front_right': 'Front right',
+        'rear_left': 'Rear left',
+        'rear_center': 'Rear center',
+        'rear_right': 'Rear right',
     }
 
     def __init__(self, runner, **kwargs):
