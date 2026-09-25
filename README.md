@@ -69,6 +69,7 @@ All CAN message definitions live in YAML files under `signal-db/`, one per vehic
 | `radio.yaml` | Radio | 0x0A4, 0x165, 0x1A5, 0x1E0, 0x1E5, 0x225, 0x265, 0x2A5, 0x3E5 |
 | `trip.yaml` | Trip computer | 0x221, 0x2A1, 0x261 |
 | `parktronic.yaml` | Parking sensors | 0x0E1 |
+| `tyres.yaml` | TPMS / tyres | 0x1E1, 0x361, 0x3A1 |
 | `bte.yaml` | BTE | 0x12B |
 | `kml.yaml` | KML / hands-free | 0x1A3, 0x223, 0x323 |
 

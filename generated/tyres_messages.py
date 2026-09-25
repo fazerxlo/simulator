@@ -1,0 +1,120 @@
+"""Auto-generated from signal-db/tyres.yaml — do not edit by hand.
+
+TPMS and tyre pressure monitoring CAN messages for PSA CAN2004
+"""
+
+from __future__ import annotations
+
+from generated.base import CanMessage
+
+
+class Msg1E1(CanMessage):
+    """TPMS wheel status enum (MSG_DONNEES_ETAT_ROUES)."""
+
+    can_id = 0x1E1
+    period_ms = 250
+    required_modules = frozenset({'tyres'})
+
+    def encode(self, car) -> list:
+        tyres = car.tyres
+        fl = (int(tyres.fl) & 0x07) << 3
+        fr = (int(tyres.fr) & 0x07) << 3
+        rr = (int(tyres.rr) & 0x07) << 3
+        rl = (int(tyres.rl) & 0x07) << 3
+        spare = (int(getattr(tyres, 'spare', 0)) & 0x07) << 3
+        sys_state = int(getattr(tyres, 'tpms_system_state', 0x20)) & 0xFF
+        return [fl, fr, rr, rl, spare, sys_state, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 4:
+            return
+        car.tyres.fl = (data[0] >> 3) & 0x07
+        car.tyres.fr = (data[1] >> 3) & 0x07
+        car.tyres.rr = (data[2] >> 3) & 0x07
+        car.tyres.rl = (data[3] >> 3) & 0x07
+        if len(data) >= 5:
+            car.tyres.spare = (data[4] >> 3) & 0x07
+        if len(data) >= 6:
+            car.tyres.tpms_system_state = data[5]
+
+
+class Msg361(CanMessage):
+    """TPMS direct sensor measurements and diagnostic status (0x361).
+    Carries 2 bytes per wheel (FL: 0-1, FR: 2-3, RR: 4-5, RL: 6-7).
+    Bits 15-14: 2-bit state (00=OK, 01=UNDER_INFLATED, 10=PUNCTURE, 11=SENSOR_FAULT).
+    Bits 13-0: 14-bit physical pressure scaled by 0.1 bar per LSB.
+    """
+
+    can_id = 0x361
+    period_ms = 500
+    required_modules = frozenset({'tyres'})
+
+    @staticmethod
+    def _encode_slot(state: int, pressure: float) -> tuple[int, int]:
+        st = (int(state) & 0x03) << 14
+        if int(state) in (3, 4):  # NO_DATA / SENSOR_FAULT / BATTERY_LOW
+            press = 0x3FFF
+        else:
+            press = max(0, min(0x3FFF, int(round(float(pressure) * 10.0))))
+        val = st | (press & 0x3FFF)
+        return (val >> 8) & 0xFF, val & 0xFF
+
+    @staticmethod
+    def _decode_slot(b_hi: int, b_lo: int) -> tuple[int, float]:
+        val = ((int(b_hi) & 0xFF) << 8) | (int(b_lo) & 0xFF)
+        state = (val >> 14) & 0x03
+        press_raw = val & 0x3FFF
+        if state == 3 or press_raw == 0x3FFF:
+            press = 0.0
+        else:
+            press = round(press_raw * 0.1, 2)
+        return state, press
+
+    def encode(self, car) -> list:
+        t = car.tyres
+        fl0, fl1 = self._encode_slot(t.fl, getattr(t, 'pressure_fl', 2.4))
+        fr0, fr1 = self._encode_slot(t.fr, getattr(t, 'pressure_fr', 2.4))
+        rr0, rr1 = self._encode_slot(t.rr, getattr(t, 'pressure_rr', 2.2))
+        rl0, rl1 = self._encode_slot(t.rl, getattr(t, 'pressure_rl', 2.2))
+        return [fl0, fl1, fr0, fr1, rr0, rr1, rl0, rl1]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 8:
+            return
+        fl_st, fl_p = self._decode_slot(data[0], data[1])
+        fr_st, fr_p = self._decode_slot(data[2], data[3])
+        rr_st, rr_p = self._decode_slot(data[4], data[5])
+        rl_st, rl_p = self._decode_slot(data[6], data[7])
+        car.tyres.fl = fl_st
+        car.tyres.pressure_fl = fl_p
+        car.tyres.fr = fr_st
+        car.tyres.pressure_fr = fr_p
+        car.tyres.rr = rr_st
+        car.tyres.pressure_rr = rr_p
+        car.tyres.rl = rl_st
+        car.tyres.pressure_rl = rl_p
+
+
+class Msg3A1(CanMessage):
+    """Direct tire pressure values in bar (MSG_DONNEES_PRESSION_ROUES)."""
+
+    can_id = 0x3A1
+    period_ms = 250
+    required_modules = frozenset({'tyres'})
+
+    def encode(self, car) -> list:
+        tyres = car.tyres
+        fl = round(float(getattr(tyres, 'pressure_fl', 2.4)) / 0.05) & 0xFF
+        fr = round(float(getattr(tyres, 'pressure_fr', 2.4)) / 0.05) & 0xFF
+        rr = round(float(getattr(tyres, 'pressure_rr', 2.2)) / 0.05) & 0xFF
+        rl = round(float(getattr(tyres, 'pressure_rl', 2.2)) / 0.05) & 0xFF
+        return [fl, fr, rr, rl, 0x00, 0x00, 0x00, 0x00]
+
+    def decode(self, car, data: bytes) -> None:
+        if len(data) < 4:
+            return
+        car.tyres.pressure_fl = round(data[0] * 0.05, 2)
+        car.tyres.pressure_fr = round(data[1] * 0.05, 2)
+        car.tyres.pressure_rr = round(data[2] * 0.05, 2)
+        car.tyres.pressure_rl = round(data[3] * 0.05, 2)
+

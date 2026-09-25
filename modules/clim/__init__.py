@@ -438,6 +438,7 @@ class Clim(TabbedPanelItem):
             if high and high == low:
                 self._clim.dir_left = high
             self._clim.recycle = (msg.data[4] >> 4) & 1
+            self._clim.unfrost_rear = msg.data[4] & 1
             # Note: bit5 of byte4 = "non-auto intake" flag; unfrost_front decoded from 0x1E3
             self._clim.temp_left = msg.data[5]
             self._clim.temp_right = msg.data[6]

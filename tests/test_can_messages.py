@@ -15,7 +15,7 @@ from generated import (ALL_MESSAGES, CanMessage, Msg036, Msg0E1, Msg0B6,
                           Msg221, Msg2A1, Msg261, Msg12B, Msg1A3, Msg223,
                           Msg323, Msg165, Msg1A5, Msg1E5, Msg0C5, Msg21F, Msg3E5,
                           Msg52D, Msg110, Msg0F6, Msg161, Msg1A8, Msg217,
-                          Msg12D, Msg0A9, Msg0E6, Msg1E1, Msg2E1, Msg3A1,
+                          Msg12D, Msg0A9, Msg0E6, Msg1E1, Msg2E1, Msg361, Msg3A1,
                           Msg3A7, Msg4A4, Msg269, STARTUP_WAKEUP_BURST)
 from conftest import make_can_mock, DummyWidget
 
@@ -171,6 +171,29 @@ class TestWorkbenchAlignedMessagePeriods:
         assert Msg221().period_ms == 1000
         assert Msg2A1().period_ms == 1000
         assert Msg261().period_ms == 1000
+
+
+class TestMsg0F6Defrost:
+    def test_rear_defrost_active_sets_bit0_in_bytes2_and_3(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.unfrost_rear = 1
+        data = Msg0F6().encode(car)
+        assert data[2] & 0x01 == 1
+        assert data[3] & 0x01 == 1
+
+    def test_rear_defrost_inactive_clears_bit0_when_ignition_on(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.unfrost_rear = 0
+        data = Msg0F6().encode(car)
+        assert data[2] & 0x01 == 0
+        assert data[3] & 0x01 == 0
+
+    def test_rear_defrost_decoded_from_msg0f6(self):
+        car = VirtualCar()
+        Msg0F6().decode(car, [0x88, 0x3C, 0x01, 0x01, 0x00, 0xFC, 0xFC, 0x20])
+        assert car.clim.unfrost_rear == 1
 
 
 class TestMsg0B6Encode:
@@ -332,6 +355,32 @@ class TestMsg128Encode:
         car = VirtualCar()
         Msg128().decode(car, [0x91, 0xE0, 0x00, 0x00, 0xA0, 0x80, 0xB0, 0x01])
         assert car.bsi.light_mode == 3
+
+    def test_unfrost_rear_state_confirmation_in_msg128(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.unfrost_rear = 1
+        data = Msg128().encode(car)
+        assert data[1] & 0x10 == 0x10  # Byte 1 Bit 4 set
+        assert data[2] & 0x01 == 1
+        assert data[3] & 0x11 != 0
+
+    def test_unfrost_rear_inactive_clears_byte1_bit4_in_msg128(self):
+        car = VirtualCar()
+        car.bsi.ignition_on = True
+        car.clim.unfrost_rear = 0
+        data = Msg128().encode(car)
+        assert data[1] & 0x10 == 0x00  # Byte 1 Bit 4 cleared
+
+    def test_unfrost_rear_decoded_from_msg128_byte1_bit4(self):
+        car = VirtualCar()
+        Msg128().decode(car, [0x00, 0x10, 0x00, 0x00, 0x00, 0x80, 0xB0, 0x01])
+        assert car.clim.unfrost_rear == 1
+
+    def test_unfrost_rear_decoded_from_msg128(self):
+        car = VirtualCar()
+        Msg128().decode(car, [0x91, 0xE0, 0x01, 0x11, 0x00, 0x80, 0xB0, 0x01])
+        assert car.clim.unfrost_rear == 1
 
 
 class TestMsg168Encode:
@@ -644,10 +693,11 @@ class TestMsg12DEncode:
 
 
 
-    def test_suppressed_when_tyre_display_active(self):
+    def test_encodes_tyre_popup_when_tyre_display_active(self):
         car = VirtualCar()
         car.tyres.display_active = True
-        assert Msg1A1().encode(car) is None
+        car.tyres.fl = Tyres.LOW
+        assert Msg1A1().encode(car) == [0x80, 0x8D, 0xC6, 0x10, 0x00, 0x00, 0x00, 0x00]
 
     def test_encodes_driver_door_popup_when_door_display_active(self):
         car = VirtualCar()
@@ -841,6 +891,19 @@ class TestMsg1D0Encode:
         assert data[5] == 14
         assert data[6] == 9
 
+    def test_unfrost_rear_encoded_in_byte4_bit0(self):
+        car = VirtualCar()
+        car.clim.enabled = True
+        car.bsi.ignition_on = True
+        car.clim.unfrost_rear = 1
+        data = Msg1D0().encode(car)
+        assert data[4] & 0x01 == 1
+
+    def test_unfrost_rear_decoded_from_byte4_bit0(self):
+        car = VirtualCar()
+        Msg1D0().decode(car, [0x08, 0x00, 0x00, 0x00, 0x01, 0x0B, 0x0B, 0x00])
+        assert car.clim.unfrost_rear == 1
+
 
 class TestMsg190Rolling:
     def test_counter_rolls_when_ignition_on(self):
@@ -990,16 +1053,22 @@ class TestRT4NewMessages:
         car.tyres.fr = Tyres.OK
         car.tyres.rr = Tyres.FLAT
         car.tyres.rl = Tyres.OK
+        car.tyres.spare = Tyres.BATTERY_LOW
+        car.tyres.tpms_system_state = 0xA0
         data = Msg1E1().encode(car)
         assert len(data) == 8
         assert data[0] >> 3 == 1  # LOW
         assert data[1] >> 3 == 0  # OK
         assert data[2] >> 3 == 2  # FLAT
+        assert data[4] >> 3 == 4  # BATTERY_LOW
+        assert data[5] == 0xA0
         car_b = VirtualCar()
         Msg1E1().decode(car_b, data)
         assert car_b.tyres.fl == Tyres.LOW
         assert car_b.tyres.fr == Tyres.OK
         assert car_b.tyres.rr == Tyres.FLAT
+        assert car_b.tyres.spare == Tyres.BATTERY_LOW
+        assert car_b.tyres.tpms_system_state == 0xA0
 
     def test_msg2e1_functions_status(self):
         car = VirtualCar()
@@ -1011,6 +1080,43 @@ class TestRT4NewMessages:
         car_b = VirtualCar()
         Msg2E1().decode(car_b, data)
         assert car_b.bsi.wipers_front == 2
+
+    def test_msg361_tpms_direct_sensors(self):
+        car = VirtualCar()
+        car.tyres.fl = Tyres.LOW
+        car.tyres.pressure_fl = 1.8
+        car.tyres.fr = Tyres.OK
+        car.tyres.pressure_fr = 2.4
+        car.tyres.rr = Tyres.FLAT
+        car.tyres.pressure_rr = 0.5
+        car.tyres.rl = Tyres.NO_DATA
+        car.tyres.pressure_rl = 0.0
+
+        data = Msg361().encode(car)
+        assert len(data) == 8
+        # FL: state=1 (LOW) -> (1 << 14) | round(1.8 / 0.1) = 0x4000 | 18 = 0x4012 -> (0x40, 0x12)
+        assert data[0] == 0x40
+        assert data[1] == 18
+        # FR: state=0 (OK) -> 0x0000 | 24 = 24 -> (0x00, 0x18)
+        assert data[2] == 0x00
+        assert data[3] == 24
+        # RR: state=2 (FLAT) -> (2 << 14) | 5 = 0x8005 -> (0x80, 0x05)
+        assert data[4] == 0x80
+        assert data[5] == 5
+        # RL: state=3 (NO_DATA) -> state=3 with 0x3FFF invalid pressure = 0xFFFF -> (0xFF, 0xFF)
+        assert data[6] == 0xFF
+        assert data[7] == 0xFF
+
+        car_b = VirtualCar()
+        Msg361().decode(car_b, data)
+        assert car_b.tyres.fl == Tyres.LOW
+        assert abs(car_b.tyres.pressure_fl - 1.8) < 0.05
+        assert car_b.tyres.fr == Tyres.OK
+        assert abs(car_b.tyres.pressure_fr - 2.4) < 0.05
+        assert car_b.tyres.rr == Tyres.FLAT
+        assert abs(car_b.tyres.pressure_rr - 0.5) < 0.05
+        assert car_b.tyres.rl == Tyres.NO_DATA
+        assert abs(car_b.tyres.pressure_rl - 0.0) < 0.05
 
     def test_msg3a1_wheel_pressures(self):
         car = VirtualCar()

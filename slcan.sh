@@ -2,14 +2,17 @@
 
 set -eou pipefail
 
+DEVICE=""
+
 function help {
    echo "Configure slcan"
    echo
-   echo "Syntax: slcan.sh [-k|h|]"
+   echo "Syntax: slcan.sh [-d <device>|-k|-h|-v]"
    echo "options:"
-   echo "h     Print this Help."
-   echo "v     Verbose mode."
-   echo "k     Close and kill slcan interface and demon"
+   echo "d <dev> Specify ttyUSB device (e.g. /dev/ttyUSB0 or ttyUSB0)."
+   echo "h       Print this Help."
+   echo "v       Verbose mode."
+   echo "k       Close and kill slcan interface and daemon"
    echo ""
 }
 
@@ -19,7 +22,21 @@ function slcan_kill {
 }
 
 function slcan_start {
-    usb_ttl_path=$(ls /dev/ttyUSB*)
+    if [[ -n "${DEVICE}" ]]; then
+        if [[ "${DEVICE}" == /* ]]; then
+            usb_ttl_path="${DEVICE}"
+        else
+            usb_ttl_path="/dev/${DEVICE}"
+        fi
+    else
+        usb_ttl_path=$(ls /dev/ttyUSB* 2>/dev/null | head -n 1 || true)
+    fi
+
+    if [[ -z "${usb_ttl_path}" || ! -e "${usb_ttl_path}" ]]; then
+        echo "Error: Device '${DEVICE:-/dev/ttyUSB*}' not found" >&2
+        exit 1
+    fi
+
     usb_ttl=$(basename "${usb_ttl_path}")
 
     sudo slcan_attach -f -s6 -o "${usb_ttl_path}"
@@ -28,8 +45,10 @@ function slcan_start {
 }
 
 
-while getopts ":hvk" option; do
+while getopts ":d:hvk" option; do
    case $option in
+      d)
+         DEVICE="$OPTARG";;
       h) # display Help
          help
          exit;;
@@ -38,9 +57,12 @@ while getopts ":hvk" option; do
       k) # display Help
          slcan_kill
          exit;;
+      :) # Missing argument
+         echo "Error: Option -$OPTARG requires an argument"
+         exit 1;;
      \?) # Invalid option
          echo "Error: Invalid option"
-         exit;;
+         exit 1;;
    esac
 done
 

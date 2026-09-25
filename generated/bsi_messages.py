@@ -124,14 +124,16 @@ class Msg0B6(CanMessage):
 
 
 class Msg0F6(CanMessage):
-    """BSI slow data: coolant/external temperature, odometer, reverse, blinkers.
+    """BSI slow data: coolant/external temperature, odometer, reverse, blinkers, rear defrost.
     
     PSA-RE canonical name: ``BSI_SLOW_DATA`` / ``DONNEES_BSI_LENTES``.
     
     Byte layout (0-indexed):
       0  — status byte: ``0x88`` on real bus (customer config + generator ok + motor running)
       1  — coolant temperature: raw − 40 °C
-      2-4 — odometer (uint24 × 0.1 km); simulator encodes ``0xFFFFFF`` (invalid) here
+      2  — accessory / environmental operational flags or odometer MSB (Bit 0 = Rear Defrost Active)
+      3  — accessory / environmental operational flags or odometer MID (Bit 0 = Rear Defrost Active)
+      4  — odometer LSB (``0xFF`` = invalid on bench)
       5  — external temperature: raw × 0.5 − 40 °C (``0xFF`` = invalid)
       6  — external temperature filtered (same encoding as byte 5)
       7  — bit 7 = REVERSE_STATUS, bit 6 = FRONT_WIPERS_STATUS,
@@ -147,8 +149,16 @@ class Msg0F6(CanMessage):
         coolant = int(bsi.coolant + 40)
         # byte 7: reverse + blinkers; force bit 0 high for compatibility
         b7 = (int(bsi.reverse) << 7) | (int(bsi.blinkers) & 0x03)
-        # bytes 2-4: odometer — emit 0xFF FF FF (invalid) for bench simulation
-        return [0x88, coolant, 0xFF, 0xFF, 0xFF, temp, temp, b7]
+        clim_rear = 1 if (bsi.ignition_on and getattr(car.clim, 'unfrost_rear', 0)) else 0
+        if bsi.ignition_on:
+            b2 = 0xFE | clim_rear
+            b3 = 0xFE | clim_rear
+            b4 = 0xFF
+        else:
+            b2 = 0xFF
+            b3 = 0xFF
+            b4 = 0xFF
+        return [0x88, coolant, b2, b3, b4, temp, temp, b7]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 8:
@@ -157,6 +167,8 @@ class Msg0F6(CanMessage):
         car.bsi.temperature = int(data[5]) / 2.0 - 40
         car.bsi.reverse = (data[7] >> 7) & 1
         car.bsi.blinkers = data[7] & 0x03
+        if (data[2] != 0xFF or data[3] != 0xFF):
+            car.clim.unfrost_rear = 1 if ((data[2] & 0x01) or (data[3] & 0x01)) else 0
 
 
 class Msg110(CanMessage):
@@ -170,11 +182,14 @@ class Msg110(CanMessage):
 
 
 class Msg128(CanMessage):
-    """Dashboard indicator lamps (0x128).
+    """Dashboard indicator lamps and BSI status broadcast (0x128 / CDE_COMBINE_SIGNALISATION).
     
     When *car.dashboard.active* is ``True`` (combine module is loaded) the
     full instrument-cluster indicator set is encoded.  Otherwise the simpler
     BSI lighting-only encoding is used.
+    
+    Byte 1 Bit 4 (mask 0x10) carries the live REAR DEFROST / HEATED MIRRORS indicator state
+    broadcast by the BSI to the instrument cluster and climate panel.
     """
 
     can_id = 0x128
@@ -183,13 +198,14 @@ class Msg128(CanMessage):
     _LIGHTS_TO_BYTE = {0: 0x00, 1: 0x80, 2: 0xC0, 3: 0xE0}
 
     def encode(self, car) -> list:
+        clim_rear = 1 if (car.bsi.ignition_on and getattr(car.clim, 'unfrost_rear', 0)) else 0
         if car.dashboard.active:
             dash = car.dashboard
             b0 = (dash.airbag_pass << 7 | dash.seatbelt << 6 | dash.brakes << 5 |
                   dash.low_fuel << 4 | dash.preheat << 2)
-            b1 = dash.warn << 7 | dash.stop << 6 | dash.doors << 4
-            b2 = dash.esp << 5 | dash.esp_blink << 4
-            b3 = dash.tyre << 6
+            b1 = dash.warn << 7 | dash.stop << 6 | (clim_rear << 4) | (dash.doors << 3)
+            b2 = dash.esp << 5 | dash.esp_blink << 4 | (clim_rear << 0)
+            b3 = (dash.tyre << 6) | (clim_rear << 4) | (clim_rear << 0)
             b4 = (dash.backlight << 7 | dash.low_beam << 6 | dash.high_beam << 5 |
                   dash.fog_front << 4 | dash.fog_rear << 3 |
                   dash.clig_r << 2 | dash.clig_l << 1)
@@ -203,11 +219,16 @@ class Msg128(CanMessage):
             b5 = cluster_on << 7
             return [b0, b1, b2, b3, b4, b5, gear_display, gearbox_mode]
         d5 = self._LIGHTS_TO_BYTE.get(car.bsi.light_mode, 0x00)
-        return [0x91, 0xE0, 0x00, 0x00, d5, 0x80, 0xB0, 0x01]
+        d1 = 0xE0 | (0x10 if clim_rear else 0x00)
+        d2 = (clim_rear << 0)
+        d3 = (clim_rear << 4) | (clim_rear << 0)
+        return [0x91, d1, d2, d3, d5, 0x80, 0xB0, 0x01]
 
     def decode(self, car, data: bytes) -> None:
         if len(data) < 6:
             return
+        if len(data) >= 2:
+            car.clim.unfrost_rear = 1 if (data[1] & 0x10) else (1 if (len(data) >= 4 and ((data[2] & 0x01) or (data[3] & 0x11))) else 0)
         if car.dashboard.active:
             dash = car.dashboard
             dash.airbag_pass = (data[0] >> 7) & 1
@@ -217,7 +238,7 @@ class Msg128(CanMessage):
             dash.preheat = (data[0] >> 2) & 1
             dash.warn = (data[1] >> 7) & 1
             dash.stop = (data[1] >> 6) & 1
-            dash.doors = (data[1] >> 4) & 1
+            dash.doors = (data[1] >> 3) & 1
             dash.esp = (data[2] >> 5) & 1
             dash.esp_blink = (data[2] >> 4) & 1
             dash.tyre = (data[3] >> 6) & 1
@@ -367,6 +388,21 @@ class Msg1A1(CanMessage):
     DOOR_ANNOUNCE_FLAGS = 0xC6
 
     @staticmethod
+    def _tyre_status_bytes(tyres) -> tuple[int, int]:
+        d3 = 0x00
+        if getattr(tyres, 'fl', 0) != 0:
+            d3 |= 1 << 4
+        if getattr(tyres, 'fr', 0) != 0:
+            d3 |= 1 << 3
+        if getattr(tyres, 'rr', 0) != 0:
+            d3 |= 1 << 2
+        if getattr(tyres, 'rl', 0) != 0:
+            d3 |= 1 << 1
+        if getattr(tyres, 'spare', 0) != 0:
+            d3 |= 1 << 0
+        return d3, 0x00
+
+    @staticmethod
     def _door_status_bytes(doors) -> tuple[int, int]:
         d3 = 0x00
         d4 = 0x00
@@ -388,10 +424,14 @@ class Msg1A1(CanMessage):
             d4 |= 1 << 6
         return d3, d4
 
-    def encode(self, car) -> list | None:
-        # Tyre warnings still own the bus with their dedicated event-driven payloads.
+    def encode(self, car) -> list:
         if car.tyres.display_active:
-            return None
+            t = car.tyres
+            flag = getattr(t, 'popup_flag', 0x80)
+            msg_id = getattr(t, 'popup_msg_id', 0x8D)
+            flags = getattr(t, 'display_flags', self.DISPLAY_FLAGS)
+            d3, d4 = self._tyre_status_bytes(t)
+            return [flag, msg_id, flags, d3, d4, 0x00, 0x00, 0x00]
 
         if car.doors.display_active:
             d = car.doors
@@ -629,30 +669,6 @@ class Msg0E6(CanMessage):
         car.bsi.wheel_ticks_rl = ((data[3] & 0x7F) << 8) | data[4]
 
 
-class Msg1E1(CanMessage):
-    """TPMS wheel status enum (MSG_DONNEES_ETAT_ROUES)."""
-
-    can_id = 0x1E1
-    period_ms = 250
-
-    def encode(self, car) -> list:
-        tyres = car.tyres
-        fl = (int(tyres.fl) & 0x07) << 3
-        fr = (int(tyres.fr) & 0x07) << 3
-        rr = (int(tyres.rr) & 0x07) << 3
-        rl = (int(tyres.rl) & 0x07) << 3
-        spare = (int(getattr(tyres, 'spare', 0)) & 0x07) << 3
-        return [fl, fr, rr, rl, spare, 0x20, 0x00, 0x00]
-
-    def decode(self, car, data: bytes) -> None:
-        if len(data) < 4:
-            return
-        car.tyres.fl = (data[0] >> 3) & 0x07
-        car.tyres.fr = (data[1] >> 3) & 0x07
-        car.tyres.rr = (data[2] >> 3) & 0x07
-        car.tyres.rl = (data[3] >> 3) & 0x07
-
-
 class Msg269(CanMessage):
     """Airbag and crash notification (MSG_ETAT_INFO_CRASH)."""
 
@@ -699,29 +715,6 @@ class Msg2E1(CanMessage):
         car.bsi.wipers_rear = data[1] & 0x0F
         car.speed_control.control_type = (data[2] >> 4) & 0x0F
         car.speed_control.function_status = 0 if (data[2] & 0x01) else 1
-
-
-class Msg3A1(CanMessage):
-    """Direct tire pressure values in bar (MSG_DONNEES_PRESSION_ROUES)."""
-
-    can_id = 0x3A1
-    period_ms = 250
-
-    def encode(self, car) -> list:
-        tyres = car.tyres
-        fl = round(float(getattr(tyres, 'pressure_fl', 2.4)) / 0.05) & 0xFF
-        fr = round(float(getattr(tyres, 'pressure_fr', 2.4)) / 0.05) & 0xFF
-        rr = round(float(getattr(tyres, 'pressure_rr', 2.2)) / 0.05) & 0xFF
-        rl = round(float(getattr(tyres, 'pressure_rl', 2.2)) / 0.05) & 0xFF
-        return [fl, fr, rr, rl, 0x00, 0x00, 0x00, 0x00]
-
-    def decode(self, car, data: bytes) -> None:
-        if len(data) < 4:
-            return
-        car.tyres.pressure_fl = round(data[0] * 0.05, 2)
-        car.tyres.pressure_fr = round(data[1] * 0.05, 2)
-        car.tyres.pressure_rr = round(data[2] * 0.05, 2)
-        car.tyres.pressure_rl = round(data[3] * 0.05, 2)
 
 
 class Msg3A7(CanMessage):

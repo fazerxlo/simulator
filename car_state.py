@@ -140,6 +140,7 @@ class Tyres:
     LOW = 1
     FLAT = 2
     NO_DATA = 3
+    BATTERY_LOW = 4
 
     def __init__(self):
         self.fl = Tyres.OK
@@ -151,8 +152,13 @@ class Tyres:
         self.pressure_fr = 2.4
         self.pressure_rr = 2.2
         self.pressure_rl = 2.2
+        # TPMS system state (0x1E1 byte 5, bit 7: fault, bit 5: calibration, default 0x20)
+        self.tpms_system_state = 0x20
         # True while a tyre-warning popup is being displayed on the MFD
         self.display_active = False
+        self.popup_msg_id = 0x8D
+        self.popup_flag = 0x80
+        self.display_flags = 0xC6
         # Byte 1 value for the 0x168 dashboard alert frame
         self.alert_0x168_b1 = 0
 

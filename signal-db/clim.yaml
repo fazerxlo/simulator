@@ -32,7 +32,8 @@ messages:
     encode_body: |
       if not car.bsi.ignition_on:
           return None
-      return [0x00, 0x32, 0x32, 0x00, 0x00, 0x00, 0x98, 0x80]
+      comp_status = 0x80 if (car.clim.enabled and car.clim.ac) else 0x00
+      return [comp_status, 0x32, 0x32, 0x00, 0x00, 0x00, 0x98, 0x80]
 
   Msg1D0:
     can_id: 0x1D0
@@ -63,12 +64,13 @@ messages:
           b0 = 0x08  # AUTO mode or explicit intake (recirc/fresh) — no manual-distribution bit
       else:
           b0 = 0x28  # 0x08 | 0x20 — manual fan/direction mode
-      # Byte 4 bit layout (workbench-verified from clima_auto_inside_outside_auto.csv):
+      # Byte 4 bit layout (workbench-verified & RT4 RE):
       #   bit5 (0x20): "explicit non-auto intake mode" — set when Fresh, Recirc, or
       #                UnfrostFront was actively selected by the user.
       #   bit4 (0x10): "recirculation" — set only when recirc is active.
+      #   bit0 (0x01): "rear defrost" (REAR_DEFROST) — set when unfrost_rear is active.
       # AUTO mode: byte4=0x00; Fresh explicit: 0x20; Recirc explicit: 0x30.
-      b4 = (0x20 if clim.intake_explicit else 0x00) | (0x10 if clim.recycle else 0x00)
+      b4 = (0x20 if clim.intake_explicit else 0x00) | (0x10 if clim.recycle else 0x00) | (0x01 if clim.unfrost_rear else 0x00)
       fan_raw = _encode_clim_fan(clim.fan)
       return [b0, 0x00, fan_raw, dir_byte, b4,
               clim.temp_left, clim.temp_right, 0x00]
@@ -85,8 +87,9 @@ messages:
       # per-side airflow state to 0x1E3 which carries both zones explicitly.
       if high and high == low:
           car.clim.dir_left = high
-      # bit4 = recirculation (workbench-verified); bit5 = non-auto intake flag.
+      # bit4 = recirculation (workbench-verified); bit5 = non-auto intake flag; bit0 = rear defrost.
       car.clim.recycle = (data[4] >> 4) & 1
+      car.clim.unfrost_rear = data[4] & 1
       car.clim.temp_left = data[5]
       car.clim.temp_right = data[6]
 

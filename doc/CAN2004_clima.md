@@ -30,9 +30,9 @@ Workbench captures show this frame carries a constant payload throughout the ent
 
 | Byte | Value  | Notes                          |
 |------|--------|--------------------------------|
-| 0    | `0x00` | Constant                       |
-| 1    | `0x32` | Constant capability field      |
-| 2    | `0x32` | Constant capability field      |
+| 0    | `0x80` / `0x00` | Bit 7: Compressor clutch engaged (`0x80` when A/C on and running, `0x00` when off) |
+| 1    | `0x32` | Constant capability / Evaporator temp field (10°C) |
+| 2    | `0x32` | Constant capability / Blower voltage field (5.0V) |
 | 3    | `0x00` | Constant                       |
 | 4    | `0x00` | Constant                       |
 | 5    | `0x00` | Constant                       |
@@ -62,7 +62,7 @@ Three operating conditions:
 | 1    | Constant `0x00`                                                         |
 | 2    | Fan speed raw value (see [Fan encoding](#fan-encoding))                 |
 | 3    | High nibble = left zone air distribution, low nibble = right zone       |
-| 4    | Bit 5 = explicit non-auto intake mode (`intake_explicit`), Bit 4 = recirculation (`recycle`) |
+| 4    | Bit 5 = explicit non-auto intake mode (`intake_explicit`), Bit 4 = recirculation (`recycle`), Bit 0 = rear demist (`unfrost_rear` / `REAR_DEFROST`) |
 | 5    | Left zone temperature index (see [Temperature index](#temperature-index)) |
 | 6    | Right zone temperature index                                            |
 | 7    | Constant `0x00`                                                         |
